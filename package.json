@@ -1,0 +1,29 @@
+{
+  "name": "abhi-cabs",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vike dev",
+    "build": "vike build",
+    "preview": "vike preview"
+  },
+  "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
+    "@reduxjs/toolkit": "^2.12.0",
+    "firebase": "^11.0.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-redux": "^9.3.0",
+    "socket.io-client": "^4.7.0",
+    "vike": "^0.4.260",
+    "vike-react": "^0.6.26"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.0.5",
+    "playwright": "^1.63.0",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.1"
+  }
+}

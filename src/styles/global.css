@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+/* ── ABHI CABS Brand Design System ──────────────────────────────────────────
+   Brand Guidelines (PDF) defines:
+     Primary Black  : #111111
+     Primary Yellow : #FFC107
+     Primary White  : #FFFFFF
+     Logo fonts     : Montserrat (ABHI wordmark) · SF Pro Display (CABS / tagline)
+     Brand tagline  : RIDE WITH TRUST
+     Brand voice    : Caring · Supportive · Reliable · Approachable · Simple
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Brand primaries — Black + Yellow palette from brand guidelines */
+  --color-primary:       #FFC107;        /* Brand Yellow — CTAs, highlights, accents */
+  --color-primary-dark:  #E6AC00;        /* Yellow dark — hover state */
+  --color-primary-light: #FFD54F;        /* Yellow light — tint accents */
+  --color-primary-tint:  #FFFBEA;        /* Yellow 5% tint — backgrounds */
+
+  /* Brand neutrals */
+  --color-brand-black:   #111111;        /* Brand Black — primary text, hero, nav */
+  --color-brand-black2:  #1C1C1C;        /* Near black — card backgrounds */
+  --color-bg:            #FAFAFA;        /* Page background — near white */
+  --color-text:          #111111;        /* Body text — Brand Black */
+  --color-text-secondary:#555555;        /* Secondary text — softer */
+  --color-border:        #E5E7EB;        /* Borders */
+
+  /* Semantic colours */
+  --color-success:       #16A34A;
+  --color-success-tint:  #DCFCE7;
+  --color-warning:       #D97706;
+  --color-warning-tint:  #FEF3C7;
+  --color-error:         #DC2626;
+  --color-error-tint:    #FEE2E2;
+
+  /* Typography — brand fonts per guidelines */
+  --font-sans: "Montserrat", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Brand guide: "CABS" wordmark + "RIDE WITH TRUST" tagline use SF Pro
+     Display Medium specifically — a separate stack from the Montserrat Bold
+     "ABHI" wordmark, per the official brand guidelines PDF. */
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Shadows — warmer (black-based) to match brand black */
+  --shadow-card:    0 1px 3px rgba(17,17,17,0.06);
+  --shadow-elevated:0 8px 24px rgba(17,17,17,0.10);
+  --shadow-lifted:  0 20px 48px rgba(17,17,17,0.16);
+  --shadow-brand:   0 8px 24px rgba(255,193,7,0.35);
+
+  --animate-drive: driveAlong 9s ease-in-out infinite;
+}
+
+/* Google Font import for Montserrat */
+
+@keyframes driveAlong {
+  0%   { left: 12%; top: 78%; }
+  30%  { left: 38%; top: 40%; }
+  55%  { left: 58%; top: 55%; }
+  80%  { left: 78%; top: 22%; }
+  100% { left: 12%; top: 78%; }
+}
+
+/* ── Global base resets ─────────────────────────────────────────────────────*/
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; }
+body { background-color: #FAFAFA; color: #111111; font-family: "Montserrat", "SF Pro Display", -apple-system, sans-serif; }
+
+/* ── Brand utility overrides ────────────────────────────────────────────────*/
+/* Yellow buttons need black text for contrast (brand standard) */
+.btn-brand {
+  background-color: #FFC107;
+  color: #111111;
+  font-weight: 700;
+}
+.btn-brand:hover { background-color: #E6AC00; }
