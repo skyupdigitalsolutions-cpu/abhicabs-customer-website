@@ -14,11 +14,13 @@ export default function Footer() {
       <div className="max-w-[1280px] mx-auto px-[22px]">
         <div className="grid grid-cols-4 gap-6">
           <div className="max-w-[340px]">
-            <div className="flex items-center gap-3 mb-3.5">
-              <img src="/images/abhi-cabs-icon.svg" alt="Abhi Cabs" className="w-[52px] h-[52px] object-contain" />
-              <span className="font-extrabold text-[19px] text-white tracking-wide" style={{ fontFamily: "'Montserrat',sans-serif" }}>
-                ABHI<span className="text-primary">CABS</span>
-              </span>
+            <div className="mb-3.5">
+              <img
+                src="/images/abhi-cabs-logo-footer.png"
+                alt="Abhi Cabs"
+                className="w-[160px] object-contain"
+                style={{ mixBlendMode: "screen" }}
+              />
             </div>
             <p className="text-[13.5px] leading-relaxed text-white/55 font-normal m-0">
               Reliable chauffeur-driven transportation across Karnataka and Hyderabad. From city cabs to 49-seat coaches.
@@ -32,7 +34,7 @@ export default function Footer() {
               <a href="/#about" className={linkClass}>About</a>
               <a href="/#services" className={linkClass}>Services</a>
               <a href="/#cities" className={linkClass}>Cities</a>
-              <a href="/#contact" className={linkClass}>Contact</a>
+              <a href="/#contact-form" className={linkClass}>Contact</a>
             </div>
           </div>
 
