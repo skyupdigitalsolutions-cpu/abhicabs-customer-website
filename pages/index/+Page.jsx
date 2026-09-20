@@ -188,7 +188,6 @@ export default function Page() {
       {/* ============================== CHOOSE YOUR RIDE (fleet carousel) ============================== */}
       <FleetCarouselSection
         vehicles={VEHICLE_RATES}
-        onViewDetails={() => bookMode("one-way")}
         onViewAll={() => bookMode("one-way")}
       />
 
