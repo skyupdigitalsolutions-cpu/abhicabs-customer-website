@@ -69,7 +69,7 @@ export default function Page() {
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden" }}>
-        <div style={{ height: 180, overflow: "hidden", background: "#F7F7F7", position: "relative" }}>
+        <div style={{ aspectRatio: "16/9", overflow: "hidden", background: "#F7F7F7", position: "relative" }}>
           {(() => {
             const img = booking.vehicleImg ||
               VEHICLE_RATES.find(v => v.id === booking.vehicleId)?.img ||

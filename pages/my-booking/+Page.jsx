@@ -319,7 +319,7 @@ export default function Page() {
                             VEHICLE_RATES.find(v => v.id === b.vehicleId)?.img ||
                             VEHICLE_RATES.find(v => v.category === b.vehicleClass)?.img;
                           return img
-                            ? <img src={img} alt={vehicleName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ? <img src={img} alt={vehicleName} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
                             : <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 16l1.5-5A2 2 0 017.4 9.5h9.2a2 2 0 011.9 1.5L20 16" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><rect x="2.5" y="16" width="19" height="4" rx="1.5" stroke="#B8860B" strokeWidth="1.5" /><circle cx="7" cy="20" r="1.6" fill="#B8860B" /><circle cx="17" cy="20" r="1.6" fill="#B8860B" /><path d="M8 9.5l1-3.5h6l1 3.5" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
                         })()}
                       </span>

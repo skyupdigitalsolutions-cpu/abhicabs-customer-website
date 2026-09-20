@@ -11,7 +11,7 @@ export default function PromoBannersSection({ onOutstation, onGroup }) {
         {/* Outstation */}
         <div style={{ position: "relative", borderRadius: 22, overflow: "hidden", minHeight: 260, display: "flex" }}>
           <div style={{ position: "absolute", inset: 0 }}>
-            <img src="/images/weekend.jpg" alt="Outstation trips" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src="/images/weekend.jpg" alt="Outstation trips" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
           </div>
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,rgba(13,13,13,.9),rgba(13,13,13,.5))", pointerEvents: "none" }} />
           <div style={{ position: "relative", padding: "clamp(24px,3vw,40px)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start" }}>

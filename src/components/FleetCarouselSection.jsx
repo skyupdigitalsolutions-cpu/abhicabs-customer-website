@@ -59,8 +59,8 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
               style={{ flex: "0 0 280px", scrollSnapAlign: "start", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column" }}
             >
               {/* Vehicle image */}
-              <div style={{ height: 150, background: "#F7F7F7", position: "relative", overflow: "hidden", flex: "none" }}>
-                <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <div style={{ aspectRatio: "16/9", background: "#F7F7F7", position: "relative", overflow: "hidden", flex: "none" }}>
+                <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
               </div>
 
               {/* Card body */}
@@ -113,11 +113,11 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
           <div style={{ background: "#fff", borderRadius: 24, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 64px rgba(0,0,0,0.22)" }}>
 
             {/* Vehicle image */}
-            <div style={{ position: "relative", height: 220, background: "#F7F7F7", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
+            <div style={{ position: "relative", aspectRatio: "16/9", background: "#F7F7F7", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
               <img
                 src={modal.gallery?.[activeImg] || modal.img}
                 alt={modal.name}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
               />
               {/* Close button */}
               <button

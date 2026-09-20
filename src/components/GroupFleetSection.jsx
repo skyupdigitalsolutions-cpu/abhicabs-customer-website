@@ -11,8 +11,8 @@ export default function GroupFleetSection({ vehicles, onViewDetails, id = "group
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(100%,230px),1fr))", gap: 18 }}>
         {vehicles.map((v) => (
           <div key={v.name} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, overflow: "hidden" }}>
-            <div style={{ height: 128, background: "linear-gradient(135deg,#F0F0F0,#FAFAFA)", position: "relative" }}>
-              <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <div style={{ aspectRatio: "16/9", background: "#F0F0F0", position: "relative", overflow: "hidden" }}>
+              <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
               <span style={{ position: "absolute", top: 9, left: 10, fontSize: 10, fontWeight: 600, color: "#111", background: "#FFC107", padding: "3px 9px", borderRadius: 9999 }}>
                 {v.seats}
               </span>

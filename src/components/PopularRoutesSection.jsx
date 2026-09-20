@@ -23,7 +23,7 @@ export default function PopularRoutesSection({ routes, onBook, id = "services" }
           return (
             <div key={`${r.from}-${r.to}`} style={{ borderRadius: 20, overflow: "hidden", border: "1px solid #EFEFEF", background: "#fff" }} className="hover:-translate-y-1.5 transition-transform">
               <div style={{ position: "relative", height: 172, overflow: "hidden" }}>
-                <img src={r.img} alt={`${r.from} to ${r.to}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={r.img} alt={`${r.from} to ${r.to}`} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
                 <span style={{ position: "absolute", top: 12, left: 12, padding: "5px 11px", borderRadius: 9999, background: badge.bg, color: badge.fg, fontWeight: 600, fontSize: 11, zIndex: 2 }}>
                   {r.badge}
                 </span>

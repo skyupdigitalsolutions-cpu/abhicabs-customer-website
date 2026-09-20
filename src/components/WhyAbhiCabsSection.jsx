@@ -6,7 +6,7 @@ export default function WhyAbhiCabsSection({ reasons, imageSrc, imageAlt = "Prof
     <section id={id} style={{ maxWidth: 1280, margin: "0 auto", padding: "clamp(46px,6vw,80px) 22px 0" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "clamp(28px,4vw,56px)", alignItems: "stretch" }}>
         <div style={{ flex: "1 1 320px", minWidth: "min(100%,320px)", borderRadius: 22, overflow: "hidden", minHeight: 380, position: "relative" }}>
-          <img src={imageSrc} alt={imageAlt} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
+          <img src={imageSrc} alt={imageAlt} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", position: "absolute", inset: 0 }} />
         </div>
         <div style={{ flex: "1 1 360px", minWidth: "min(100%,320px)" }}>
           <span style={{ display: "inline-block", fontWeight: 700, fontSize: 12, letterSpacing: ".14em", textTransform: "uppercase", color: "#B8860B" }}>Why Abhi Cabs</span>
