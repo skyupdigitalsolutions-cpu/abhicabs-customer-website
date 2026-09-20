@@ -41,7 +41,8 @@ function getVehicleType(v) {
 export default function Page() {
   const pageContext = usePageContext();
   const journeyId = pageContext.urlParsed?.search?.j || null;
-  const browseType = pageContext.urlParsed?.search?.type || null; // e.g. "group" from a homepage tile with no real trip yet
+  const browseType = pageContext.urlParsed?.search?.type || null; // e.g. "group"
+  const urlSeater  = pageContext.urlParsed?.search?.seater || null; // e.g. "13" from group section
   const dispatch = useDispatch();
   const toast = useToast();
   const journey = useSelector(selectJourney(journeyId));
@@ -67,6 +68,10 @@ export default function Page() {
   // this state) is what scopes things to group-relevant vehicles; the user
   // still actively picks among them via the pills.
   const [typeFilters, setTypeFilters] = useState([]);
+  // Pre-populate seat filter from URL param (e.g. ?seater=13 from group section)
+  const [seatFilters, setSeatFilters] = useState(() =>
+    urlSeater ? [urlSeater] : []
+  );
   // Only meaningful in Group/Coach browse mode, where there's no real trip
   // type yet — lets the customer indicate one here, which then carries
   // through to a real search (see selectVehicle) instead of being lost.
@@ -149,7 +154,6 @@ export default function Page() {
     navigate(`/booking-search?j=${action.payload.id}&type=group`);
   }
 
-  const [seatFilters, setSeatFilters] = useState([]);
   const [ac, setAc] = useState("all"); // all | on | off
   const [sort, setSort] = useState("recommended");
 
@@ -372,6 +376,27 @@ export default function Page() {
           </div>
         </div>
       ) : (
+        {/* Seater pre-selected banner */}
+        {urlSeater && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEA", border: "1.5px solid #FFC107", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+            <span style={{ fontSize: 20 }}>🚌</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: "#111" }}>
+                Showing {urlSeater} Seater coaches
+              </p>
+              <p style={{ fontSize: 12.5, color: "#666", margin: "2px 0 0" }}>
+                Vehicles with {urlSeater} seats are pre-filtered below.
+              </p>
+            </div>
+            <button
+              onClick={() => { setSeatFilters([]); window.history.replaceState({}, "", "/booking-search?type=group"); }}
+              style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         {/* Mobile filter toggle */}
         <div className="lg:hidden mb-3">
           <button

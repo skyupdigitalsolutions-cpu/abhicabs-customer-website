@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { usePageContext } from "vike-react/usePageContext";
+import React, { useState } from "react";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
 import Button from "../../src/components/ui/Button";
 import SectionHead from "../../src/components/ui/SectionHead";
@@ -27,24 +26,7 @@ export default function FleetPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [activeImg, setActiveImg] = useState(0);
-  const [highlightSeater, setHighlightSeater] = useState(null);
 
-  useEffect(() => {
-    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    const seater = params.get("seater");
-    const tab    = params.get("tab");
-
-    if (seater) {
-      const n = parseInt(seater, 10);
-      setHighlightSeater(n);
-      // Auto-switch to the right tab based on seater size
-      if (n <= 8)       setActiveTab("suv");
-      else if (n <= 20) setActiveTab("tempo");
-      else              setActiveTab("bus");
-    } else if (tab) {
-      setActiveTab(tab);
-    }
-  }, []);
 
   const filtered = activeTab === "all"
     ? VEHICLE_RATES
@@ -93,27 +75,6 @@ export default function FleetPage() {
       <section className="py-12 md:py-16">
         <div className="max-w-[1264px] mx-auto px-6">
 
-          {/* Seater selection notice — shown when navigating from group section */}
-          {highlightSeater && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#FFFBEA", border: "1.5px solid #FFC107", borderRadius: 14, padding: "14px 18px", marginBottom: 22 }}>
-              <span style={{ fontSize: 22, flexShrink: 0 }}>🚌</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 700, fontSize: 14.5, margin: 0, color: "#111" }}>
-                  Showing vehicles for {highlightSeater} Seater
-                </p>
-                <p style={{ fontSize: 13, color: "#666", margin: "3px 0 0" }}>
-                  Vehicles matching your selection are marked <strong style={{ color: "#B8860B" }}>★ Your Selection</strong>.
-                  <button
-                    onClick={() => { setHighlightSeater(null); setActiveTab("all"); }}
-                    style={{ marginLeft: 10, color: "#B8860B", fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}
-                  >
-                    Clear filter
-                  </button>
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Category tabs */}
           <div className="flex gap-2 flex-wrap justify-center mb-10">
             {TABS.map((t) => (
@@ -148,7 +109,7 @@ export default function FleetPage() {
           {/* Vehicle grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map((v) => (
-              <FleetCard key={v.id} vehicle={v} onView={() => openModal(v)} highlightSeater={highlightSeater} />
+              <FleetCard key={v.id} vehicle={v} onView={() => openModal(v)} />
             ))}
           </div>
         </div>
@@ -189,7 +150,7 @@ export default function FleetPage() {
 }
 
 // ─── Fleet Card ──────────────────────────────────────────────────────────────
-function FleetCard({ vehicle: v, onView, highlightSeater }) {
+function FleetCard({ vehicle: v, onView }) {
   const catColors = {
     sedan:  "bg-blue-50 text-blue-700",
     suv:    "bg-green-50 text-green-700",
@@ -198,15 +159,10 @@ function FleetCard({ vehicle: v, onView, highlightSeater }) {
     bus:    "bg-red-50 text-red-700",
   };
 
-  const isHighlighted = highlightSeater && v.seats === highlightSeater;
   return (
     <div
       className="bg-white overflow-hidden flex flex-col group hover:shadow-lifted transition-shadow"
-      style={{
-        borderRadius: 18,
-        border: isHighlighted ? "2px solid #FFC107" : "1px solid var(--color-border)",
-        boxShadow: isHighlighted ? "0 0 0 4px rgba(255,193,7,.18)" : undefined,
-      }}
+      style={{ borderRadius: 18, border: "1px solid var(--color-border)" }}
     >
       {/* Image */}
       <div className="relative aspect-[16/9] overflow-hidden">
@@ -224,11 +180,7 @@ function FleetCard({ vehicle: v, onView, highlightSeater }) {
           <span className="absolute top-2.5 right-2.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white">Non A/C</span>
         )}
         {/* Your selection badge when coming from group section */}
-        {isHighlighted && (
-          <span style={{ position: "absolute", bottom: 8, right: 8, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 11, padding: "4px 10px", borderRadius: 9999 }}>
-            ★ Your Selection
-          </span>
-        )}
+
         {/* Gallery count */}
         {v.gallery?.length > 1 && (
           <span className="absolute bottom-2.5 right-2.5 text-[11px] bg-black/50 text-white px-2 py-0.5 rounded-full flex items-center gap-1">

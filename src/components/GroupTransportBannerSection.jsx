@@ -5,8 +5,9 @@ export default function GroupTransportBannerSection({ seaterOptions, onRequestQu
   const [selected, setSelected] = useState(null);
 
   function handleExplore() {
-    const param = selected ? `?seater=${selected}` : "?tab=tempo";
-    navigate(`/fleet${param}`);
+    const params = new URLSearchParams({ type: "group" });
+    if (selected) params.set("seater", selected);
+    navigate(`/booking-search?${params.toString()}`);
   }
 
   return (
@@ -45,11 +46,11 @@ export default function GroupTransportBannerSection({ seaterOptions, onRequestQu
           })}
         </div>
 
-        {/* Selected hint */}
+        {/* Hint text */}
         <p style={{ fontSize: 13, color: "rgba(255,255,255,.45)", margin: "0 0 24px", minHeight: 20 }}>
           {selected
-            ? `${selected} Seater selected — click Explore to see matching vehicles`
-            : "Select a seater size above to filter vehicles on the next page"}
+            ? `${selected} Seater selected — click below to search available coaches`
+            : "Select a seater size above, then search for available vehicles"}
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
@@ -58,8 +59,7 @@ export default function GroupTransportBannerSection({ seaterOptions, onRequestQu
             className="hover:!bg-[#FFB300]"
             style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "15px 28px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, cursor: "pointer", border: "none" }}
           >
-            Explore Group Vehicles
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#111" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {selected ? `Search ${selected} Seater →` : "Search Group Vehicles →"}
           </button>
           <button
             onClick={onRequestQuote}
