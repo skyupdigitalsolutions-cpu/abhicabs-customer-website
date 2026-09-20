@@ -369,7 +369,7 @@ export default function Page() {
               <Row label="Booking ID" value={bookingNumber || "—"} />
               {fare != null && <Row label="Fare" value={fmtINR(fare)} />}
               <Row label="Status" value={realBooking?.status || "—"} />
-              <Button href="/#contact" variant="outline" block className="mt-4">
+              <Button href="/#contact-form" variant="outline" block className="mt-4">
                 Contact Support
               </Button>
             </Card>

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { useRequireAuth } from "../../src/hooks/useRequireAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -17,6 +18,7 @@ import { IconPin, IconClose } from "../../src/components/Icons";
 const PARTIAL_ADVANCE_PERCENT = 25;
 
 export default function Page() {
+  const { checked, authed } = useRequireAuth();
   const dispatch  = useDispatch();
   const toast     = useToast();
   const selected  = useSelector(selectSelectedCab);
@@ -42,6 +44,9 @@ export default function Page() {
   // (e.g. after Razorpay failure) can reuse the same booking id instead of
   // creating a second one.
   const bookingRef = useRef(null);
+
+  if (!checked) return null;
+  if (!authed)  return null;
 
   if (!selected || !vehicle || !journey) {
     return (
@@ -311,7 +316,7 @@ export default function Page() {
         </div>
 
         {/* ── Booking Summary ─────────────────────────────────────────── */}
-        <div style={{ position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22 }}>
+        <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22 }} className="lg:sticky lg:top-[120px]">
           <h3 style={{ fontWeight: 700, fontSize: 15, margin: "0 0 14px" }}>Booking Summary</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
             <span style={{ width: 56, height: 40, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
@@ -440,7 +445,7 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
             </span>
           </div>
 
-          <table className="w-full border border-gray-300 text-[12.5px]">
+          <div className="table-scroll"><table className="w-full border border-gray-300 text-[12.5px]" style={{ minWidth: 480 }}>
             <tbody>
               <tr>
                 <td className="bg-gray-50 font-bold text-[11px] uppercase tracking-wide px-3 py-1.5 border-b border-gray-300" colSpan={2}>Customer Details</td>
@@ -475,7 +480,7 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
             </tbody>
           </table>
 
-          <table className="w-full border border-t-0 border-gray-300 text-[12.5px] mt-0">
+          </div><div className="table-scroll"><table className="w-full border border-t-0 border-gray-300 text-[12.5px] mt-0" style={{ minWidth: 480 }}>
             <thead>
               <tr className="bg-gray-50">
                 <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wide w-1/2">Trip Details</th>
@@ -512,6 +517,7 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
             <p># Toll fees, airport charges, parking, and state taxes are charged extra.</p>
             <p># Electronically generated — no signature required.</p>
             <p># For queries: support@abhicabs.in</p>
+          </div>
           </div>
           {isCorporate && <div className="mt-2 text-[10.5px] text-gray-400 text-center">SAC: 996412</div>}
         </div>

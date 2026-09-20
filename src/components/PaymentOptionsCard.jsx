@@ -38,13 +38,15 @@ export function PaymentOptionsCard({ totalPayable, advancePercent = 25, paymentM
             <button
               key={opt.key}
               onClick={() => onChange(opt.key)}
-              className={`w-full flex items-center justify-between px-4 py-3.5 text-left ${i > 0 ? "border-t border-border" : ""} ${selected ? "bg-primary/10" : ""}`}
+              className={`w-full flex items-center justify-between px-4 py-3.5 text-left ${i > 0 ? "border-t border-border" : ""}`}
+              style={{ backgroundColor: selected ? "#eef6ff" : "transparent" }}
             >
               <div className="flex items-center gap-3">
                 <span
-                  className={`w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? "border-primary" : "border-[#D1D5DB]"}`}
+                  className="w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center shrink-0"
+                  style={{ borderColor: selected ? "#2563eb" : "#D1D5DB" }}
                 >
-                  {selected && <span className="w-2 h-2 rounded-full bg-primary" />}
+                  {selected && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#2563eb" }} />}
                 </span>
                 <div>
                   <p className="text-[14px] font-bold text-text">{opt.title}</p>

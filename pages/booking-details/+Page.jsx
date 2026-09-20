@@ -59,7 +59,7 @@ export default function Page() {
   const sc = STATUS_COLORS[displayStatus];
 
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "24px 22px 70px" }}>
+    <main className="page-main" style={{ maxWidth: 760, margin: "0 auto", padding: "24px 22px 70px" }}>
       <a href="/my-booking" className="inline-flex items-center gap-1.5 hover:!text-[#111]" style={{ color: "#666", fontWeight: 700, fontSize: 13.5, marginBottom: 18 }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         Back to My Bookings

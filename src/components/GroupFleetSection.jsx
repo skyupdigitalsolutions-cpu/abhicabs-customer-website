@@ -8,7 +8,7 @@ export default function GroupFleetSection({ vehicles, onViewDetails, id = "group
         <span style={{ display: "inline-block", fontWeight: 700, fontSize: 12, letterSpacing: ".14em", textTransform: "uppercase", color: "#B8860B" }}>Featured Vehicles</span>
         <h2 style={{ fontWeight: 800, fontSize: "clamp(26px,3.4vw,42px)", lineHeight: 1.12, margin: "8px 0 0", letterSpacing: "-.02em" }}>Premium &amp; Group Fleet</h2>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(100%,230px),1fr))", gap: 18 }}>
         {vehicles.map((v) => (
           <div key={v.name} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, overflow: "hidden" }}>
             <div style={{ height: 128, background: "linear-gradient(135deg,#F0F0F0,#FAFAFA)", position: "relative" }}>

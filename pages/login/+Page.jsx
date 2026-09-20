@@ -1,15 +1,28 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useToast } from "../../src/hooks/useToast";
 import Button from "../../src/components/ui/Button";
 import { FIELD_LABEL, FIELD_INPUT } from "../../src/components/ui/classNames";
 import { authApi } from "../../src/api";
 import { isNotRegistered } from "../../src/api/services/auth";
 import { requestNotificationPermission } from "../../src/lib/firebase";
+import { isAuthenticated } from "../../src/api/tokens";
+import { navigate } from "vike/client/router";
 
 const OTP_LENGTH = 6;
 
 export default function Page() {
   const toast = useToast();
+
+  // If already logged in, redirect away immediately
+  useEffect(() => {
+    if (isAuthenticated()) {
+      const returnTo = typeof sessionStorage !== "undefined"
+        ? sessionStorage.getItem("abhicabs_login_return") || "/my-booking"
+        : "/my-booking";
+      sessionStorage?.removeItem("abhicabs_login_return");
+      navigate(returnTo);
+    }
+  }, []);
   const [authMode, setAuthMode] = useState("login"); // "login" | "register"
   const [step, setStep] = useState("form");          // "form" | "otp"
 
@@ -46,7 +59,13 @@ export default function Page() {
       await authApi.register({ name: name.trim(), email: email.trim(), phone: phone.trim() });
       requestNotificationPermission();
       toast("Welcome to ABHI CABS!", "success");
-      setTimeout(() => { window.location.href = "/my-booking"; }, 700);
+      setTimeout(() => {
+        const returnTo = typeof sessionStorage !== "undefined"
+          ? sessionStorage.getItem("abhicabs_login_return") || "/my-booking"
+          : "/my-booking";
+        sessionStorage.removeItem("abhicabs_login_return");
+        window.location.href = returnTo;
+      }, 700);
     } catch (err) {
       setFormError(err.message || "Couldn't create your account. Please try again.");
       setSubmitting(false);
@@ -114,7 +133,13 @@ export default function Page() {
       await authApi.verifyOtp(email.trim(), code);
       requestNotificationPermission();
       toast("Welcome back!", "success");
-      setTimeout(() => { window.location.href = "/my-booking"; }, 700);
+      setTimeout(() => {
+        const returnTo = typeof sessionStorage !== "undefined"
+          ? sessionStorage.getItem("abhicabs_login_return") || "/my-booking"
+          : "/my-booking";
+        sessionStorage.removeItem("abhicabs_login_return");
+        window.location.href = returnTo;
+      }, 700);
     } catch (err) {
       setOtpError(err.message || "That code didn't work. Check it and try again.");
       setOtp(Array(OTP_LENGTH).fill(""));

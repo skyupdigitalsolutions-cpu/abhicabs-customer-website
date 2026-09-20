@@ -35,7 +35,7 @@ export default function Page() {
       <p>You can request access to, correction of, or deletion of your personal information by contacting us at <a href="mailto:support@abhicabs.in">support@abhicabs.in</a>.</p>
 
       <h2>7. Contact Us</h2>
-      <p>For any privacy-related questions, reach us via our <a href="/#contact">Contact &amp; Support</a> page.</p>
+      <p>For any privacy-related questions, reach us via our <a href="/#contact-form">Contact &amp; Support</a> page.</p>
     </LegalLayout>
   );
 }

@@ -73,3 +73,113 @@ body { background-color: #FAFAFA; color: #111111; font-family: "Montserrat", "SF
   font-weight: 700;
 }
 .btn-brand:hover { background-color: #E6AC00; }
+
+/* ── Mobile-first responsive overrides ──────────────────────────────────────
+   These rules patch inline-style components that use fixed widths.
+   All max-width containers are naturally capped by the viewport; these
+   rules ensure nothing causes horizontal overflow on small screens.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Prevent any element from overflowing the viewport horizontally */
+html, body {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Utility scroll class used by carousels — allow horizontal scroll */
+.ac-scroll {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.ac-scroll::-webkit-scrollbar { display: none; }
+
+/* Hide utility bar items on small screens */
+@media (max-width: 768px) {
+  .ac-util-hide { display: none !important; }
+}
+
+/* Booking widget tabs — scroll horizontally on mobile */
+.booking-tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.booking-tabs::-webkit-scrollbar { display: none; }
+
+/* Tables in invoices / payment — always scrollable */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Cards that stack on mobile */
+@media (max-width: 640px) {
+  /* Booking search filter sidebar — full width on mobile */
+  .booking-search-layout {
+    flex-direction: column !important;
+  }
+  
+  /* Vehicle cards in booking search — full width */
+  .vehicle-card-wrap {
+    flex-direction: column !important;
+  }
+  .vehicle-card-image {
+    min-height: 200px !important;
+    position: relative !important;
+    height: 200px !important;
+  }
+  
+  /* Checkout / payment summary — show below form on mobile */
+  .checkout-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Payment step cards */
+  .payment-method-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Footer grid */
+  .footer-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Confirmation / my-booking large padding */
+  .page-main {
+    padding: 16px 16px 60px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .footer-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Safe-area insets for iPhone notch / home bar */
+.mobile-sticky-bar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Touch targets — minimum 44px for interactive elements on mobile */
+@media (max-width: 768px) {
+  button:not(.no-touch-target),
+  a:not(.no-touch-target) {
+    min-height: 44px;
+  }
+}
+/* iOS auto-zoom prevention — inputs below 16px trigger zoom */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  input, select, textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* OTP input boxes on mobile */
+@media (max-width: 400px) {
+  .otp-boxes input {
+    width: 36px !important;
+    height: 44px !important;
+  }
+}

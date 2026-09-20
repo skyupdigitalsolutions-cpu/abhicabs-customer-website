@@ -272,7 +272,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       <div className="flex gap-[2px] p-[6px] overflow-x-auto bg-brand-black">
         {TABS.map((t) => (
           <button key={t.mode} type="button" onClick={() => setMode(t.mode)}
-            className={`flex items-center gap-2 whitespace-nowrap px-5 py-2.5 rounded-full font-semibold text-[14.5px] transition-colors ${
+            className={`no-touch-target flex items-center gap-2 whitespace-nowrap px-5 py-2.5 rounded-full font-semibold text-[14.5px] transition-colors ${
               mode === t.mode ? "bg-primary text-brand-black" : "text-white/70 hover:bg-white/10 hover:text-white"
             }`}
           >
@@ -309,7 +309,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
               {stops.length === 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_160px_150px_140px] gap-3.5 items-end">
                   <Field label="From">
-                    <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Select pickup city" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                    <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                   </Field>
                   <Field label="To">
                     <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
@@ -333,7 +333,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                 <div className="flex flex-wrap gap-3.5 items-end">
                   <div className="w-full sm:w-[220px]">
                     <Field label="From">
-                      <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Select pickup city" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                      <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                     </Field>
                   </div>
 
@@ -404,7 +404,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <Field label="Pickup">
-                  <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="From city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                  <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                 </Field>
                 <Field label="Destination">
                   <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="To city or address" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
@@ -429,7 +429,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 <Field label="Pickup Location">
-                  <Input icon={<IconPin className="w-4 h-4 text-text-secondary" />} placeholder="Enter city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                  <Input icon={<IconPin className="w-4 h-4 text-text-secondary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                 </Field>
                 <Field label="Package / Duration">
                   <select className={FIELD_INPUT} value={fields.package} onChange={set("package")}>
@@ -475,7 +475,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   </select>
                 </Field>
                 <Field label={fields.airportDirection === "pickup" ? "Airport (Pickup)" : "Pickup Location"}>
-                  <Input placeholder="Enter address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                  <Input placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                 </Field>
                 <Field label={fields.airportDirection === "pickup" ? "Drop Location" : "Destination"}>
                   <Input placeholder="Enter destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />

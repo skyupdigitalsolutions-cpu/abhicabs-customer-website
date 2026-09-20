@@ -12,7 +12,7 @@ export default function Footer() {
   return (
     <footer className="bg-[#0b0b0b] pt-[clamp(46px,6vw,72px)] pb-0 mt-[clamp(46px,6vw,80px)]">
       <div className="max-w-[1280px] mx-auto px-[22px]">
-        <div className="grid grid-cols-4 gap-6">
+        <div className="footer-grid grid grid-cols-4 gap-6">
           <div className="max-w-[340px]">
             <div className="mb-3.5">
               <img

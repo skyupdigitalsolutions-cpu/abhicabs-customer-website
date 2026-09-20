@@ -45,7 +45,7 @@ export default function Page() {
   const isCorporate = booking.customerType === "corporate";
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "40px 22px 70px" }}>
+    <main className="page-main" style={{ maxWidth: 720, margin: "0 auto", padding: "40px 22px 70px" }}>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <div style={{ width: 82, height: 82, margin: "0 auto 20px", borderRadius: "50%", background: "#e7f6ed", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="42" height="42" viewBox="0 0 24 24" fill="none">

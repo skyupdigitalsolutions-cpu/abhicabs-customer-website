@@ -8,7 +8,7 @@ export default function ReviewsSection({ reviews }) {
         <span style={{ display: "inline-block", fontWeight: 700, fontSize: 12, letterSpacing: ".14em", textTransform: "uppercase", color: "#B8860B" }}>Reviews</span>
         <h2 style={{ fontWeight: 800, fontSize: "clamp(26px,3.4vw,42px)", lineHeight: 1.12, margin: "8px 0 0", letterSpacing: "-.02em" }}>What Our Customers Say</h2>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(100%,280px),1fr))", gap: 22 }}>
         {reviews.map((r, i) => (
           <div key={i} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ color: "#FFC107", fontSize: 16, letterSpacing: 2 }}>{"★".repeat(r.stars || 5)}</div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useRequireAuth } from "../../src/hooks/useRequireAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
@@ -57,6 +58,8 @@ export default function Page() {
 
   const [loading, setLoading] = useState(!browseMode);
   const [apiVehicles, setApiVehicles] = useState(null);
+  const [serviceAreaError, setServiceAreaError] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
   // FIX: previously auto-selected Tempo Traveller/Urbania/Coach as an
   // already-applied filter when arriving via the "Group / Coach" tile.
   // Per feedback, the filter should offer only these as choices — not
@@ -157,9 +160,17 @@ export default function Page() {
     if (browseMode || !journey) return;
     let cancelled = false;
     setLoading(true);
+    setServiceAreaError(null);
     faresApi.getFareOptions(journey)
       .then((options) => { if (!cancelled) setApiVehicles(options); })
-      .catch(() => { if (!cancelled) setApiVehicles(null); })
+      .catch((err) => {
+        if (cancelled) return;
+        setApiVehicles(null);
+        // Surface service-area errors with a clear actionable message
+        if (err?.code === "OUTSIDE_SERVICE_AREA" || (err?.message || "").includes("service area")) {
+          setServiceAreaError(err.message || "Pickup is outside the Bengaluru service area.");
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [journey?.id]);
@@ -266,6 +277,9 @@ export default function Page() {
     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#B8860B",
   };
 
+  if (!checked) return null;
+  if (!authed)  return null;
+
   return (
     <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 22px 60px" }}>
       {/* Summary bar — real route/date/time when a search was actually
@@ -326,10 +340,52 @@ export default function Page() {
 
       {loading ? (
         <StateBlock icon={<Spinner />} title="Finding available cabs…" description="Matching vehicles to your journey." />
+      ) : serviceAreaError ? (
+        <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#F59E0B" strokeWidth="2" strokeLinejoin="round"/>
+              <circle cx="12" cy="10" r="2" fill="#F59E0B"/>
+            </svg>
+          </div>
+          <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>Location Outside Service Area</h3>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
+            ABHI CABS operates across <strong>Karnataka, Telangana, Andhra Pradesh and Maharashtra</strong>.
+          </p>
+          <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 22px" }}>
+            Your selected location appears to be outside our service states. Please enter a valid
+            pickup address within one of our operating states and try again.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <a
+              href="/#booking"
+              style={{ display: "block", padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, textDecoration: "none" }}
+            >
+              ← Change Pickup Location
+            </a>
+            <a
+              href="/#contact-form"
+              style={{ display: "block", padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", color: "#555", fontWeight: 600, fontSize: 14, textDecoration: "none" }}
+            >
+              Request a Custom Booking
+            </a>
+          </div>
+        </div>
       ) : (
+        {/* Mobile filter toggle */}
+        <div className="lg:hidden mb-3">
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 12h10M10 18h4" stroke="#111" strokeWidth="2" strokeLinecap="round"/></svg>
+            {showFilters ? "Hide Filters" : "Show Filters"}
+          </button>
+        </div>
+
         <div style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
           {/* FILTERS */}
-          <aside style={{ flex: "1 1 240px", minWidth: "min(100%,240px)", position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
+          <aside className={showFilters ? "" : "hidden lg:block"} style={{ flex: "1 1 240px", minWidth: "min(100%,240px)", position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <h3 style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>Filters</h3>
               <button onClick={clearFilters} style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}>Clear all</button>
@@ -539,8 +595,8 @@ export default function Page() {
                   // two catalogue entries share the same id after merging
                   const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (
-                    <div key={cardKey} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 320px", minWidth: 280, minHeight: 260, position: "relative" }}>
+                    <div key={cardKey} className="vehicle-card-wrap" style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap" }}>
+                      <div className="vehicle-card-image" style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", minHeight: 200, position: "relative" }}>
                         <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
                       </div>
                       <div style={{ flex: "2 1 320px", padding: "20px 22px", display: "flex", flexDirection: "column" }}>

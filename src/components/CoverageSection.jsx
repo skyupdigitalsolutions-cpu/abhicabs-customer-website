@@ -8,7 +8,7 @@ export default function CoverageSection({ coverage, id = "cities" }) {
     <section id={id} style={{ maxWidth: 1280, margin: "0 auto", padding: "clamp(46px,6vw,80px) 22px 0" }}>
       <div style={{ background: "#111", borderRadius: 26, overflow: "hidden", display: "flex", flexWrap: "wrap", position: "relative" }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px)", backgroundSize: "26px 26px", pointerEvents: "none" }} />
-        <div style={{ flex: "1 1 340px", minWidth: "min(100%,320px)", padding: "clamp(28px,3.4vw,52px)", position: "relative" }}>
+        <div style={{ flex: "1 1 min(100%, 300px)", minWidth: "min(100%,320px)", padding: "clamp(28px,3.4vw,52px)", position: "relative" }}>
           <span style={{ display: "inline-block", fontWeight: 700, fontSize: 12, letterSpacing: ".14em", textTransform: "uppercase", color: "#FFC107" }}>Coverage</span>
           <h2 style={{ fontWeight: 800, fontSize: "clamp(26px,3.4vw,42px)", lineHeight: 1.1, margin: "10px 0 14px", letterSpacing: "-.02em", color: "#fff" }}>Built Around Your Routes</h2>
           <p style={{ fontSize: 15, color: "rgba(255,255,255,.6)", fontWeight: 400, margin: "0 0 24px", maxWidth: 440 }}>
@@ -39,7 +39,7 @@ export default function CoverageSection({ coverage, id = "cities" }) {
             ))}
           </div>
         </div>
-        <div style={{ flex: "1 1 340px", minWidth: "min(100%,320px)", padding: "clamp(20px,2.4vw,40px)", position: "relative", display: "flex", alignItems: "center" }}>
+        <div style={{ flex: "1 1 min(100%, 300px)", minWidth: "min(100%,320px)", padding: "clamp(20px,2.4vw,40px)", position: "relative", display: "flex", alignItems: "center" }}>
           <svg viewBox="0 0 420 340" style={{ width: "100%", height: "auto", display: "block" }}>
             <path d="M80 100 Q160 70 165 165" stroke="#FFC107" strokeWidth="2.5" fill="none" strokeDasharray="2 8" strokeLinecap="round" />
             <path d="M165 165 Q125 235 100 275" stroke="rgba(255,255,255,.35)" strokeWidth="2" fill="none" strokeDasharray="2 8" strokeLinecap="round" />

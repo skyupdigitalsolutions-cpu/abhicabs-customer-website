@@ -72,7 +72,7 @@ export default function HeroSection({ widgetKey, widgetProps }) {
       </section>
 
       {/* BOOKING ENGINE (overlaps hero) */}
-      <section id="booking" style={{ position: "relative", marginTop: "clamp(-96px,-9vw,-110px)", zIndex: 5 }}>
+      <section id="booking" style={{ position: "relative", marginTop: "clamp(-40px,-9vw,-110px)", zIndex: 5 }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 22px" }}>
           <div
             style={{

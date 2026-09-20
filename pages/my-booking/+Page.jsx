@@ -228,7 +228,7 @@ export default function Page() {
   );
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "32px 22px 70px" }}>
+    <main className="page-main" style={{ maxWidth: 900, margin: "0 auto", padding: "32px 22px 70px" }}>
       <h1 style={{ fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", margin: "0 0 18px", letterSpacing: "-.02em" }}>My Bookings</h1>
 
       {loggedIn === false && (
@@ -246,7 +246,7 @@ export default function Page() {
       {loggedIn === true && (
         <>
           {/* Tab bar — per spec */}
-          <div style={{ display: "flex", gap: 6, background: "#fff", border: "1px solid #EFEFEF", padding: 5, borderRadius: 12, marginBottom: 22, width: "max-content", maxWidth: "100%", overflowX: "auto" }}>
+          <div className="booking-tabs" style={{ display: "flex", gap: 6, background: "#fff", border: "1px solid #EFEFEF", padding: 5, borderRadius: 12, marginBottom: 22, width: "max-content", maxWidth: "100%", overflowX: "auto" }}>
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -282,7 +282,7 @@ export default function Page() {
             )}
           </div>
 
-          {loadStatus === "loading" && <p style={{ textAlign: "center", padding: "64px 0", color: "#666" }}>Loading your bookings…</p>}
+          {loadStatus === "loading" && <p style={{ textAlign: "center", padding: "40px 0", color: "#666" }}>Loading your bookings…</p>}
 
           {loadStatus === "error" && (
             <div style={{ maxWidth: 480, margin: "0 auto" }}>

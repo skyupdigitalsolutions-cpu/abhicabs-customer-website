@@ -27,7 +27,7 @@ export default function Page() {
       <p>Changing your pickup time, date, or drop location is treated as a modification rather than a cancellation and does not incur a cancellation fee, subject to driver and cab availability.</p>
 
       <h2>7. Contact</h2>
-      <p>For cancellation or refund queries, reach us through <a href="/#contact">Contact &amp; Support</a>.</p>
+      <p>For cancellation or refund queries, reach us through <a href="/#contact-form">Contact &amp; Support</a>.</p>
     </LegalLayout>
   );
 }

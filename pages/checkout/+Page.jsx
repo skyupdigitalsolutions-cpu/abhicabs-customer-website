@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useRequireAuth } from "../../src/hooks/useRequireAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -129,6 +130,7 @@ function TermsModal({ onClose }) {
 
 // ── Checkout Page ────────────────────────────────────────────────────────────
 export default function Page() {
+  const { checked, authed } = useRequireAuth();
   const dispatch = useDispatch();
   const toast = useToast();
   const selected = useSelector(selectSelectedCab);
@@ -150,6 +152,9 @@ export default function Page() {
 
   const bookingCompletedRef = useRef(false);
   const abandonmentSentRef = useRef(false);
+
+  if (!checked) return null;
+  if (!authed)  return null;
 
   if (!selected || !vehicle || !journey) {
     return (
@@ -233,7 +238,7 @@ export default function Page() {
         </a>
         <h1 style={{ fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", margin: "0 0 22px", letterSpacing: "-.02em" }}>Checkout</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">
+        <div className="checkout-grid grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">
 
           {/* ── Left: Passenger Details ────────────────────────────── */}
           <div className="flex flex-col gap-5">
