@@ -1,4 +1,0 @@
-# Cloudflare Pages — SPA fallback
-# All routes that don't match a static file get served index.html
-# so Vike's client-side router handles them.
-/*    /index.html    200
