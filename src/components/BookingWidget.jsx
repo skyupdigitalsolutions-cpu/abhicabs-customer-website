@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { createJourney } from "../store/slices/journeySlice";
@@ -7,7 +7,8 @@ import { IconArrowRight, IconSwap, IconClock, IconPlane, IconPin, IconZap } from
 import Button from "./ui/Button";
 import { FIELD_INPUT, FIELD_LABEL } from "./ui/classNames";
 import LocationMapPicker from "./LocationMapPicker";
-import { useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { useJsApiLoader } from "@react-google-maps/api";
+import { isAuthenticated } from "../api/tokens";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 import { createSupportTicket } from "../api/services/support";
 
@@ -123,25 +124,55 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const pickupAutocompleteRef = useRef(null);
   const dropAutocompleteRef = useRef(null);
 
-  function makeAutocompleteHandlers(key, ref, setStateFn) {
-    return {
-      onLoad: (autocomplete) => {
-        ref.current = autocomplete;
-        autocomplete.setComponentRestrictions({ country: "in" });
-      },
-      onPlaceChanged: () => {
-        const place = ref.current?.getPlace();
-        const value = place?.formatted_address || place?.name;
-        if (value) setFieldDirect(key, value);
-        setStateFn(extractStateFromPlace(place));
-      },
-    };
-  }
-  // Only wired up once the script has actually loaded and a real key is
-  // configured — otherwise these fields just behave as plain text inputs,
-  // same as before this feature existed.
-  const pickupAutocomplete = mapsLoaded && GOOGLE_MAPS_API_KEY ? makeAutocompleteHandlers("pickup", pickupAutocompleteRef, setPickupState) : null;
-  const dropAutocomplete = mapsLoaded && GOOGLE_MAPS_API_KEY ? makeAutocompleteHandlers("drop", dropAutocompleteRef, setDropState) : null;
+  // Attach google.maps.places.Autocomplete to an input element.
+  //
+  // Key design decisions:
+  //   1. useCallback with [mapsLoaded] dependency → stable function reference
+  //      across renders. React's ref callback is called with null on detach and
+  //      the DOM node on attach — a new function identity every render would
+  //      cause React to detach+reattach on every render, breaking the listener.
+  //   2. We use google.maps.places.Autocomplete (the classic API) directly on
+  //      the existing <input> element. PlaceAutocompleteElement (new API) is a
+  //      Web Component that creates its OWN input — it cannot wrap an existing
+  //      one, so using it here would require replacing all our inputs with it,
+  //      which would break the widget's controlled-input value binding.
+  //   3. The ac ref is stored outside the callback so React ref detach (null)
+  //      doesn't lose it — we just ignore the null call.
+
+  const attachPickup = useCallback((inputDomEl) => {
+    if (!inputDomEl || !mapsLoaded || !window.google?.maps?.places?.Autocomplete) return;
+    if (pickupAutocompleteRef.current) return; // already attached
+    const ac = new window.google.maps.places.Autocomplete(inputDomEl, {
+      componentRestrictions: { country: "in" },
+      fields: ["formatted_address", "name", "address_components", "geometry"],
+    });
+    pickupAutocompleteRef.current = ac;
+    ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      const value = place?.formatted_address || place?.name || "";
+      if (value) setFieldDirect("pickup", value);
+      setPickupState(extractStateFromPlace(place));
+    });
+  }, [mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const attachDrop = useCallback((inputDomEl) => {
+    if (!inputDomEl || !mapsLoaded || !window.google?.maps?.places?.Autocomplete) return;
+    if (dropAutocompleteRef.current) return; // already attached
+    const ac = new window.google.maps.places.Autocomplete(inputDomEl, {
+      componentRestrictions: { country: "in" },
+      fields: ["formatted_address", "name", "address_components", "geometry"],
+    });
+    dropAutocompleteRef.current = ac;
+    ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      const value = place?.formatted_address || place?.name || "";
+      if (value) setFieldDirect("drop", value);
+      setDropState(extractStateFromPlace(place));
+    });
+  }, [mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickupAutocomplete = GOOGLE_MAPS_API_KEY ? { attachTo: attachPickup } : null;
+  const dropAutocomplete   = GOOGLE_MAPS_API_KEY ? { attachTo: attachDrop }   : null;
 
   // Via stops — simple list of intermediate city names (no separate date/time)
   const [stops, setStops] = useState([]); // e.g. ["Mysore", "Coorg"]
@@ -171,6 +202,15 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
   function handleSubmit(e) {
     e.preventDefault();
+
+    // Guard: booking search requires auth — redirect to login and come back
+    if (!isAuthenticated()) {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem("abhicabs_login_return", "/booking-search");
+      }
+      navigate("/login");
+      return;
+    }
 
     if (mode !== "local" && !fields.pickup.trim()) {
       toast("Please enter a pickup location", "error"); return;
@@ -525,19 +565,20 @@ function Field({ label, children }) {
 }
 
 function Input({ icon, className = "", onMapClick, autocomplete, ...props }) {
+  // autocomplete?.attachTo is a stable useCallback — pass it as the ref
+  // callback directly. React calls it with the DOM node on mount and null
+  // on unmount; the callback ignores null so no cleanup is needed.
   const inputEl = (
-    <input {...props} className={`border-none bg-transparent outline-none text-base md:text-[14.5px] text-text w-full min-w-0 ${className}`} />
+    <input
+      {...props}
+      ref={autocomplete ? autocomplete.attachTo : null}
+      className={`border-none bg-transparent outline-none text-base md:text-[14.5px] text-text w-full min-w-0 ${className}`}
+    />
   );
   return (
     <div className="flex items-center gap-2.5 border border-border rounded-[10px] px-3.5 py-3 bg-[#fbfbfe] focus-within:border-brand-black focus-within:bg-white transition-colors">
       {icon}
-      {autocomplete ? (
-        <Autocomplete onLoad={autocomplete.onLoad} onPlaceChanged={autocomplete.onPlaceChanged} className="w-full min-w-0">
-          {inputEl}
-        </Autocomplete>
-      ) : (
-        inputEl
-      )}
+      {inputEl}
       {onMapClick && (
         <button
           type="button"

@@ -35,3 +35,20 @@ export function clearTokens() {
 export function isAuthenticated() {
   return !!getAccessToken();
 }
+
+const USER_NAME_KEY = "abhicabs_user_name";
+
+export function storeUserName(name) {
+  if (!hasWindow || !name) return;
+  try { window.localStorage.setItem(USER_NAME_KEY, name); } catch { /* ignore */ }
+}
+
+export function getStoredUserName() {
+  if (!hasWindow) return null;
+  try { return window.localStorage.getItem(USER_NAME_KEY); } catch { return null; }
+}
+
+export function clearStoredUserName() {
+  if (!hasWindow) return;
+  try { window.localStorage.removeItem(USER_NAME_KEY); } catch { /* ignore */ }
+}

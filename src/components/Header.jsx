@@ -2,52 +2,81 @@ import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectMobileNavOpen, setMobileNavOpen } from "../store/slices/uiSlice";
-import { isAuthenticated } from "../api/tokens";
+import { isAuthenticated, getStoredUserName } from "../api/tokens";
 import { authApi } from "../api";
 import { useToast } from "../hooks/useToast";
 
-// Rebuilt to match the Figma bundler export exactly: copy, icon geometry,
-// colors (#111 / #FFC107), spacing, and nav link set all reproduced as
-// given. Converted from inline style={{}} objects to Tailwind utility
-// classes for consistency with the rest of the codebase — same visual
-// result, using the project's existing bg-primary/bg-brand-black tokens
-// where they match, and arbitrary-value classes (e.g. text-[#999]) for the
-// handful of one-off colors that don't have a token.
 const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/#about", label: "About" },
-  { href: "/#fleet", label: "Vehicles" },
-  { href: "/#booking", label: "Outstation" },
-  { href: "/#blogs", label: "Blogs" }, // no dedicated blog content/page exists anywhere in this project yet — placeholder anchor
+  { href: "/",          label: "Home" },
+  { href: "/#about",    label: "About" },
+  { href: "/#fleet",    label: "Vehicles" },
+  { href: "/#booking",  label: "Outstation" },
+  { href: "/#blogs",    label: "Blogs" },
 ];
 
-// FIX: this is still the same placeholder number used throughout the
-// project (all zeros) — there's no real business phone number provided
-// anywhere in this codebase yet. Displaying the actual digits (rather than
-// the generic "Customer Support" label) is what was asked for, but this
-// specific number itself still needs to be replaced with the real one.
-const HELPLINE_HREF = "tel:+910000000000";
+const HELPLINE_HREF    = "tel:+910000000000";
 const HELPLINE_DISPLAY = "+91 00000 00000";
+
+// ── User icon (shown before login) ───────────────────────────────────────────
+function UserIcon({ size = 18, color = "#111" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="8" r="3.4" stroke={color} strokeWidth="2" />
+      <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export default function Header() {
   const dispatch = useDispatch();
   const open = useSelector(selectMobileNavOpen);
   const toast = useToast();
 
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [loggedIn, setLoggedIn]   = useState(false);
+  const [userName, setUserName]   = useState("");
+  const [dropdownOpen, setDropdown] = useState(false);
+
   useEffect(() => {
-    setLoggedIn(isAuthenticated());
+    const auth = isAuthenticated();
+    setLoggedIn(auth);
+    if (auth) {
+      // Try stored name first (instant), then fetch from /auth/me in background
+      const stored = getStoredUserName();
+      if (stored) setUserName(stored);
+      authApi.getMe()
+        .then((data) => {
+          const name = data?.name || data?.user?.name || stored || "";
+          if (name) {
+            setUserName(name);
+            import("../api/tokens").then(({ storeUserName }) => storeUserName(name));
+          }
+        })
+        .catch(() => { /* keep stored name */ });
+    }
   }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    function close() { setDropdown(false); }
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [dropdownOpen]);
 
   async function handleLogout() {
     await authApi.logout();
     setLoggedIn(false);
+    setUserName("");
+    setDropdown(false);
     navigate("/");
   }
 
+  // First name only for greeting
+  const firstName = userName?.trim().split(" ")[0] || "";
+
   return (
     <>
-      {/* ===== UTILITY BAR ===== */}
+      {/* ── Utility bar ─────────────────────────────────────────────── */}
       <div className="bg-brand-black text-white">
         <div className="max-w-[1280px] mx-auto px-[22px] h-[38px] flex items-center justify-between gap-4 text-[12.5px] font-medium">
           <span className="inline-flex items-center gap-1.5 text-white/85">
@@ -79,9 +108,11 @@ export default function Header() {
         </div>
       </div>
 
-      {/* ===== NAV ===== */}
+      {/* ── Main nav ─────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-white border-b border-black/5">
         <div className="max-w-[1280px] mx-auto px-[22px] h-[72px] flex items-center justify-between gap-4 relative">
+
+          {/* Logo */}
           <a href="/" className="flex items-center gap-2.5 shrink-0">
             <img src="/images/abhi-cabs-icon.svg" alt="Abhi Cabs" className="w-10 h-10 object-contain" />
             <span className="leading-none">
@@ -94,6 +125,7 @@ export default function Header() {
             </span>
           </a>
 
+          {/* Desktop nav links */}
           <nav className="hidden lg:flex items-center" aria-label="Primary">
             {NAV_LINKS.map((l) => (
               <a
@@ -108,35 +140,75 @@ export default function Header() {
             ))}
           </nav>
 
+          {/* Desktop right actions */}
           <div className="flex items-center gap-3 shrink-0">
             {loggedIn ? (
-              <a
-                href="/my-booking"
-                className="hidden lg:inline-flex items-center gap-1.5 font-semibold text-[13.5px] text-brand-black hover:!text-[#B8860B]"
-              >
-                My Booking
-              </a>
+              /* ── Logged in: Hi [Name] dropdown ── */
+              <div className="relative hidden lg:block">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setDropdown((v) => !v); }}
+                  className="inline-flex items-center gap-2 font-semibold text-[13.5px] text-brand-black hover:!text-[#B8860B] bg-none border-none cursor-pointer"
+                >
+                  {/* Avatar circle */}
+                  <span className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-brand-black font-bold text-[13px] shrink-0">
+                    {firstName ? firstName[0].toUpperCase() : <UserIcon size={15} color="#111" />}
+                  </span>
+                  <span>Hi, {firstName || "there"}</span>
+                  {/* Chevron */}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ transition: "transform .2s", transform: dropdownOpen ? "rotate(180deg)" : "rotate(0)" }}>
+                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+
+                {/* Dropdown */}
+                {dropdownOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-[#F0F0F0] overflow-hidden z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <a
+                      href="/my-booking"
+                      onClick={() => setDropdown(false)}
+                      className="flex items-center gap-2.5 px-4 py-3 text-[13.5px] font-semibold text-brand-black hover:!bg-[#FAFAFA]"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                        <rect x="3" y="4" width="18" height="17" rx="2.5" stroke="#111" strokeWidth="1.8" />
+                        <path d="M8 2v4M16 2v4M3 10h18" stroke="#111" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                      My Bookings
+                    </a>
+                    <div className="h-px bg-[#F0F0F0]" />
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-[13.5px] font-semibold text-[#E53E3E] hover:!bg-[#FFF5F5] border-none bg-white cursor-pointer"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                        <path d="M16 17l5-5-5-5M21 12H9M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
+              /* ── Not logged in: Login icon + Sign In ── */
               <a
                 href="/login"
                 className="hidden lg:inline-flex items-center gap-1.5 font-semibold text-[13.5px] text-brand-black hover:!text-[#B8860B]"
               >
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" className="mr-0.5">
-                  <circle cx="12" cy="8" r="3.4" stroke="#111" strokeWidth="2" />
-                  <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="#111" strokeWidth="2" strokeLinecap="round" />
-                </svg>
+                <UserIcon size={17} />
                 Sign In
               </a>
             )}
-            {/* FIX: no real customer mobile app exists anywhere in this
-                project (only the driver app does), so this is an honest
-                "coming soon" action rather than a fake app-store link. */}
+
             <button
               onClick={() => toast("App download coming soon!", "success")}
               className="hidden lg:inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-primary text-brand-black font-semibold text-[14px] shadow-[0_6px_18px_rgba(255,193,7,.4)] border-none cursor-pointer hover:!bg-[#FFB300]"
             >
               Download App
             </button>
+
+            {/* Mobile hamburger */}
             <button
               className="lg:hidden w-[42px] h-[42px] rounded-[11px] border-[1.5px] border-[#E5E5E5] bg-white flex items-center justify-center cursor-pointer"
               onClick={() => dispatch(setMobileNavOpen(!open))}
@@ -152,10 +224,8 @@ export default function Header() {
         </div>
       </header>
 
-      {/* Mobile drawer */}
-      <div
-        className={`lg:hidden fixed inset-x-0 top-[110px] bottom-0 bg-white z-40 overflow-y-auto px-6 py-5 transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
-      >
+      {/* ── Mobile drawer ────────────────────────────────────────────── */}
+      <div className={`lg:hidden fixed inset-x-0 top-[110px] bottom-0 bg-white z-40 overflow-y-auto px-6 py-5 transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}>
         {NAV_LINKS.map((l) => (
           <a
             key={l.label}
@@ -166,16 +236,38 @@ export default function Header() {
             {l.label}
           </a>
         ))}
+
         <div className="flex flex-col gap-3 mt-6">
           {loggedIn ? (
-            <button
-              onClick={() => { handleLogout(); dispatch(setMobileNavOpen(false)); }}
-              className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold"
-            >
-              Logout
-            </button>
+            <>
+              {/* Greeting row in mobile */}
+              <div className="flex items-center gap-2.5 py-3 px-1">
+                <span className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-brand-black font-bold text-[14px]">
+                  {firstName ? firstName[0].toUpperCase() : "U"}
+                </span>
+                <span className="font-semibold text-[15px]">Hi, {firstName || "there"}</span>
+              </div>
+              <a
+                href="/my-booking"
+                onClick={() => dispatch(setMobileNavOpen(false))}
+                className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center text-brand-black"
+              >
+                My Bookings
+              </a>
+              <button
+                onClick={() => { handleLogout(); dispatch(setMobileNavOpen(false)); }}
+                className="w-full py-3 rounded-xl border border-[#FECACA] text-[#E53E3E] font-semibold bg-white cursor-pointer"
+              >
+                Logout
+              </button>
+            </>
           ) : (
-            <a href="/login" onClick={() => dispatch(setMobileNavOpen(false))} className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center">
+            <a
+              href="/login"
+              onClick={() => dispatch(setMobileNavOpen(false))}
+              className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center inline-flex items-center justify-center gap-2"
+            >
+              <UserIcon size={16} />
               Sign In
             </a>
           )}
@@ -184,7 +276,7 @@ export default function Header() {
             onClick={() => dispatch(setMobileNavOpen(false))}
             className="w-full py-3 rounded-full text-center font-bold bg-primary text-brand-black"
           >
-            My Booking
+            Book Now
           </a>
         </div>
       </div>

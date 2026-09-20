@@ -12,18 +12,122 @@ import { FIELD_INPUT } from "../../src/components/ui/classNames";
 import { useToast } from "../../src/hooks/useToast";
 import { IconPin } from "../../src/components/Icons";
 
-const PARTIAL_ADVANCE_PERCENT = 25;
+const INCLUSIONS = [
+  "Driver allowance (bata) included for outstation trips",
+  "Toll charges covered on the route",
+  "State tax / permit charges included",
+  "GST included in the displayed fare (5%)",
+  "Free waiting time — 30 min at pickup, 15 min at stops",
+  "Round-trip fare includes return journey distance",
+  "Night driving allowance included where applicable",
+  "One pickup and one drop per booking",
+];
 
-// Rebuilt to match the Figma bundler export's structure: Checkout is now
-// ONLY passenger/invoice details + a fare summary ending in "Continue to
-// Payment" — Payment Method and Payment Options moved to the new, separate
-// /payment page (pages/payment/+Page.jsx), matching the spec's actual
-// two-page split instead of the previous single combined page.
-//
-// Form values are saved to the new checkoutSlice (Redux, localStorage
-// -backed) via setCheckoutDetails so the Payment page — which can no longer
-// read this out of local component state now that it's a different page —
-// has everything it needs to actually create the booking and take payment.
+const EXCLUSIONS = [
+  "Parking charges at destination — paid by passenger",
+  "Entry / green tax fees at tourist spots",
+  "Extra kilometres beyond the package limit",
+  "Extra waiting time beyond the free window",
+  "Intercity or state-border permit fees not on route",
+  "Alcohol, smoking, or food damage inside the vehicle",
+  "Airport / railway terminal entry charges",
+  "Return fare for one-way trips",
+];
+
+// ── Terms Modal ──────────────────────────────────────────────────────────────
+function TermsModal({ onClose }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 20, maxWidth: 520, width: "100%",
+          maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: "20px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <h2 style={{ fontWeight: 800, fontSize: 18, margin: 0 }}>Terms &amp; Conditions</h2>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, color: "#888", lineHeight: 1 }}
+            aria-label="Close"
+          >×</button>
+        </div>
+        <p style={{ color: "#666", fontSize: 13, padding: "6px 24px 0", flexShrink: 0 }}>
+          Please read before confirming your booking.
+        </p>
+
+        {/* Scrollable body */}
+        <div style={{ overflowY: "auto", padding: "18px 24px 24px" }}>
+          {/* Inclusions */}
+          <div style={{
+            background: "#F0FFF4", border: "1px solid #BBF7D0", borderRadius: 14,
+            padding: "16px 18px", marginBottom: 16,
+          }}>
+            <p style={{ fontWeight: 700, fontSize: 13.5, color: "#166534", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: ".04em" }}>
+              ✓ What's Included
+            </p>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 9 }}>
+              {INCLUSIONS.map((item, i) => (
+                <li key={i} style={{ display: "flex", gap: 9, fontSize: 13.5, color: "#15803D" }}>
+                  <span style={{ flexShrink: 0, marginTop: 2 }}>✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Exclusions */}
+          <div style={{
+            background: "#FFF7F7", border: "1px solid #FECACA", borderRadius: 14,
+            padding: "16px 18px", marginBottom: 20,
+          }}>
+            <p style={{ fontWeight: 700, fontSize: 13.5, color: "#991B1B", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: ".04em" }}>
+              ✗ Not Included
+            </p>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 9 }}>
+              {EXCLUSIONS.map((item, i) => (
+                <li key={i} style={{ display: "flex", gap: 9, fontSize: 13.5, color: "#B91C1C" }}>
+                  <span style={{ flexShrink: 0, marginTop: 2 }}>✗</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* General terms */}
+          <div style={{ fontSize: 12.5, color: "#666", lineHeight: 1.7 }}>
+            <p style={{ fontWeight: 700, color: "#333", fontSize: 13, marginBottom: 8 }}>General Terms</p>
+            <p style={{ margin: "0 0 7px" }}>Cancellations made more than 24 hours before pickup receive a full refund. Cancellations within 24 hours may attract a cancellation fee as per our policy.</p>
+            <p style={{ margin: "0 0 7px" }}>ABHI CABS reserves the right to substitute a vehicle of equivalent or superior category in case of unforeseen circumstances.</p>
+            <p style={{ margin: 0 }}>By proceeding with the booking, you agree to these terms and conditions.</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "14px 24px 20px", borderTop: "1px solid #EFEFEF", flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{
+              width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
+              background: "#111", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer",
+            }}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Checkout Page ────────────────────────────────────────────────────────────
 export default function Page() {
   const dispatch = useDispatch();
   const toast = useToast();
@@ -39,15 +143,10 @@ export default function Page() {
   const [landmark, setLandmark] = useState(saved.landmark || "");
   const [gstNumber, setGstNumber] = useState(saved.gstNumber || "");
   const [companyName, setCompanyName] = useState(saved.companyName || "");
-  const [paxCount, setPaxCount] = useState(saved.paxCount || "2");
   const [notes, setNotes] = useState(saved.notes || "");
   const [customerType, setCustomerType] = useState(saved.customerType || "retail");
-  // NEW: was never actually capturable on this page before — checkoutSlice
-  // already had a paymentMode field and Payment page already read it, but
-  // nothing on Checkout ever let the user set it, so it silently stayed at
-  // its "FULL" default no matter what. This is the missing piece.
-  const [paymentMode, setPaymentMode] = useState(saved.paymentMode || "FULL");
   const [errors, setErrors] = useState({});
+  const [showTerms, setShowTerms] = useState(false);
 
   const bookingCompletedRef = useRef(false);
   const abandonmentSentRef = useRef(false);
@@ -80,28 +179,16 @@ export default function Page() {
       const phoneOk = /^\d{10}$/.test(mobile.trim());
       const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
       if (!nameOk || !phoneOk || !emailOk) return;
-
       abandonmentSentRef.current = true;
       const message =
         `Abandoned checkout before confirming.\n` +
         `Route: ${journey.pickup} → ${journey.drop}\n` +
-        `Vehicle: ${vehicle?.name || selected?.vehicleId || "unknown"}\n` +
+        `Vehicle: ${vehicle?.name || "unknown"}\n` +
         `Estimated fare: ${fmtINR(totalPayable)}`;
-
-      const payload = JSON.stringify({
-        name: fullName.trim(), mobile: mobile.trim(), email: email.trim(),
-        topic: "Abandoned Booking", message,
-      });
-
-      try {
-        const blob = new Blob([payload], { type: "application/json" });
-        navigator.sendBeacon(`${API_BASE_URL}/contact`, blob);
-      } catch { /* best-effort only */ }
+      const payload = JSON.stringify({ name: fullName.trim(), mobile: mobile.trim(), email: email.trim(), topic: "Abandoned Booking", message });
+      try { navigator.sendBeacon(`${API_BASE_URL}/contact`, new Blob([payload], { type: "application/json" })); } catch { /* best-effort */ }
     }
-
-    function onVisibilityChange() {
-      if (document.visibilityState === "hidden") trySendAbandonment();
-    }
+    function onVisibilityChange() { if (document.visibilityState === "hidden") trySendAbandonment(); }
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", trySendAbandonment);
     return () => {
@@ -123,180 +210,174 @@ export default function Page() {
 
   function continueToPayment() {
     if (!validate()) { toast("Please fix the highlighted fields", "error"); return; }
-    bookingCompletedRef.current = true; // stop abandonment tracking — they're proceeding, not leaving
+    bookingCompletedRef.current = true;
     dispatch(setCheckoutDetails({
       fullName: fullName.trim(), mobile: mobile.trim(), email: email.trim(),
       address: address.trim(), landmark: landmark.trim(),
-      gstNumber: isCorporate ? gstNumber.trim() : "", companyName: isCorporate ? companyName.trim() : "",
-      paxCount, notes: notes.trim(), customerType, paymentMode,
+      gstNumber: isCorporate ? gstNumber.trim() : "",
+      companyName: isCorporate ? companyName.trim() : "",
+      notes: notes.trim(), customerType,
+      paymentMode: saved.paymentMode || "FULL",
     }));
     navigate("/payment");
   }
 
   return (
-    <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
-      <a href="/booking-search" className="inline-flex items-center gap-1.5 hover:!text-[#111]" style={{ color: "#666", fontWeight: 600, fontSize: 13.5, marginBottom: 18 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        Back to Vehicles
-      </a>
-      <h1 style={{ fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", margin: "0 0 22px", letterSpacing: "-.02em" }}>Checkout</h1>
+    <>
+      {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">
-        <div className="flex flex-col gap-5">
-          {/* Passenger Details — per spec: Full Name, Mobile, Email, Pickup
-              Address, Landmark, Passengers, Special Instructions.
-              FIX: the old separate "Invoice Type" card (a big two-option
-              Retail/Corporate picker) is replaced by a small "+ GST" toggle
-              here — clicking it reveals Company Name/GSTIN inline and marks
-              the booking as corporate; clicking it again hides them and
-              reverts to retail, clearing whatever was entered. */}
-          <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
-            <div className="flex items-center justify-between mb-4.5">
-              <h2 className="text-[17px] font-bold">Passenger Details</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isCorporate) {
-                    setCustomerType("retail");
-                    setCompanyName("");
-                    setGstNumber("");
-                  } else {
-                    setCustomerType("corporate");
-                  }
-                }}
-                style={{
-                  fontSize: 12.5, fontWeight: 700, padding: "6px 12px", borderRadius: 9999, cursor: "pointer",
-                  border: isCorporate ? "1.5px solid #FFC107" : "1.5px solid #E5E5E5",
-                  background: isCorporate ? "#FFFBEA" : "#fff",
-                  color: isCorporate ? "#B8860B" : "#666",
-                }}
-              >
-                {isCorporate ? "− Remove GST" : "+ GST"}
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <FormField label="Full Name" required error={errors.fullName}>
-                  <input className={FIELD_INPUT} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
-                </FormField>
+      <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
+        <a href="/booking-search" className="inline-flex items-center gap-1.5 hover:!text-[#111]" style={{ color: "#666", fontWeight: 600, fontSize: 13.5, marginBottom: 18 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          Back to Vehicles
+        </a>
+        <h1 style={{ fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", margin: "0 0 22px", letterSpacing: "-.02em" }}>Checkout</h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">
+
+          {/* ── Left: Passenger Details ────────────────────────────── */}
+          <div className="flex flex-col gap-5">
+            <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
+              <div className="flex items-center justify-between mb-4.5">
+                <h2 className="text-[17px] font-bold">Passenger Details</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isCorporate) { setCustomerType("retail"); setCompanyName(""); setGstNumber(""); }
+                    else setCustomerType("corporate");
+                  }}
+                  style={{
+                    fontSize: 12.5, fontWeight: 700, padding: "6px 12px", borderRadius: 9999, cursor: "pointer",
+                    border: isCorporate ? "1.5px solid #FFC107" : "1.5px solid #E5E5E5",
+                    background: isCorporate ? "#FFFBEA" : "#fff",
+                    color: isCorporate ? "#B8860B" : "#666",
+                  }}
+                >
+                  {isCorporate ? "− Remove GST" : "+ GST"}
+                </button>
               </div>
-              <FormField label="Mobile" required error={errors.mobile}>
-                <input className={FIELD_INPUT} type="tel" placeholder="10-digit mobile" value={mobile} onChange={(e) => setMobile(e.target.value)} />
-              </FormField>
-              <FormField label="Email" error={errors.email}>
-                <input className={FIELD_INPUT} type="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </FormField>
-              <div className="sm:col-span-2">
-                <FormField label="Pickup Address">
-                  <input className={FIELD_INPUT} placeholder="House / building, area" value={address} onChange={(e) => setAddress(e.target.value)} />
-                </FormField>
-              </div>
-              <FormField label="Landmark">
-                <input className={FIELD_INPUT} placeholder="Nearby landmark" value={landmark} onChange={(e) => setLandmark(e.target.value)} />
-              </FormField>
-              <FormField label="Passengers">
-                <input className={FIELD_INPUT} readOnly value={paxCount} style={{ background: "#F1F1F1", color: "#666" }} />
-              </FormField>
-              {isCorporate && (
-                <>
-                  <FormField label="Company Name" required error={errors.companyName}>
-                    <input className={FIELD_INPUT} placeholder="Your company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full Name — full width */}
+                <div className="sm:col-span-2">
+                  <FormField label="Full Name" required error={errors.fullName}>
+                    <input className={FIELD_INPUT} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" />
                   </FormField>
-                  <FormField label="GSTIN (optional)">
-                    <input className={FIELD_INPUT} placeholder="e.g. 29AABCT1332L1ZU" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} />
-                  </FormField>
-                </>
-              )}
-              <div className="sm:col-span-2">
-                <FormField label="Special Instructions">
-                  <textarea className={`${FIELD_INPUT} min-h-[80px]`} placeholder="Anything the driver should know…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </div>
+
+                {/* Mobile + Email — side by side */}
+                <FormField label="Mobile" required error={errors.mobile}>
+                  <input className={FIELD_INPUT} type="tel" maxLength={10} placeholder="10-digit mobile" value={mobile} onChange={(e) => setMobile(e.target.value)} />
                 </FormField>
-              </div>
-            </div>
-          </div>
-        </div>
+                <FormField label="Email" error={errors.email}>
+                  <input className={FIELD_INPUT} type="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </FormField>
 
-        {/* Summary */}
-        <div style={{ position: "sticky", top: 120, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden" }}>
-            <div style={{ height: 130, background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="72" height="72" viewBox="0 0 24 24" fill="none">
-                <path d="M4 16l1.5-5A2 2 0 017.4 9.5h9.2a2 2 0 011.9 1.5L20 16" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <rect x="2.5" y="16" width="19" height="4" rx="1.5" stroke="#B8860B" strokeWidth="1.5" />
-                <circle cx="7" cy="20" r="1.6" fill="#B8860B" />
-                <circle cx="17" cy="20" r="1.6" fill="#B8860B" />
-                <path d="M8 9.5l1-3.5h6l1 3.5" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div style={{ padding: 22 }}>
-              <h3 style={{ fontWeight: 700, fontSize: 17, margin: "0 0 3px" }}>{vehicle.name}</h3>
-              <div style={{ fontSize: 12.5, color: "#666", fontWeight: 500, marginBottom: 16 }}>{vehicle.seats} Seats · {vehicle.ac ? "A/C" : "Non-A/C"}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13, paddingBottom: 16, borderBottom: "1px dashed #EFEFEF" }}>
-                <SummaryRow label="Route" value={`${journey.pickup} → ${journey.drop}`} />
-                <SummaryRow label="Date" value={journey.date} />
-                <SummaryRow label="Time" value={journey.time} />
-                <SummaryRow label="Trip" value={journey.tripType} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13, padding: "16px 0", borderBottom: "1px dashed #EFEFEF" }}>
-                <SummaryRow label="Base Fare" value={fmtINR(baseFare)} />
-                {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
-                {surgeFee > 0 && <SummaryRow label="Surge Fee (5%)" value={`+ ${fmtINR(surgeFee)}`} />}
-                {isCorporate && <SummaryRow label="Taxes (5%)" value={`+ ${fmtINR(cgst + sgst)}`} />}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 0 6px" }}>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>Estimated Total</span>
-                <span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 800, fontSize: 24, color: "#111" }}>{fmtINR(totalPayable)}</span>
-              </div>
+                {/* Pickup Address — full width */}
+                <div className="sm:col-span-2">
+                  <FormField label="Pickup Address">
+                    <input className={FIELD_INPUT} placeholder="House / building, area" value={address} onChange={(e) => setAddress(e.target.value)} />
+                  </FormField>
+                </div>
 
-              {/* Payment Options — decide when/how much here, before moving
-                  on to Payment (which just collects the actual payment
-                  method for whatever was chosen here). */}
-              <div style={{ marginTop: 14 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "#666", textTransform: "uppercase", letterSpacing: ".04em", margin: "0 0 8px" }}>Payment Options</p>
-                <div style={{ border: "1px solid #EFEFEF", borderRadius: 12, overflow: "hidden" }}>
-                  {[
-                    { key: "ZERO", title: "Book at zero", sub: `Pay ${fmtINR(totalPayable)} later`, amount: 0 },
-                    { key: "PARTIAL", title: "Part Pay", sub: `Pay ${PARTIAL_ADVANCE_PERCENT}% now, rest to the driver`, amount: Math.round((totalPayable * PARTIAL_ADVANCE_PERCENT) / 100) },
-                    { key: "FULL", title: "Full Pay", sub: "Full amount now", amount: totalPayable },
-                  ].map((opt, i) => (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => setPaymentMode(opt.key)}
-                      style={{
-                        width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "12px 14px", textAlign: "left", border: "none", cursor: "pointer",
-                        borderTop: i > 0 ? "1px solid #EFEFEF" : "none",
-                        background: paymentMode === opt.key ? "#FFFBEA" : "#fff",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${paymentMode === opt.key ? "#FFC107" : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {paymentMode === opt.key && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FFC107" }} />}
-                        </span>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>{opt.title}</p>
-                          <p style={{ fontSize: 11, color: "#666", margin: 0 }}>{opt.sub}</p>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtINR(opt.amount)}</span>
-                    </button>
-                  ))}
+                {/* Landmark — full width (was half-width next to the now-removed Passengers) */}
+                <div className="sm:col-span-2">
+                  <FormField label="Landmark">
+                    <input className={FIELD_INPUT} placeholder="Nearby landmark" value={landmark} onChange={(e) => setLandmark(e.target.value)} />
+                  </FormField>
+                </div>
+
+                {/* Corporate fields */}
+                {isCorporate && (
+                  <>
+                    <FormField label="Company Name" required error={errors.companyName}>
+                      <input className={FIELD_INPUT} placeholder="Your company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                    </FormField>
+                    <FormField label="GSTIN (optional)">
+                      <input className={FIELD_INPUT} placeholder="e.g. 29AABCT1332L1ZU" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} />
+                    </FormField>
+                  </>
+                )}
+
+                {/* Special Instructions — full width */}
+                <div className="sm:col-span-2">
+                  <FormField label="Special Instructions">
+                    <textarea className={`${FIELD_INPUT} min-h-[80px]`} placeholder="Anything the driver should know…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  </FormField>
                 </div>
               </div>
+            </div>
+          </div>
 
-              <button
-                onClick={continueToPayment}
-                className="hover:!bg-black"
-                style={{ width: "100%", marginTop: 14, padding: 15, borderRadius: 12, border: "none", background: "#111", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
-              >
-                Continue to Payment
-              </button>
+          {/* ── Right: Fare Summary ────────────────────────────────── */}
+          <div style={{ position: "sticky", top: 120, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden" }}>
+              {/* Vehicle banner — actual selected vehicle photo */}
+              <div style={{ height: 180, overflow: "hidden", position: "relative", background: "#F7F7F7" }}>
+                <img
+                  src={vehicle.img}
+                  alt={vehicle.name}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                />
+                {/* subtle gradient overlay so vehicle name below blends cleanly */}
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 55%, rgba(0,0,0,0.18))" }} />
+              </div>
+
+              <div style={{ padding: 22 }}>
+                <h3 style={{ fontWeight: 700, fontSize: 17, margin: "0 0 3px" }}>{vehicle.name}</h3>
+                <div style={{ fontSize: 12.5, color: "#666", fontWeight: 500, marginBottom: 16 }}>
+                  {vehicle.seats} Seats · {vehicle.ac ? "A/C" : "Non-A/C"}
+                </div>
+
+                {/* Route details */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13, paddingBottom: 16, borderBottom: "1px dashed #EFEFEF" }}>
+                  <SummaryRow label="Route" value={`${journey.pickup} → ${journey.drop}`} />
+                  <SummaryRow label="Date" value={journey.date} />
+                  <SummaryRow label="Time" value={journey.time} />
+                  <SummaryRow label="Trip" value={journey.tripType} />
+                </div>
+
+                {/* Fare breakdown */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13, padding: "16px 0", borderBottom: "1px dashed #EFEFEF" }}>
+                  <SummaryRow label="Base Fare" value={fmtINR(baseFare)} />
+                  {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
+                  {surgeFee > 0 && <SummaryRow label="Surge Fee (5%)" value={`+ ${fmtINR(surgeFee)}`} />}
+                  {isCorporate && <SummaryRow label="Taxes (5%)" value={`+ ${fmtINR(cgst + sgst)}`} />}
+                </div>
+
+                {/* Total */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 0 14px" }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>Estimated Total</span>
+                  <span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 800, fontSize: 24, color: "#111" }}>{fmtINR(totalPayable)}</span>
+                </div>
+
+                {/* Terms & Conditions link */}
+                <p style={{ fontSize: 12, color: "#888", textAlign: "center", margin: "0 0 14px", lineHeight: 1.6 }}>
+                  By continuing you agree to our{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowTerms(true)}
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#B8860B", fontWeight: 700, fontSize: 12, textDecoration: "underline" }}
+                  >
+                    Terms &amp; Conditions
+                  </button>
+                  {" "}including inclusions &amp; exclusions.
+                </p>
+
+                {/* CTA */}
+                <button
+                  onClick={continueToPayment}
+                  className="hover:!bg-black"
+                  style={{ width: "100%", padding: 15, borderRadius: 12, border: "none", background: "#111", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+                >
+                  Continue to Payment
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { GoogleMap, MarkerF, useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 
 // Loaded once and reused by every LocationMapPicker instance — useJsApiLoader
@@ -128,16 +128,33 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
             <div className="h-[320px] flex items-center justify-center text-gray-400 text-[14px]">Loading map…</div>
           ) : (
             <>
-              <Autocomplete
-                onLoad={(a) => { autocompleteRef.current = a; a.setComponentRestrictions({ country: "in" }); }}
-                onPlaceChanged={handlePlaceChanged}
-              >
-                <input
+              <input
+                  ref={(el) => {
+                    if (!el || autocompleteRef.current) return;
+                    const places = window.google?.maps?.places;
+                    if (!places) return;
+                    if (places.PlaceAutocompleteElement) {
+                      const ac = new places.PlaceAutocompleteElement({ inputElement: el, componentRestrictions: { country: "in" } });
+                      autocompleteRef.current = { getPlace: () => null, _new: ac };
+                      ac.addEventListener("gmp-placeselect", ({ place }) => {
+                        place.fetchFields({ fields: ["formattedAddress", "displayName", "location"] }).then(() => {
+                          const lat = place.location?.lat() ?? 0;
+                          const lng = place.location?.lng() ?? 0;
+                          setPosition({ lat, lng });
+                          setAddress(place.formattedAddress || place.displayName || "");
+                        });
+                      });
+                    } else if (places.Autocomplete) {
+                      const ac = new places.Autocomplete(el, { componentRestrictions: { country: "in" } });
+                      autocompleteRef.current = ac;
+                      ac.addListener("place_changed", handlePlaceChanged);
+                    }
+                  }}
                   defaultValue={initialAddress || ""}
                   placeholder="Search for a city, area or landmark…"
                   className="w-full border border-[#E5E5E5] rounded-[10px] px-3.5 py-2.5 text-[14px] outline-none focus:border-brand-black mb-3"
                 />
-              </Autocomplete>
+
 
               <div style={{ height: 320, borderRadius: 14, overflow: "hidden", border: "1px solid #EFEFEF" }}>
                 <GoogleMap

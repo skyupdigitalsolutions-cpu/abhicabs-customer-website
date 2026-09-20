@@ -533,10 +533,13 @@ export default function Page() {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {vehicles.map((v) => {
+                {vehicles.map((v, idx) => {
                   const type = getVehicleType(v);
+                  // Use vehicleClass+idx as key to guarantee uniqueness even if
+                  // two catalogue entries share the same id after merging
+                  const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (
-                    <div key={v.id} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap" }}>
+                    <div key={cardKey} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap" }}>
                       <div style={{ flex: "1 1 320px", minWidth: 280, minHeight: 260, position: "relative" }}>
                         <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
                       </div>

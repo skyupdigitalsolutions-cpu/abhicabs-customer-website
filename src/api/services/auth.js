@@ -1,16 +1,13 @@
-// Auth service — real backend architecture: Register and Login are two
-// genuinely separate flows (confirmed against a fresh backend upload).
+// Auth service — matches the ACTUAL backend routes:
 //
-//   Register: POST /auth/register { name, email, phone } — logs in
-//     immediately, NO OTP step at all.
-//   Login:    POST /auth/otp/request { phone } — explicitly checks
-//     registration status first and refuses with 404 NOT_REGISTERED if
-//     the number has no account.
-//             POST /auth/otp/verify { phone, code } — only ever logs into
-//     an existing account; never creates one.
+//   Register: POST /auth/register   { name, email, phone }
+//             → logs in immediately, no OTP step
+//   Login:    POST /auth/otp/request { email }
+//             POST /auth/otp/verify  { email, code }
+
 import { api, ApiError } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
-import { setTokens, clearTokens } from "../tokens";
+import { setTokens, clearTokens, storeUserName, clearStoredUserName } from "../tokens";
 
 function isGenuineNetworkFailure(err) {
   return err instanceof ApiError && (err.status === 0 || err.code === "NETWORK_ERROR");
@@ -24,75 +21,67 @@ export function isNotRegistered(err) {
   return err instanceof ApiError && err.code === "NOT_REGISTERED";
 }
 
-// ── Register ─────────────────────────────────────────────────────────────────
+// ── Register ──────────────────────────────────────────────────────────────────
+// POST /auth/register — { name, email, phone }
+// Phone is required by the backend schema.
 export async function register({ name, email, phone }) {
   if (USE_MOCK) {
     setTokens({ accessToken: "mock-access", refreshToken: "mock-refresh" });
     return { user: { name, email, phone }, mock: true };
   }
 
-  const data = await api.post("/auth/register", { name, email, phone }, { auth: false });
+  const data = await api.post(
+    "/auth/register",
+    { name, email, phone },
+    { auth: false }
+  );
   if (data.accessToken) {
     setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    storeUserName(name);
   }
 
-  // FIX: Call GET /customers/me immediately after registration.
-  // The backend's register() only creates a User row — the Customer row
-  // (which the admin Customers page reads from) is created lazily by
-  // customerService.findOrCreate() inside GET /customers/me.
-  // Without this call, new registrants are invisible in the admin dashboard
-  // until they open the app. This is a silent best-effort call — if it
-  // fails it does not break registration.
-  try {
-    await api.get("/customers/me");
-  } catch {
-    // Non-fatal — Customer row creation failed or endpoint unavailable.
-    // Registration itself already succeeded.
-  }
+  // Ensure Customer row exists (created lazily by /customers/me).
+  try { await api.get("/customers/me"); } catch { /* non-fatal */ }
 
   return data;
 }
 
-// ── Login (existing accounts only) ───────────────────────────────────────────
-export async function requestOtp(mobile) {
+// ── OTP Login ─────────────────────────────────────────────────────────────────
+// POST /auth/otp/request — { email }
+export async function requestOtp(email) {
   if (USE_MOCK) return { sent: true, mock: true };
   try {
-    return await api.post("/auth/otp/request", { phone: mobile }, { auth: false });
+    return await api.post("/auth/otp/request", { email }, { auth: false });
   } catch (err) {
     if (MOCK_FALLBACK && isGenuineNetworkFailure(err)) return { sent: true, mock: true };
     throw err;
   }
 }
 
-export async function verifyOtp(mobile, otp) {
+// POST /auth/otp/verify — { email, code }
+export async function verifyOtp(email, code) {
   if (USE_MOCK) {
     setTokens({ accessToken: "mock-access", refreshToken: "mock-refresh" });
-    return { user: { mobile }, mock: true };
+    return { user: { email }, mock: true };
   }
   try {
-    const data = await api.post("/auth/otp/verify", { phone: mobile, code: otp }, { auth: false });
+    const data = await api.post("/auth/otp/verify", { email, code }, { auth: false });
     if (data.accessToken) {
       setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      storeUserName(data.user?.name || data.name || "");
     }
-
-    // Same fix for OTP login — ensure the Customer row exists for returning
-    // users who registered before this fix was deployed.
-    try {
-      await api.get("/customers/me");
-    } catch {
-      // Non-fatal.
-    }
-
+    try { await api.get("/customers/me"); } catch { /* non-fatal */ }
     return data;
   } catch (err) {
     if (MOCK_FALLBACK && isGenuineNetworkFailure(err)) {
       setTokens({ accessToken: "mock-access", refreshToken: "mock-refresh" });
-      return { user: { mobile }, mock: true };
+      return { user: { email }, mock: true };
     }
     throw err;
   }
 }
 
+// ── Shared ────────────────────────────────────────────────────────────────────
 export async function updateProfile(fields) {
   if (USE_MOCK) return { ...fields, mock: true };
   try {
@@ -113,4 +102,5 @@ export async function logout() {
     try { await api.post("/auth/logout", {}); } catch { /* ignore */ }
   }
   clearTokens();
+  clearStoredUserName();
 }

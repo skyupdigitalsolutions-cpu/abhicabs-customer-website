@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -16,33 +16,32 @@ import { IconPin, IconClose } from "../../src/components/Icons";
 
 const PARTIAL_ADVANCE_PERCENT = 25;
 
-// NEW page — matches the Figma bundler export's separate "Payment" section.
-// Previously this was the second half of a single combined Checkout page;
-// splitting it out means it now reads the passenger/invoice details the
-// Checkout page saved to checkoutSlice (Redux, localStorage-backed) instead
-// of local component state, since that no longer exists on this page. All
-// the real logic that lived here before — double-submit guard, payment
-// modes (ZERO/PARTIAL/FULL), Razorpay flow, invoice preview/print — is
-// preserved exactly, just relocated.
 export default function Page() {
-  const dispatch = useDispatch();
-  const toast = useToast();
-  const selected = useSelector(selectSelectedCab);
-  const journey = useSelector(selectJourney(selected?.journeyId));
-  const vehicle = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
-  const details = useSelector(selectCheckoutDetails);
+  const dispatch  = useDispatch();
+  const toast     = useToast();
+  const selected  = useSelector(selectSelectedCab);
+  const journey   = useSelector(selectJourney(selected?.journeyId));
+  const vehicle   = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
+  const details   = useSelector(selectCheckoutDetails);
 
-  const [payMethod, setPayMethod] = useState("upi");
-  // Restored per request: user-selectable Zero/Partial/Full payment options.
-  const [paymentMode, setPaymentMode] = useState(details.paymentMode || "FULL");
-  const [processing, setProcessing] = useState(false);
-  const [payFailOpen, setPayFailOpen] = useState(false);
-  const [showInvoice, setShowInvoice] = useState(false);
-  const isSubmittingRef = useRef(false);
-  // Two-step flow: pick when/how much first, then (unless paying zero, which
-  // needs no method at all) pick how to pay — matching the requested
-  // structure of showing one card at a time, not both stacked together.
-  const [step, setStep] = useState(1);
+  const [payMethod,    setPayMethod]    = useState("upi");
+  const [paymentMode,  setPaymentMode]  = useState(details.paymentMode || "FULL");
+  const [processing,   setProcessing]   = useState(false);
+  const [payFailOpen,  setPayFailOpen]  = useState(false);
+  const [showInvoice,  setShowInvoice]  = useState(false);
+  const [step,         setStep]         = useState(1);
+
+  // ── Single-flight guard ───────────────────────────────────────────────────
+  // One ref that is set to true the moment confirmAndPay starts, and never
+  // reset to false. This means the booking is attempted EXACTLY ONCE no
+  // matter how many times the button is clicked or the invoice modal fires.
+  const bookingFiredRef = useRef(false);
+
+  // ── Cached booking result ─────────────────────────────────────────────────
+  // Once the backend creates the booking we store it here so a payment retry
+  // (e.g. after Razorpay failure) can reuse the same booking id instead of
+  // creating a second one.
+  const bookingRef = useRef(null);
 
   if (!selected || !vehicle || !journey) {
     return (
@@ -56,9 +55,6 @@ export default function Page() {
     );
   }
 
-  // If someone lands here without going through Checkout first (direct URL,
-  // back button after clearing), there's no name/mobile to book with —
-  // send them back rather than letting them pay into a broken booking.
   if (!details.fullName || !details.mobile) {
     return (
       <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
@@ -71,103 +67,117 @@ export default function Page() {
     );
   }
 
-  const baseFare = selected.baseFare || selected.fare;
-  const surgeFee = selected.surgeFee || 0;
-  const driverBhata = selected.driverBhata || vehicle?.outstation?.driverBhata || 0;
-  const subTotal = baseFare + surgeFee;
-  const isCorporate = details.customerType === "corporate";
-  const cgst = isCorporate ? Math.round(subTotal * 0.025) : 0;
-  const sgst = isCorporate ? Math.round(subTotal * 0.025) : 0;
+  const baseFare     = selected.baseFare || selected.fare;
+  const surgeFee     = selected.surgeFee || 0;
+  const driverBhata  = selected.driverBhata || vehicle?.outstation?.driverBhata || 0;
+  const subTotal     = baseFare + surgeFee;
+  const isCorporate  = details.customerType === "corporate";
+  const cgst         = isCorporate ? Math.round(subTotal * 0.025) : 0;
+  const sgst         = isCorporate ? Math.round(subTotal * 0.025) : 0;
   const totalPayable = subTotal + cgst + sgst;
 
   const payNowAmount =
-    paymentMode === "ZERO" ? 0 :
+    paymentMode === "ZERO"    ? 0 :
     paymentMode === "PARTIAL" ? Math.round((totalPayable * PARTIAL_ADVANCE_PERCENT) / 100) :
     totalPayable;
   const payLaterAmount = totalPayable - payNowAmount;
 
   const confirmButtonLabel =
-    paymentMode === "ZERO" ? "Confirm Booking" :
+    paymentMode === "ZERO"    ? "Confirm Booking" :
     paymentMode === "PARTIAL" ? "Confirm & Pay Advance" :
     `Pay ${fmtINR(payNowAmount)}`;
 
-  async function confirmAndPay() {
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
+  // ── confirmAndPay — called at most ONCE ───────────────────────────────────
+  const confirmAndPay = useCallback(async () => {
+    // Hard guard — if already fired, do nothing
+    if (bookingFiredRef.current) return;
+    bookingFiredRef.current = true;
     setProcessing(true);
 
     const bookingPayload = {
-      journeyId: journey.id,
-      pickup: journey.pickup,
-      drop: journey.drop,
-      stops: journey.stops || [],
-      date: journey.date,
-      time: journey.time,
-      tripType: journey.tripType,
-      returnDate: journey.returnDate,
-      returnTime: journey.returnTime,
-      flight: journey.flight,
-      vehicleId: vehicle.id,
+      journeyId:     journey.id,
+      pickup:        journey.pickup,
+      drop:          journey.drop,
+      stops:         journey.stops || [],
+      date:          journey.date,
+      time:          journey.time,
+      tripType:      journey.tripType,
+      returnDate:    journey.returnDate,
+      returnTime:    journey.returnTime,
+      flight:        journey.flight,
+      vehicleId:     vehicle.id,
       vehicleCategory: vehicle.category,
-      vehicle: vehicle.name,
-      vehicleImg: vehicle.img,
-      vehicleSeats: vehicle.seats,
+      vehicle:       vehicle.name,
+      vehicleImg:    vehicle.img,
+      vehicleSeats:  vehicle.seats,
       passengerName: details.fullName,
-      mobile: details.mobile,
-      email: details.email,
-      address: details.address,
-      landmark: details.landmark,
-      notes: details.notes,
-      companyName: isCorporate ? details.companyName : "",
-      gstNumber: isCorporate ? details.gstNumber : "",
-      customerType: details.customerType,
-      fare: totalPayable,
+      mobile:        details.mobile,
+      email:         details.email,
+      address:       details.address,
+      landmark:      details.landmark,
+      notes:         details.notes,
+      companyName:   isCorporate ? details.companyName : "",
+      gstNumber:     isCorporate ? details.gstNumber   : "",
+      customerType:  details.customerType,
+      fare:          totalPayable,
       baseFare,
-      amountPaid: payNowAmount,
-      balanceDue: payLaterAmount,
+      amountPaid:    payNowAmount,
+      balanceDue:    payLaterAmount,
       surgeFee, cgst, sgst, driverBhata,
-      surge: selected.surge,
+      surge:         selected.surge,
       paymentMethod: payMethod,
       paymentMode,
       paymentStatus:
-        paymentMode === "ZERO" ? "Pay on trip completion" :
+        paymentMode === "ZERO"    ? "Pay on trip completion" :
         paymentMode === "PARTIAL" ? `${fmtINR(payNowAmount)} paid, ${fmtINR(payLaterAmount)} due on trip` :
         "Paid",
     };
 
     try {
-      const booking = await bookingsApi.createBooking(bookingPayload);
+      // Create booking ONCE — result cached in ref
+      const booking = bookingRef.current || await bookingsApi.createBooking(bookingPayload);
+      bookingRef.current = booking;
 
+      // Payment step (skip for ZERO or cash)
       if (paymentMode !== "ZERO" && payMethod !== "cash") {
         const purpose = paymentMode === "PARTIAL" ? "ADVANCE" : "FULL";
-        const order = await paymentsApi.createPaymentOrder(booking.bookingId || booking.bookingNumber, purpose);
+        const order   = await paymentsApi.createPaymentOrder(booking.id, purpose);
 
         if (!USE_MOCK) {
           await paymentsApi.openRazorpayCheckout({
-            order, amount: payNowAmount, name: details.fullName, email: details.email,
-            contact: details.mobile, description: `${journey.pickup} → ${journey.drop}`,
+            order,
+            amount:      payNowAmount,
+            name:        details.fullName,
+            email:       details.email,
+            contact:     details.mobile,
+            description: `${journey.pickup} → ${journey.drop}`,
           });
         }
 
-        const result = await paymentsApi.waitForPayment(order.orderId || order.paymentId || order.id);
+        const result = await paymentsApi.waitForPayment(
+          order.orderId || order.paymentId || order.id
+        );
         if (!result.success) {
+          // Payment failed — allow retry (only payment, NOT booking creation)
           setProcessing(false);
-          isSubmittingRef.current = false;
+          bookingFiredRef.current = false; // allow payment retry
           setPayFailOpen(true);
           return;
         }
       }
 
-      const action = dispatch(createBooking({ ...bookingPayload, ...booking }));
-      const id = booking.bookingId || booking.bookingNumber || action.payload.bookingId;
+      dispatch(createBooking({ ...bookingPayload, ...booking }));
       dispatch(clearCheckoutDetails());
+      const id = booking.bookingNumber || booking.id;
       navigate("/confirmation?b=" + id);
+
     } catch (err) {
       setProcessing(false);
-      isSubmittingRef.current = false;
+      bookingFiredRef.current = false; // allow retry on error
       toast(err.message || "Something went wrong. Please try again.", "error");
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMode, payMethod]);
 
   return (
     <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
@@ -179,14 +189,16 @@ export default function Page() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">
         <div className="flex flex-col gap-5">
+
+          {/* ── Step 1: Payment Options ──────────────────────────────── */}
           {step === 1 && (
             <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
               <h2 className="text-[17px] font-bold mb-4">Payment Options</h2>
               <div style={{ border: "1px solid #EFEFEF", borderRadius: 12, overflow: "hidden" }}>
                 {[
-                  { key: "ZERO", title: "Book at zero", sub: `Pay ${fmtINR(totalPayable)} later`, amount: 0 },
-                  { key: "PARTIAL", title: "Part Pay", sub: `Pay ${PARTIAL_ADVANCE_PERCENT}% now, rest to the driver`, amount: Math.round((totalPayable * PARTIAL_ADVANCE_PERCENT) / 100) },
-                  { key: "FULL", title: "Full Pay", sub: "Full amount now", amount: totalPayable },
+                  { key: "ZERO",    title: "Book at zero",  sub: `Pay ${fmtINR(totalPayable)} later`,                                                         amount: 0 },
+                  { key: "PARTIAL", title: "Part Pay",      sub: `Pay ${PARTIAL_ADVANCE_PERCENT}% now, rest to the driver`,                                    amount: Math.round((totalPayable * PARTIAL_ADVANCE_PERCENT) / 100) },
+                  { key: "FULL",    title: "Full Pay",      sub: "Full amount now",                                                                             amount: totalPayable },
                 ].map((opt, i) => (
                   <button
                     key={opt.key}
@@ -213,11 +225,9 @@ export default function Page() {
                 ))}
               </div>
 
-              {/* "Book at zero" needs no payment method at all, so this
-                  confirms straight away; Partial/Full move on to step 2. */}
               <button
                 disabled={processing}
-                onClick={() => (paymentMode === "ZERO" ? confirmAndPay() : setStep(2))}
+                onClick={() => paymentMode === "ZERO" ? confirmAndPay() : setStep(2)}
                 className="hover:!bg-[#FFB300]"
                 style={{
                   width: "100%", marginTop: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
@@ -226,11 +236,12 @@ export default function Page() {
                 }}
               >
                 {processing && <span style={{ width: 18, height: 18, borderRadius: "50%", border: "2.4px solid rgba(17,17,17,.3)", borderTopColor: "#111", display: "inline-block", animation: "spin .7s linear infinite" }} />}
-                {processing ? "Processing payment…" : paymentMode === "ZERO" ? confirmButtonLabel : "Continue"}
+                {processing ? "Processing…" : paymentMode === "ZERO" ? confirmButtonLabel : "Continue"}
               </button>
             </div>
           )}
 
+          {/* ── Step 2: Payment Method ───────────────────────────────── */}
           {step === 2 && (
             <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
               <button
@@ -247,9 +258,9 @@ export default function Page() {
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  { key: "upi", title: "UPI", sub: "GPay · PhonePe · Paytm", icon: <path d="M4 17V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="1.8" /> },
-                  { key: "card", title: "Card", sub: "Credit / Debit", icon: <><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" /></> },
-                  { key: "netbanking", title: "Net Banking", sub: "All major banks", icon: <path d="M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 19h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /> },
+                  { key: "upi",        title: "UPI",          sub: "GPay · PhonePe · Paytm",  icon: <path d="M4 17V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="1.8" /> },
+                  { key: "card",       title: "Card",         sub: "Credit / Debit",           icon: <><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" /></> },
+                  { key: "netbanking", title: "Net Banking",  sub: "All major banks",          icon: <path d="M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 19h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /> },
                 ].map((opt) => {
                   const active = payMethod === opt.key;
                   return (
@@ -289,7 +300,7 @@ export default function Page() {
                 }}
               >
                 {processing && <span style={{ width: 18, height: 18, borderRadius: "50%", border: "2.4px solid rgba(17,17,17,.3)", borderTopColor: "#111", display: "inline-block", animation: "spin .7s linear infinite" }} />}
-                {processing ? "Processing payment…" : confirmButtonLabel}
+                {processing ? "Processing…" : confirmButtonLabel}
               </button>
               <p style={{ fontSize: 11.5, color: "#666", textAlign: "center", marginTop: 10 }}>
                 By confirming, you agree to our <a href="/terms" style={{ color: "#FFC107", fontWeight: 600 }}>Terms</a> &amp;{" "}
@@ -299,11 +310,11 @@ export default function Page() {
           )}
         </div>
 
-        {/* Booking Summary */}
+        {/* ── Booking Summary ─────────────────────────────────────────── */}
         <div style={{ position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22 }}>
           <h3 style={{ fontWeight: 700, fontSize: 15, margin: "0 0 14px" }}>Booking Summary</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
-            <span style={{ width: 56, height: 40, borderRadius: 9, background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)", flex: "none", overflow: "hidden" }}>
+            <span style={{ width: 56, height: 40, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
               <img src={vehicle.img} alt={vehicle.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </span>
             <div>
@@ -312,12 +323,12 @@ export default function Page() {
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
-            <SummaryRow label="Route" value={`${journey.pickup} → ${journey.drop}`} />
-            <SummaryRow label="Date · Time" value={`${journey.date} · ${journey.time}`} />
-            <SummaryRow label="Base Fare" value={fmtINR(baseFare)} />
+            <SummaryRow label="Route"        value={`${journey.pickup} → ${journey.drop}`} />
+            <SummaryRow label="Date · Time"  value={`${journey.date} · ${journey.time}`} />
+            <SummaryRow label="Base Fare"    value={fmtINR(baseFare)} />
             {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
-            {surgeFee > 0 && <SummaryRow label="Surge Fee (5%)" value={`+ ${fmtINR(surgeFee)}`} />}
-            {isCorporate && <SummaryRow label="Taxes (5%)" value={`+ ${fmtINR(cgst + sgst)}`} />}
+            {surgeFee > 0    && <SummaryRow label="Surge Fee (5%)"   value={`+ ${fmtINR(surgeFee)}`} />}
+            {isCorporate     && <SummaryRow label="Taxes (5%)"        value={`+ ${fmtINR(cgst + sgst)}`} />}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 14, marginTop: 14, borderTop: "1px dashed #EFEFEF" }}>
             <span style={{ fontWeight: 700, fontSize: 15 }}>Total</span>
@@ -329,7 +340,6 @@ export default function Page() {
               <span style={{ fontWeight: 700 }}>{fmtINR(payNowAmount)}</span>
             </div>
           )}
-
           <button
             onClick={() => setShowInvoice(true)}
             style={{ width: "100%", marginTop: 16, padding: 12, borderRadius: 11, border: "1.5px solid #E5E5E5", background: "#fff", color: "#666", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
@@ -339,9 +349,13 @@ export default function Page() {
         </div>
       </div>
 
-      <Modal open={payFailOpen} title="Payment Failed"
+      <Modal
+        open={payFailOpen}
+        title="Payment Failed"
         description="We couldn't process your payment. No amount has been deducted — please try again or use a different method."
-        confirmLabel="Try Again" onClose={() => setPayFailOpen(false)} onConfirm={() => setPayFailOpen(false)}
+        confirmLabel="Try Again"
+        onClose={() => setPayFailOpen(false)}
+        onConfirm={() => setPayFailOpen(false)}
       />
 
       {showInvoice && (
@@ -366,14 +380,11 @@ function SummaryRow({ label, value }) {
 }
 
 function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgst, totalPayable, onClose, onConfirm }) {
-  const isCorporate = details.customerType === "corporate";
+  const isCorporate  = details.customerType === "corporate";
   const invoiceNumber = "INV-" + Date.now().toString().slice(-9);
-  const billedOn = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const bookingId = rid("ABHI");
-  const startDate = journey.date;
-  const endDate = journey.returnDate || journey.date;
-  const itinerary = `${journey.pickup} → ${journey.drop}`;
-  const invoiceRef = useRef(null);
+  const billedOn     = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const bookingId    = rid("ABHI");
+  const invoiceRef   = useRef(null);
 
   function printInvoice() {
     const w = window.open("", "_blank");
@@ -382,13 +393,9 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
         body { font-family: Montserrat, Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 20px; }
         table { width: 100%; border-collapse: collapse; }
         td, th { padding: 6px 8px; vertical-align: top; }
-        .border-table td, .border-table th { border: 1px solid #ccc; }
         .header { background: #111111; color: white; padding: 12px 16px; }
-        .section-title { background: #FFFBEA; font-weight: bold; padding: 6px 8px; }
-        .total-row td { font-weight: bold; background: #FFFBEA; }
         hr { border: none; border-top: 1px solid #ddd; margin: 8px 0; }
         .text-right { text-align: right; }
-        .label { color: #555; }
         @media print { body { padding: 0; } }
       </style></head><body>
       ${invoiceRef.current.innerHTML}
@@ -403,10 +410,12 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#EFEFEF]">
           <h2 className="text-[17px] font-bold">{isCorporate ? "TAX INVOICE" : "NON-TAX INVOICE"} — Preview</h2>
           <div className="flex gap-2">
-            <button onClick={printInvoice} className="text-[13px] font-semibold border border-primary text-primary px-3.5 py-1.5 rounded-lg hover:bg-primary-tint transition-colors">
+            <button onClick={printInvoice} className="text-[13px] font-semibold border border-primary text-primary px-3.5 py-1.5 rounded-lg">
               Print / Download
             </button>
-            <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"><IconClose className="w-4 h-4" /></button>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+              <IconClose className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -414,7 +423,7 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
           <div className="bg-brand-black text-white px-5 py-3 rounded-[8px] flex items-center justify-between mb-0">
             <div>
               <div className="text-[20px] tracking-wide" style={{ fontFamily: "Montserrat,sans-serif", fontWeight: 700 }}>
-                ABHI<span className="text-primary" style={{ fontFamily: "var(--font-display)", fontWeight: 500 }}> CABS</span>
+                ABHI<span className="text-primary"> CABS</span>
               </div>
               <div className="text-[11px] text-white/70 font-semibold">CAR RENTALS</div>
             </div>
@@ -475,7 +484,7 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
             </thead>
             <tbody>
               <tr>
-                <td className="px-3 py-1.5 border-t border-gray-200"><span className="text-gray-500">Trip Type</span></td>
+                <td className="px-3 py-1.5 border-t border-gray-200"><span className="text-gray-500">Trip Type</span><span className="ml-2 font-semibold">{journey.tripType}</span></td>
                 <td className="px-3 py-1.5 border-t border-gray-200 border-l border-gray-300 text-right font-semibold" rowSpan={5}>
                   <div className="flex flex-col gap-1.5 items-end pt-1">
                     <div className="flex justify-between w-full"><span className="text-gray-500">Base Fare</span><span className="font-bold">₹ {baseFare.toLocaleString("en-IN")}</span></div>
@@ -485,28 +494,26 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
                       <div className="flex justify-between w-full"><span className="text-gray-500">SGST (2.5%)</span><span className="font-bold">₹ {sgst.toLocaleString("en-IN")}</span></div>
                     </>)}
                     <div className="border-t border-gray-300 pt-1.5 mt-0.5 w-full flex justify-between">
-                      <span className="font-bold">Total Amount Payable</span>
-                      <span className="font-bold text-[14px]" style={{ color: "#111" }}>₹ {totalPayable.toLocaleString("en-IN")}</span>
+                      <span className="font-bold">Total</span>
+                      <span className="font-bold text-[14px]">₹ {totalPayable.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
                 </td>
               </tr>
               <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Vehicle</span><span className="ml-2 font-semibold">{vehicle.name}</span></td></tr>
               <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Pick Up</span><span className="ml-2">{journey.pickup}</span></td></tr>
-              <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Itinerary</span><span className="ml-2">{itinerary}</span></td></tr>
-              <tr><td className="px-3 py-1.5"><span className="text-gray-500 text-[11.5px]">Start Date</span><span className="ml-2">{startDate}</span></td></tr>
+              <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Drop</span><span className="ml-2">{journey.drop}</span></td></tr>
+              <tr><td className="px-3 py-1.5"><span className="text-gray-500 text-[11.5px]">Date</span><span className="ml-2">{journey.date}</span></td></tr>
             </tbody>
           </table>
 
           <div className="mt-4 border border-gray-300 rounded-[6px] p-3.5 text-[11px] text-gray-500 leading-relaxed">
             <p className="font-bold text-gray-700 mb-1">Terms &amp; Conditions</p>
-            <p># All road toll fees, Airport entry charges, parking charges, state taxes etc. are charged extra and need to be paid to the concerned authorities as per actuals.</p>
-            <p># This is an electronically generated invoice and does not require signature. All disputes are subject to jurisdiction of courts in Bangalore.</p>
-            <p># For any queries, please write to us at support@abhicabs.in</p>
+            <p># Toll fees, airport charges, parking, and state taxes are charged extra.</p>
+            <p># Electronically generated — no signature required.</p>
+            <p># For queries: support@abhicabs.in</p>
           </div>
-
-          <div className="mt-4 text-right text-[11.5px] font-semibold text-gray-500">For Abhi Cabs Pvt Ltd</div>
-          {isCorporate && <div className="mt-2 text-[10.5px] text-gray-400 text-center">Service: Transport of passengers · Service Accounting Code (SAC): 996412</div>}
+          {isCorporate && <div className="mt-2 text-[10.5px] text-gray-400 text-center">SAC: 996412</div>}
         </div>
 
         <div className="flex gap-3 px-6 py-4 border-t border-[#EFEFEF] bg-gray-50">
@@ -517,3 +524,4 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
     </div>
   );
 }
+
