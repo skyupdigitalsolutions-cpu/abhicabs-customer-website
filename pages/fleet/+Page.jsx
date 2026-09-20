@@ -148,7 +148,7 @@ export default function FleetPage() {
           {/* Vehicle grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map((v) => (
-              <FleetCard key={v.id} vehicle={v} onView={() => openModal(v)} />
+              <FleetCard key={v.id} vehicle={v} onView={() => openModal(v)} highlightSeater={highlightSeater} />
             ))}
           </div>
         </div>
@@ -189,7 +189,7 @@ export default function FleetPage() {
 }
 
 // ─── Fleet Card ──────────────────────────────────────────────────────────────
-function FleetCard({ vehicle: v, onView }) {
+function FleetCard({ vehicle: v, onView, highlightSeater }) {
   const catColors = {
     sedan:  "bg-blue-50 text-blue-700",
     suv:    "bg-green-50 text-green-700",
