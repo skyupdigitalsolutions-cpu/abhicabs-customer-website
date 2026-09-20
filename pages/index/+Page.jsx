@@ -198,7 +198,7 @@ export default function Page() {
       />
 
       {/* ============================== FEATURED VEHICLES ============================== */}
-      <GroupFleetSection vehicles={GROUP_FLEET} onViewDetails={() => bookMode("group-coach")} />
+      <GroupFleetSection vehicles={GROUP_FLEET} />
 
       {/* ============================== PROMO BANNERS ============================== */}
       <PromoBannersSection
