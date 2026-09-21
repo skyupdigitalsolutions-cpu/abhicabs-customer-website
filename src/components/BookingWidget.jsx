@@ -29,6 +29,16 @@ const TABS = [
 
 const today = new Date().toISOString().split("T")[0];
 
+// Returns the minimum selectable time (HH:MM) — current time + 30 min buffer
+// when the chosen date is today, otherwise no restriction.
+function getMinTime(selectedDate) {
+  if (selectedDate !== today) return undefined;
+  const now = new Date(Date.now() + 30 * 60 * 1000); // +30 min buffer
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 function emptyFields() {
   return {
     pickup: "", drop: "", date: today, time: "10:00",
@@ -216,6 +226,15 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       toast("Please fill in all via stop fields or remove empty ones", "error"); return;
     }
 
+    // Past date/time check
+    if (fields.date && fields.time) {
+      const pickupDt = new Date(fields.date + "T" + fields.time);
+      if (pickupDt < new Date(Date.now() + 30 * 60 * 1000)) {
+        toast("Please select a pickup time at least 30 minutes from now", "error");
+        return;
+      }
+    }
+
     // Out-of-service-area check — only when we actually have confirmed
     // state data (from Places Autocomplete or the map picker, both of
     // which return real structured address components). A location typed
@@ -316,7 +335,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                     <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                   </Field>
                   <Field label="Time">
-                    <Input type="time" value={fields.time} onChange={set("time")} required />
+                    <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
                   </Field>
                 </div>
               ) : (
@@ -379,7 +398,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   </div>
                   <div className="w-full sm:w-[160px]">
                     <Field label="Time">
-                      <Input type="time" value={fields.time} onChange={set("time")} required />
+                      <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
                     </Field>
                   </div>
                 </div>
@@ -403,7 +422,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                 </Field>
                 <Field label="Pickup Time">
-                  <Input type="time" value={fields.time} onChange={set("time")} required />
+                  <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
                 </Field>
                 <Field label="Return Date">
                   <Input type="date" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} required />
@@ -432,7 +451,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                 </Field>
                 <Field label="Time">
-                  <Input type="time" value={fields.time} onChange={set("time")} required />
+                  <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
                 </Field>
               </div>
               <div className="mt-3.5">
@@ -476,7 +495,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-3.5">
                 <Field label="Time">
-                  <Input type="time" value={fields.time} onChange={set("time")} required />
+                  <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
                 </Field>
 
                 <div className="flex items-end">
