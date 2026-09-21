@@ -335,7 +335,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                     <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                   </Field>
                   <Field label="Time">
-                    <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
+                    <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
                   </Field>
                 </div>
               ) : (
@@ -398,7 +398,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   </div>
                   <div className="w-full sm:w-[160px]">
                     <Field label="Time">
-                      <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
+                      <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
                     </Field>
                   </div>
                 </div>
@@ -422,7 +422,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                 </Field>
                 <Field label="Pickup Time">
-                  <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
+                  <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
                 </Field>
                 <Field label="Return Date">
                   <Input type="date" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} required />
@@ -451,7 +451,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                 </Field>
                 <Field label="Time">
-                  <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
+                  <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
                 </Field>
               </div>
               <div className="mt-3.5">
@@ -495,7 +495,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-3.5">
                 <Field label="Time">
-                  <Input type="time" min={getMinTime(fields.date)} value={fields.time} onChange={set("time")} required />
+                  <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
                 </Field>
 
                 <div className="flex items-end">
@@ -567,6 +567,156 @@ function Field({ label, children }) {
     <div className="flex flex-col gap-1.5 min-w-0">
       <label className={FIELD_LABEL}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+
+// ── 12-hour AM/PM Time Picker ─────────────────────────────────────────────
+// value / onChange use "HH:MM" (24hr) internally so the rest of the form
+// doesn't need to change; the picker just renders in 12hr format.
+function TimePicker12hr({ value, onChange, min }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+
+  // Parse "HH:MM" → { h12, minute, ampm }
+  function parse(v) {
+    if (!v) return { h12: 10, minute: 0, ampm: "AM" };
+    const [hh, mm] = v.split(":").map(Number);
+    const ampm = hh < 12 ? "AM" : "PM";
+    const h12 = hh % 12 || 12;
+    return { h12, minute: mm, ampm };
+  }
+
+  // Convert back to "HH:MM"
+  function toHHMM(h12, minute, ampm) {
+    let hh = h12 % 12;
+    if (ampm === "PM") hh += 12;
+    return `${String(hh).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  const { h12, minute, ampm } = parse(value);
+
+  function isDisabled(h12c, minutec, ampmc) {
+    if (!min) return false;
+    const candidate = toHHMM(h12c, minutec, ampmc);
+    return candidate < min;
+  }
+
+  function select(h12c, minutec, ampmc) {
+    const v = toHHMM(h12c, minutec, ampmc);
+    if (isDisabled(h12c, minutec, ampmc)) return;
+    onChange({ target: { value: v } });
+    setOpen(false);
+  }
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const displayTime = (() => {
+    const v = toHHMM(h12, minute, ampm);
+    if (!v) return "Select time";
+    const [hh, mm] = v.split(":").map(Number);
+    const ap = hh < 12 ? "AM" : "PM";
+    const h = hh % 12 || 12;
+    return `${h}:${String(mm).padStart(2, "0")} ${ap}`;
+  })();
+
+  const hours = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const minutes = [0, 15, 30, 45];
+
+  return (
+    <div ref={ref} style={{ position: "relative", width: "100%" }}>
+      {/* Trigger */}
+      <div
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2.5 border border-border rounded-[10px] px-3.5 py-3 bg-[#fbfbfe] focus-within:border-brand-black focus-within:bg-white transition-colors cursor-pointer select-none"
+        style={{ minWidth: 110 }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.45 }}>
+          <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M12 7v5.5l3.5 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+        <span style={{ fontSize: 14.5, color: "#111", fontWeight: 500, whiteSpace: "nowrap" }}>{displayTime}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginLeft: "auto", flexShrink: 0, opacity: 0.4 }}>
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 999,
+          background: "#fff", border: "1px solid #E5E5E5", borderRadius: 14,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.13)", padding: 14, minWidth: 240,
+        }}>
+          {/* AM / PM toggle */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {["AM", "PM"].map((ap) => (
+              <button
+                key={ap} type="button"
+                onClick={() => select(h12, minute, ap)}
+                style={{
+                  flex: 1, padding: "7px 0", borderRadius: 9, border: "none",
+                  fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+                  background: ampm === ap ? "#FFC107" : "#F3F3F3",
+                  color: ampm === ap ? "#111" : "#666",
+                  opacity: isDisabled(h12, minute, ap) ? 0.35 : 1,
+                }}
+              >{ap}</button>
+            ))}
+          </div>
+
+          {/* Hour grid */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#999", letterSpacing: ".08em", marginBottom: 6 }}>HOUR</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 5, marginBottom: 12 }}>
+            {hours.map((hr) => {
+              const dis = isDisabled(hr, minute, ampm);
+              const active = hr === h12;
+              return (
+                <button
+                  key={hr} type="button"
+                  onClick={() => select(hr, minute, ampm)}
+                  disabled={dis}
+                  style={{
+                    padding: "6px 0", borderRadius: 8, border: "none",
+                    fontWeight: active ? 700 : 500, fontSize: 13.5, cursor: dis ? "not-allowed" : "pointer",
+                    background: active ? "#111" : "#F5F5F5",
+                    color: active ? "#FFC107" : dis ? "#ccc" : "#333",
+                  }}
+                >{hr}</button>
+              );
+            })}
+          </div>
+
+          {/* Minute options */}
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#999", letterSpacing: ".08em", marginBottom: 6 }}>MINUTE</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
+            {minutes.map((mn) => {
+              const dis = isDisabled(h12, mn, ampm);
+              const active = mn === minute;
+              return (
+                <button
+                  key={mn} type="button"
+                  onClick={() => select(h12, mn, ampm)}
+                  disabled={dis}
+                  style={{
+                    padding: "6px 0", borderRadius: 8, border: "none",
+                    fontWeight: active ? 700 : 500, fontSize: 13.5, cursor: dis ? "not-allowed" : "pointer",
+                    background: active ? "#111" : "#F5F5F5",
+                    color: active ? "#FFC107" : dis ? "#ccc" : "#333",
+                  }}
+                >{String(mn).padStart(2, "0")}</button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
