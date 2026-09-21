@@ -202,7 +202,11 @@ export default function Page() {
   // group travel. The Vehicle Type filter then only offers "Coach" as a
   // choice here, and nothing is pre-selected — the list is already scoped
   // by the vehicles available, not by an applied filter.
-  const source = browseType === "group" ? allSource.filter((v) => GROUP_TYPES.includes(getVehicleType(v))) : allSource;
+  // When arriving via a fleet card (?vehicle=...), show the full catalogue
+  // regardless of type=group — the specific vehicle may not be a Coach.
+  const source = (browseType === "group" && !urlVehicle)
+    ? allSource.filter((v) => GROUP_TYPES.includes(getVehicleType(v)))
+    : allSource;
 
   // Available filter options derived from the actual vehicle list, not
   // hardcoded — so a filter pill never appears for something that isn't
