@@ -67,7 +67,7 @@ function BigMap({ hovered }) {
   return (
     <svg
       viewBox={`0 0 ${md.vb.w} ${md.vb.h}`}
-      style={ width: "100%", height: "100%", display: "block" }
+      style={{ width: "100%", height: "100%", display: "block" }}
     >
       <defs>
         <linearGradient id="acSG" x1="0" y1="0" x2="0" y2="1">
@@ -96,7 +96,7 @@ function BigMap({ hovered }) {
             strokeLinejoin="round"
             filter="url(#acGlow)"
             opacity={hovered ? (hi ? 1 : 0.5) : 0.85}
-            style={ transition: "opacity .25s, stroke-width .25s" }
+            style={{ transition: "opacity .25s, stroke-width .25s" }}
           />
         );
       })}
@@ -132,7 +132,7 @@ function BigMap({ hovered }) {
               d="M0 -15 C7.2 -15 10.5 -9 10.5 -4.5 C10.5 2.5 0 12 0 12 C0 12 -10.5 2.5 -10.5 -4.5 C-10.5 -9 -7.2 -15 0 -15 Z"
               fill="#fff"
               transform={`scale(${hi ? 1.18 : 1})`}
-              style={ transition: "transform .2s" }
+              style={{ transition: "transform .2s" }}
             />
             <circle cy={-4.5} r={3.6} fill="#111" />
             <g transform="translate(0 16)">
@@ -167,8 +167,8 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
   };
 
   return (
-    <section id={id} style={ maxWidth: 1280, margin: "0 auto", padding: "clamp(24px,4vw,48px) 22px" }>
-      <div style={ background: "#0d0d0d", borderRadius: 28, position: "relative", overflow: "hidden" }>
+    <section id={id} style={{ maxWidth: 1280, margin: "0 auto", padding: "clamp(24px,4vw,48px) 22px"  }}>
+      <div style={{ background: "#0d0d0d", borderRadius: 28, position: "relative", overflow: "hidden"  }}>
         {/* Dot grid */}
         <div style={{
           position: "absolute", inset: 0,
@@ -183,9 +183,9 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
           pointerEvents: "none"
         }} />
 
-        <div style={ position: "relative", display: "flex", flexWrap: "wrap" }>
+        <div style={{ position: "relative", display: "flex", flexWrap: "wrap"  }}>
           {/* LEFT */}
-          <div style={ flex: "1 1 440px", minWidth: "min(100%, 340px)", padding: "clamp(30px,3.6vw,56px)" }>
+          <div style={{ flex: "1 1 440px", minWidth: "min(100%, 340px)", padding: "clamp(30px,3.6vw,56px)"  }}>
             <span style={{
               display: "inline-block", fontWeight: 700, fontSize: 12,
               letterSpacing: ".16em", textTransform: "uppercase", color: "#FFC107"
@@ -194,7 +194,7 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
               fontWeight: 800, fontSize: "clamp(30px,4vw,52px)", lineHeight: 1.04,
               margin: "12px 0 16px", letterSpacing: "-.025em", color: "#fff"
             }}>
-              Built Around<br />Your <span style={ color: "#FFC107" }>Routes</span>
+              Built Around<br />Your <span style={{ color: "#FFC107"  }}>Routes</span>
             </h2>
             <p style={{
               fontSize: 15.5, lineHeight: 1.6, color: "rgba(255,255,255,.62)",
@@ -204,7 +204,7 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
             </p>
 
             {/* State cards grid */}
-            <div style={ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(118px,1fr))", gap: 14 }>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(118px,1fr))", gap: 14  }}>
               {STATE_ORDER.map(name => (
                 <div
                   key={name}
@@ -225,11 +225,11 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
                       color: "#111", background: "#FFC107", padding: "2px 7px", borderRadius: 9999
                     }}>NEW</span>
                   )}
-                  <div style={ height: 66, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }>
+                  <div style={{ height: 66, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10  }}>
                     <MiniMap name={name} />
                   </div>
-                  <div style={ textAlign: "center", fontWeight: 700, fontSize: 13.5, color: "#fff" }>{name}</div>
-                  <div style={ width: 26, height: 3, borderRadius: 2, background: "#FFC107", margin: "8px auto 0" } />
+                  <div style={{ textAlign: "center", fontWeight: 700, fontSize: 13.5, color: "#fff"  }}>{name}</div>
+                  <div style={{ width: 26, height: 3, borderRadius: 2, background: "#FFC107", margin: "8px auto 0" }} />
                 </div>
               ))}
             </div>
@@ -244,12 +244,12 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
               position: "absolute", top: "clamp(20px,3vw,40px)", right: "clamp(20px,3vw,44px)",
               textAlign: "right", zIndex: 3, pointerEvents: "none"
             }}>
-              <div style={ fontSize: 12, fontWeight: 600, letterSpacing: ".2em", color: "rgba(255,255,255,.42)", lineHeight: 1.9 }>
+              <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".2em", color: "rgba(255,255,255,.42)", lineHeight: 1.9  }}>
                 FOUR STATES<br />COUNTLESS<br />DESTINATIONS
               </div>
-              <div style={ width: 44, height: 3, background: "#FFC107", margin: "10px 0 0 auto", borderRadius: 2 } />
+              <div style={{ width: 44, height: 3, background: "#FFC107", margin: "10px 0 0 auto", borderRadius: 2 }} />
             </div>
-            <div style={ position: "absolute", inset: 0 }>
+            <div style={{ position: "absolute", inset: 0  }}>
               <BigMap hovered={hovered} />
             </div>
           </div>
@@ -272,14 +272,14 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
               <path d="M9 8h6M9 12h6M9 16h3" stroke="#111" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
           </span>
-          <div style={ flex: "1 1 300px", minWidth: "min(100%, 260px)" }>
-            <div style={ fontWeight: 700, fontSize: 11.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#7a5c00", marginBottom: 5 }>
+          <div style={{ flex: "1 1 300px", minWidth: "min(100%, 260px)"  }}>
+            <div style={{ fontWeight: 700, fontSize: 11.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#7a5c00", marginBottom: 5  }}>
               Travelling to another city?
             </div>
-            <h3 style={ fontWeight: 800, fontSize: "clamp(22px,2.6vw,30px)", color: "#111", margin: "0 0 6px", letterSpacing: "-.02em" }>
+            <h3 style={{ fontWeight: 800, fontSize: "clamp(22px,2.6vw,30px)", color: "#111", margin: "0 0 6px", letterSpacing: "-.02em"  }}>
               Send a Travel Request
             </h3>
-            <p style={ fontSize: 13.5, lineHeight: 1.55, color: "#3a2f00", fontWeight: 500, margin: 0, maxWidth: 520 }>
+            <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "#3a2f00", fontWeight: 500, margin: 0, maxWidth: 520  }}>
               Tell us your destination and our team will check availability and get back to you with the best options.
             </p>
           </div>
@@ -304,34 +304,34 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
           display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
           gap: 4, padding: "clamp(24px,3vw,40px) clamp(20px,3vw,44px) clamp(28px,3.4vw,48px)"
         }}>
-          <div style={ display: "flex", alignItems: "center", gap: 14, padding: "6px 22px 6px 0", borderRight: "1px solid rgba(255,255,255,.08)" }>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "6px 22px 6px 0", borderRight: "1px solid rgba(255,255,255,.08)"  }}>
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
               <path d="M3 13l1.6-4.4A2.5 2.5 0 017 7h10a2.5 2.5 0 012.4 1.6L21 13v5h-2.5M3 18v-5m0 5h2.5m0 0a1.75 1.75 0 103.5 0m-3.5 0h9m0 0a1.75 1.75 0 103.5 0" stroke="#FFC107" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <div>
-              <div style={ fontWeight: 700, fontSize: 15, color: "#fff" }>Wide Coverage</div>
-              <div style={ fontSize: 12.5, color: "rgba(255,255,255,.55)", fontWeight: 400, marginTop: 2 }>Across 4 states and beyond.</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#fff"  }}>Wide Coverage</div>
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.55)", fontWeight: 400, marginTop: 2  }}>Across 4 states and beyond.</div>
             </div>
           </div>
-          <div style={ display: "flex", alignItems: "center", gap: 14, padding: "6px 22px", borderRight: "1px solid rgba(255,255,255,.08)" }>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "6px 22px", borderRight: "1px solid rgba(255,255,255,.08)"  }}>
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
               <circle cx="9" cy="8" r="3.2" stroke="#FFC107" strokeWidth="1.8" />
               <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#FFC107" strokeWidth="1.8" strokeLinecap="round" />
               <path d="M16 6.5a3 3 0 010 5.6M17.5 19c0-2.2-1-3.9-2.5-4.7" stroke="#FFC107" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
             <div>
-              <div style={ fontWeight: 700, fontSize: 15, color: "#fff" }>Dedicated Support</div>
-              <div style={ fontSize: 12.5, color: "rgba(255,255,255,.55)", fontWeight: 400, marginTop: 2 }>We plan the best route for you.</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#fff"  }}>Dedicated Support</div>
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.55)", fontWeight: 400, marginTop: 2  }}>We plan the best route for you.</div>
             </div>
           </div>
-          <div style={ display: "flex", alignItems: "center", gap: 14, padding: "6px 0 6px 22px" }>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "6px 0 6px 22px"  }}>
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
               <path d="M12 3l7 2.5v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9v-5L12 3z" stroke="#FFC107" strokeWidth="1.8" strokeLinejoin="round" />
               <path d="M9 12l2 2 4-4" stroke="#FFC107" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <div>
-              <div style={ fontWeight: 700, fontSize: 15, color: "#fff" }>Reliable Travel</div>
-              <div style={ fontSize: 12.5, color: "rgba(255,255,255,.55)", fontWeight: 400, marginTop: 2 }>Safe, comfortable and on time.</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#fff"  }}>Reliable Travel</div>
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.55)", fontWeight: 400, marginTop: 2  }}>Safe, comfortable and on time.</div>
             </div>
           </div>
         </div>
