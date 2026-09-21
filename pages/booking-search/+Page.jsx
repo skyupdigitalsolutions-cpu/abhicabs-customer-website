@@ -372,6 +372,7 @@ export default function Page() {
           </div>
         </div>
       ) : (
+        <>
         {/* Seater pre-selected banner */}
         {urlSeater && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEA", border: "1.5px solid #FFC107", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
@@ -661,6 +662,7 @@ export default function Page() {
             </p>
           </div>
         </div>
+        </>
       )}
 
       <LocationMapPicker

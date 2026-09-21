@@ -271,21 +271,23 @@ export default function Header() {
               </button>
             </>
           ) : (
-            <a
-              href="/login"
-              onClick={() => dispatch(setMobileNavOpen(false))}
-              className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center inline-flex items-center justify-center gap-2"
-            >
-              <UserIcon size={16} />
-              Sign In
-            </a>
-            <a
-              href="/#booking"
-              onClick={() => dispatch(setMobileNavOpen(false))}
-              className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center text-[#666]"
-            >
-              Book as Guest
-            </a>
+            <>
+              <a
+                href="/login"
+                onClick={() => dispatch(setMobileNavOpen(false))}
+                className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center inline-flex items-center justify-center gap-2"
+              >
+                <UserIcon size={16} />
+                Sign In
+              </a>
+              <a
+                href="/#booking"
+                onClick={() => dispatch(setMobileNavOpen(false))}
+                className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center text-[#666]"
+              >
+                Book as Guest
+              </a>
+            </>
           )}
           <a
             href="/#booking"
