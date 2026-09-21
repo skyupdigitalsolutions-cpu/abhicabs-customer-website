@@ -2,25 +2,24 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 
-// Loaded once and reused by every LocationMapPicker instance — useJsApiLoader
-// (unlike the older <LoadScript> component) is specifically designed to be
-// called from multiple places without double-loading the Google Maps script
-// or throwing "already included" console errors.
 const LIBRARIES = ["places"];
 
-// Centered roughly over Karnataka/Hyderabad, matching where this business
-// actually operates.
+// Centered over Karnataka/Telangana operating region
 const DEFAULT_CENTER = { lat: 15.3, lng: 77.5 };
 const DEFAULT_ZOOM = 7;
-const PICKED_ZOOM = 14;
+const PICKED_ZOOM = 15;
 
 const mapContainerStyle = { width: "100%", height: "100%" };
 
-// Extracts the Indian state name from Google's address_components — the
-// same structure is returned by both the Geocoder (map-click path) and
-// Places Autocomplete (search path), so this one helper covers both.
 function extractState(addressComponents) {
   const comp = addressComponents?.find((c) => c.types.includes("administrative_area_level_1"));
+  return comp?.long_name || null;
+}
+
+function extractCity(addressComponents) {
+  const comp = addressComponents?.find(
+    (c) => c.types.includes("locality") || c.types.includes("administrative_area_level_2")
+  );
   return comp?.long_name || null;
 }
 
@@ -31,21 +30,33 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
     libraries: LIBRARIES,
   });
 
-  const [position, setPosition] = useState(null); // { lat, lng }
+  const [position, setPosition] = useState(null);
   const [address, setAddress] = useState(initialAddress || "");
+  const [city, setCity] = useState(null);
   const [stateName, setStateName] = useState(null);
   const [resolving, setResolving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
+  const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
+  const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
   const autocompleteRef = useRef(null);
   const geocoderRef = useRef(null);
   const mapRef = useRef(null);
+  const searchInputRef = useRef(null);
 
+  // Reset on open
   useEffect(() => {
     if (open) {
       setPosition(null);
       setAddress(initialAddress || "");
+      setCity(null);
       setStateName(null);
       setError("");
+      setMapCenter(DEFAULT_CENTER);
+      setMapZoom(DEFAULT_ZOOM);
+      autocompleteRef.current = null;
+      // Reset search input value
+      if (searchInputRef.current) searchInputRef.current.value = initialAddress || "";
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -62,11 +73,17 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
     geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
       setResolving(false);
       if (status === "OK" && results?.[0]) {
-        setAddress(results[0].formatted_address);
+        const addr = results[0].formatted_address;
+        setAddress(addr);
         setStateName(extractState(results[0].address_components));
+        setCity(extractCity(results[0].address_components));
+        // Sync search input
+        if (searchInputRef.current) searchInputRef.current.value = addr;
       } else {
-        setError("Couldn't fetch the address for this spot — you can still confirm using the pinned coordinates.");
-        setAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setError("Couldn't resolve address — coordinates saved.");
+        setAddress(fallback);
+        if (searchInputRef.current) searchInputRef.current.value = fallback;
         setStateName(null);
       }
     });
@@ -76,128 +93,301 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
     setPosition({ lat, lng });
+    setMapCenter({ lat, lng });
     reverseGeocode(lat, lng);
   }
 
-  function handlePlaceChanged() {
-    const place = autocompleteRef.current?.getPlace();
+  function handlePlaceChanged(place) {
     if (!place?.geometry?.location) return;
     const lat = place.geometry.location.lat();
     const lng = place.geometry.location.lng();
+    const addr = place.formatted_address || place.name || "";
     setPosition({ lat, lng });
-    setAddress(place.formatted_address || place.name || "");
+    setAddress(addr);
     setStateName(extractState(place.address_components));
-    mapRef.current?.panTo({ lat, lng });
-    mapRef.current?.setZoom(PICKED_ZOOM);
+    setCity(extractCity(place.address_components));
+    setMapCenter({ lat, lng });
+    setMapZoom(PICKED_ZOOM);
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat, lng });
+      mapRef.current.setZoom(PICKED_ZOOM);
+    }
+    if (searchInputRef.current) searchInputRef.current.value = addr;
+  }
+
+  // Use browser geolocation
+  function handleLocateMe() {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by your browser.");
+      return;
+    }
+    setLocating(true);
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setPosition({ lat, lng });
+        setMapCenter({ lat, lng });
+        setMapZoom(PICKED_ZOOM);
+        if (mapRef.current) {
+          mapRef.current.panTo({ lat, lng });
+          mapRef.current.setZoom(PICKED_ZOOM);
+        }
+        reverseGeocode(lat, lng);
+      },
+      () => {
+        setLocating(false);
+        setError("Couldn't get your location. Please allow location access or pick manually.");
+      },
+      { timeout: 10000 }
+    );
+  }
+
+  function attachAutocomplete(el) {
+    if (!el || autocompleteRef.current) return;
+    searchInputRef.current = el;
+    const places = window.google?.maps?.places;
+    if (!places) return;
+    if (places.Autocomplete) {
+      const ac = new places.Autocomplete(el, {
+        componentRestrictions: { country: "in" },
+        fields: ["geometry", "formatted_address", "name", "address_components"],
+      });
+      autocompleteRef.current = ac;
+      ac.addListener("place_changed", () => handlePlaceChanged(ac.getPlace()));
+    } else if (places.PlaceAutocompleteElement) {
+      const ac = new places.PlaceAutocompleteElement({
+        inputElement: el,
+        componentRestrictions: { country: "in" },
+      });
+      autocompleteRef.current = { _new: ac };
+      ac.addEventListener("gmp-placeselect", async ({ place }) => {
+        await place.fetchFields({ fields: ["formattedAddress", "displayName", "location", "addressComponents"] });
+        const lat = place.location?.lat() ?? 0;
+        const lng = place.location?.lng() ?? 0;
+        const addr = place.formattedAddress || place.displayName || "";
+        setPosition({ lat, lng });
+        setAddress(addr);
+        setMapCenter({ lat, lng });
+        setMapZoom(PICKED_ZOOM);
+        if (mapRef.current) {
+          mapRef.current.panTo({ lat, lng });
+          mapRef.current.setZoom(PICKED_ZOOM);
+        }
+        if (searchInputRef.current) searchInputRef.current.value = addr;
+      });
+    }
   }
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3"
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+    >
       <div
-        className="bg-white rounded-[20px] w-full max-w-[640px] overflow-hidden shadow-2xl"
+        className="bg-white rounded-[22px] w-full overflow-hidden shadow-2xl"
+        style={{ maxWidth: 680, maxHeight: "92vh", display: "flex", flexDirection: "column" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#EFEFEF]">
-          <h3 className="font-bold text-[16px] m-0">{title || "Pick a location on the map"}</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        {/* Header */}
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div>
+            <h3 style={{ fontWeight: 800, fontSize: 16, margin: 0, color: "#111" }}>{title || "Pick a Location"}</h3>
+            <p style={{ fontSize: 12, color: "#888", margin: "3px 0 0" }}>Search, or tap anywhere on the map to pin</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#F5F5F5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#666" strokeWidth="2.2" strokeLinecap="round" /></svg>
           </button>
         </div>
 
-        <div className="p-4">
+        {/* Body */}
+        <div style={{ padding: "14px 16px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+
           {!GOOGLE_MAPS_API_KEY ? (
-            // Matches the same honest fallback pattern already used on the
-            // Live Tracking page for a missing key — no broken/blank map,
-            // just a clear message telling the operator what to configure.
-            <div className="bg-amber-50 border border-amber-200 rounded-[12px] p-5 text-center">
-              <p className="text-[14px] font-semibold text-amber-800 m-0 mb-1.5">Map isn't configured yet</p>
-              <p className="text-[13px] text-amber-700 m-0">
-                Add a value for <code className="bg-amber-100 px-1.5 py-0.5 rounded">VITE_GOOGLE_MAPS_API_KEY</code> in your
-                <code className="bg-amber-100 px-1.5 py-0.5 rounded mx-1">.env</code> file (see the comment above it for where
-                to get one), then restart the dev server.
+            <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 12, padding: "16px 18px", textAlign: "center" }}>
+              <p style={{ fontWeight: 700, fontSize: 14, color: "#92400E", margin: "0 0 6px" }}>Map not configured</p>
+              <p style={{ fontSize: 13, color: "#78350F", margin: 0 }}>
+                Add <code style={{ background: "#FEF3C7", padding: "1px 6px", borderRadius: 4 }}>VITE_GOOGLE_MAPS_API_KEY</code> to your <code style={{ background: "#FEF3C7", padding: "1px 6px", borderRadius: 4 }}>.env</code> file.
               </p>
             </div>
           ) : loadError ? (
-            <div className="bg-red-50 border border-red-200 rounded-[12px] p-5 text-center">
-              <p className="text-[14px] font-semibold text-red-700 m-0">Couldn't load Google Maps</p>
-              <p className="text-[13px] text-red-600 m-0 mt-1">Check that your API key is valid and the Maps JavaScript + Places APIs are enabled for it.</p>
+            <div style={{ background: "#FFF5F5", border: "1px solid #FCA5A5", borderRadius: 12, padding: "16px 18px", textAlign: "center" }}>
+              <p style={{ fontWeight: 700, fontSize: 14, color: "#991B1B", margin: "0 0 4px" }}>Couldn't load Google Maps</p>
+              <p style={{ fontSize: 13, color: "#B91C1C", margin: 0 }}>Check your API key and ensure Maps JavaScript + Places APIs are enabled.</p>
             </div>
           ) : !isLoaded ? (
-            <div className="h-[320px] flex items-center justify-center text-gray-400 text-[14px]">Loading map…</div>
+            <div style={{ height: 380, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "#999" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+              <span style={{ fontSize: 13 }}>Loading map…</span>
+            </div>
           ) : (
             <>
-              <input
-                  ref={(el) => {
-                    if (!el || autocompleteRef.current) return;
-                    const places = window.google?.maps?.places;
-                    if (!places) return;
-                    if (places.PlaceAutocompleteElement) {
-                      const ac = new places.PlaceAutocompleteElement({ inputElement: el, componentRestrictions: { country: "in" } });
-                      autocompleteRef.current = { getPlace: () => null, _new: ac };
-                      ac.addEventListener("gmp-placeselect", ({ place }) => {
-                        place.fetchFields({ fields: ["formattedAddress", "displayName", "location"] }).then(() => {
-                          const lat = place.location?.lat() ?? 0;
-                          const lng = place.location?.lng() ?? 0;
-                          setPosition({ lat, lng });
-                          setAddress(place.formattedAddress || place.displayName || "");
-                        });
-                      });
-                    } else if (places.Autocomplete) {
-                      const ac = new places.Autocomplete(el, { componentRestrictions: { country: "in" } });
-                      autocompleteRef.current = ac;
-                      ac.addListener("place_changed", handlePlaceChanged);
-                    }
-                  }}
+              {/* Search + Locate Me row */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  ref={attachAutocomplete}
                   defaultValue={initialAddress || ""}
-                  placeholder="Search for a city, area or landmark…"
-                  className="w-full border border-[#E5E5E5] rounded-[10px] px-3.5 py-2.5 text-[14px] outline-none focus:border-brand-black mb-3"
+                  placeholder="Search city, area or landmark…"
+                  style={{
+                    flex: 1, border: "1.5px solid #E5E5E5", borderRadius: 10,
+                    padding: "10px 14px", fontSize: 14, outline: "none",
+                    fontFamily: "inherit",
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = "#111"}
+                  onBlur={(e) => e.target.style.borderColor = "#E5E5E5"}
                 />
+                <button
+                  type="button"
+                  onClick={handleLocateMe}
+                  disabled={locating}
+                  title="Use my current location"
+                  style={{
+                    flexShrink: 0, width: 44, height: 44, borderRadius: 10,
+                    border: "1.5px solid #E5E5E5", background: locating ? "#FFF7DE" : "#fff",
+                    cursor: locating ? "wait" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  {locating ? (
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2.5px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="4" fill="#FFC107" />
+                      <circle cx="12" cy="12" r="8" stroke="#FFC107" strokeWidth="1.8" />
+                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#FFC107" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  )}
+                </button>
+              </div>
 
-
-              <div style={{ height: 320, borderRadius: 14, overflow: "hidden", border: "1px solid #EFEFEF" }}>
+              {/* Map */}
+              <div style={{ height: 360, borderRadius: 14, overflow: "hidden", border: "1px solid #EFEFEF", position: "relative" }}>
                 <GoogleMap
                   mapContainerStyle={mapContainerStyle}
-                  center={position || DEFAULT_CENTER}
-                  zoom={position ? PICKED_ZOOM : DEFAULT_ZOOM}
+                  center={mapCenter}
+                  zoom={mapZoom}
                   onClick={handleMapClick}
                   onLoad={(map) => { mapRef.current = map; }}
-                  options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+                  options={{
+                    streetViewControl: false,
+                    mapTypeControl: false,
+                    fullscreenControl: true,
+                    zoomControlOptions: { position: 7 },
+                    clickableIcons: false,
+                    styles: [
+                      { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+                    ],
+                  }}
                 >
-                  {position && <MarkerF position={position} />}
+                  {position && (
+                    <MarkerF
+                      position={position}
+                      animation={window.google?.maps?.Animation?.DROP}
+                      icon={{
+                        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
+                          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48">
+                            <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30s18-16.5 18-30C36 8.06 27.94 0 18 0z" fill="#FFC107"/>
+                            <circle cx="18" cy="18" r="8" fill="#111"/>
+                          </svg>`),
+                        scaledSize: { width: 36, height: 48 },
+                        anchor: { x: 18, y: 48 },
+                      }}
+                    />
+                  )}
                 </GoogleMap>
+
+                {/* Crosshair hint */}
+                {!position && (
+                  <div style={{
+                    position: "absolute", inset: 0, display: "flex", alignItems: "center",
+                    justifyContent: "center", pointerEvents: "none",
+                  }}>
+                    <div style={{
+                      background: "rgba(255,255,255,0.88)", borderRadius: 10,
+                      padding: "8px 14px", fontSize: 12.5, fontWeight: 600, color: "#444",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                    }}>
+                      📍 Tap the map to drop a pin
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <p className="text-[12px] text-gray-500 mt-2.5 mb-0">
-                Tap anywhere on the map to drop a pin, or search above. The address fills in automatically.
-              </p>
-
-              {error && <p className="text-[12.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-[8px] px-3 py-2 mt-2.5">{error}</p>}
-
-              <div className="mt-4 border-t border-[#EFEFEF] pt-4">
-                <label className="text-[12px] font-bold text-gray-600 block mb-1.5">Selected location</label>
-                <div className="text-[14px] font-medium min-h-[20px]">
-                  {resolving ? "Looking up address…" : (address || "No location picked yet")}
+              {/* Selected location preview */}
+              <div style={{
+                background: position ? "#FFFBEB" : "#F9F9F9",
+                border: `1px solid ${position ? "#FCD34D" : "#EFEFEF"}`,
+                borderRadius: 12, padding: "12px 14px",
+                display: "flex", alignItems: "flex-start", gap: 10,
+                minHeight: 52,
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 2, color: position ? "#FFC107" : "#ccc" }}>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="currentColor" />
+                  <circle cx="12" cy="9" r="2.5" fill="#111" />
+                </svg>
+                <div style={{ flex: 1 }}>
+                  {resolving ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#888", fontSize: 13 }}>
+                      <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                      Resolving address…
+                    </div>
+                  ) : address ? (
+                    <>
+                      <div style={{ fontWeight: 600, fontSize: 13.5, color: "#111", lineHeight: 1.4 }}>{address}</div>
+                      {(city || stateName) && (
+                        <div style={{ fontSize: 11.5, color: "#888", marginTop: 3 }}>
+                          {[city, stateName].filter(Boolean).join(", ")}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 13, color: "#aaa" }}>No location selected yet</span>
+                  )}
                 </div>
               </div>
+
+              {error && (
+                <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, color: "#92400E" }}>
+                  ⚠️ {error}
+                </div>
+              )}
             </>
           )}
+        </div>
 
-          <div className="flex gap-3 mt-5">
-            <button onClick={onClose} className="flex-1 py-3 rounded-[11px] border border-[#E5E5E5] font-semibold text-[14px]">
-              Cancel
-            </button>
-            <button
-              onClick={() => address && onConfirm(address, stateName)}
-              disabled={!address || resolving || !GOOGLE_MAPS_API_KEY}
-              className="flex-1 py-3 rounded-[11px] bg-primary text-brand-black font-bold text-[14px] disabled:opacity-40"
-            >
-              Confirm Location
-            </button>
-          </div>
+        {/* Footer */}
+        <div style={{ padding: "12px 16px 16px", borderTop: "1px solid #F0F0F0", display: "flex", gap: 10, flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => address && onConfirm(address, stateName)}
+            disabled={!address || resolving || !GOOGLE_MAPS_API_KEY}
+            style={{
+              flex: 2, padding: "12px 0", borderRadius: 12, border: "none",
+              background: address && !resolving ? "#FFC107" : "#F5F5F5",
+              color: address && !resolving ? "#111" : "#aaa",
+              fontWeight: 700, fontSize: 14, cursor: address && !resolving ? "pointer" : "not-allowed",
+              transition: "background .2s",
+            }}
+          >
+            {resolving ? "Resolving…" : address ? "Confirm Location" : "Pick a location first"}
+          </button>
         </div>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
