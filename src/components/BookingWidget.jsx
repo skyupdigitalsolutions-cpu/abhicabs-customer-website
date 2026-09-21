@@ -687,7 +687,7 @@ function TimePicker12hr({ value, onChange, min }) {
 
   const displayTime = (() => {
     if (!value) return null; // show placeholder
-    const [hh, mm] = toHHMM(h12, minute, ampm).split(":").map(Number);
+    const [hh, mm] = value.split(":").map(Number);
     const ap = hh < 12 ? "AM" : "PM";
     const h = hh % 12 || 12;
     return `${h}:${String(mm).padStart(2, "0")} ${ap}`;
