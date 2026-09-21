@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useRequireAuth } from "../../src/hooks/useRequireAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
@@ -280,9 +279,6 @@ export default function Page() {
     flexShrink: 0, width: 34, height: 34, borderRadius: 9, border: "1px solid #E5E5E5", background: "#fff",
     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#B8860B",
   };
-
-  if (!checked) return null;
-  if (!authed)  return null;
 
   return (
     <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 22px 60px" }}>

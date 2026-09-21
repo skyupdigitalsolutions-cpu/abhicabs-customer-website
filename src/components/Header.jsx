@@ -191,14 +191,23 @@ export default function Header() {
                 )}
               </div>
             ) : (
-              /* ── Not logged in: Login icon + Sign In ── */
-              <a
-                href="/login"
-                className="hidden lg:inline-flex items-center gap-1.5 font-semibold text-[13.5px] text-brand-black hover:!text-[#B8860B]"
-              >
-                <UserIcon size={17} />
-                Sign In
-              </a>
+              /* ── Not logged in: Sign In + Book as Guest ── */
+              <div className="hidden lg:flex items-center gap-2">
+                <a
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 font-semibold text-[13.5px] text-brand-black hover:!text-[#B8860B]"
+                >
+                  <UserIcon size={17} />
+                  Sign In
+                </a>
+                <span className="text-[#ccc]">|</span>
+                <a
+                  href="/#booking"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#666] hover:!text-brand-black"
+                >
+                  Book as Guest
+                </a>
+              </div>
             )}
 
             <button
@@ -269,6 +278,13 @@ export default function Header() {
             >
               <UserIcon size={16} />
               Sign In
+            </a>
+            <a
+              href="/#booking"
+              onClick={() => dispatch(setMobileNavOpen(false))}
+              className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center text-[#666]"
+            >
+              Book as Guest
             </a>
           )}
           <a

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useRequireAuth } from "../../src/hooks/useRequireAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
 import { selectJourney } from "../../src/store/slices/journeySlice";
 import { selectCheckoutDetails, setCheckoutDetails } from "../../src/store/slices/checkoutSlice";
 import { API_BASE_URL } from "../../src/api/config";
+import { isAuthenticated } from "../../src/api/tokens";
+import { authApi } from "../../src/api";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
 import StateBlock from "../../src/components/StateBlock";
 import Button from "../../src/components/ui/Button";
@@ -130,7 +131,6 @@ function TermsModal({ onClose }) {
 
 // ── Checkout Page ────────────────────────────────────────────────────────────
 export default function Page() {
-  const { checked, authed } = useRequireAuth();
   const dispatch = useDispatch();
   const toast = useToast();
   const selected = useSelector(selectSelectedCab);
@@ -153,8 +153,23 @@ export default function Page() {
   const bookingCompletedRef = useRef(false);
   const abandonmentSentRef = useRef(false);
 
-  if (!checked) return null;
-  if (!authed)  return null;
+  // Auto-fill from logged-in user profile on mount.
+  // Only fills fields the user hasn't already typed — never overwrites edits.
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    authApi.getMe()
+      .then((user) => {
+        if (!user) return;
+        if (!fullName && (user.name || user.fullName))
+          setFullName(user.name || user.fullName || "");
+        if (!mobile && user.phone)
+          setMobile(user.phone.replace(/[^\d]/g, "").slice(-10));
+        if (!email && user.email && !user.email.includes("@placeholder.local"))
+          setEmail(user.email);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!selected || !vehicle || !journey) {
     return (
@@ -213,8 +228,30 @@ export default function Page() {
     return Object.keys(e).length === 0;
   }
 
-  function continueToPayment() {
+  async function continueToPayment() {
     if (!validate()) { toast("Please fix the highlighted fields", "error"); return; }
+
+    // Guest user — silently register with checkout details so the backend
+    // can associate the booking with a real account. No OTP required.
+    if (!isAuthenticated()) {
+      try {
+        await authApi.register({
+          name: fullName.trim(),
+          email: email.trim(),
+          phone: mobile.trim(),
+        });
+        toast("Account created automatically — you can log in later to view bookings.", "success");
+      } catch (err) {
+        // If email already registered, try OTP login (account exists)
+        // For now just proceed — backend will create the booking anyway
+        // since the booking endpoint doesn't require auth for guests
+        if (!err?.code?.includes("EMAIL_TAKEN")) {
+          // Non-duplicate error — show it but don't block
+          console.warn("Guest auto-register:", err.message);
+        }
+      }
+    }
+
     bookingCompletedRef.current = true;
     dispatch(setCheckoutDetails({
       fullName: fullName.trim(), mobile: mobile.trim(), email: email.trim(),
@@ -243,8 +280,28 @@ export default function Page() {
           {/* ── Left: Passenger Details ────────────────────────────── */}
           <div className="flex flex-col gap-5">
             <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
+              {/* Guest checkout notice */}
+              {isGuest && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "#F0F7FF", border: "1px solid #BFDBFE", borderRadius: 14, padding: "14px 16px", marginBottom: 18 }}>
+                  <span style={{ fontSize: 20, flexShrink: 0 }}>👤</span>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 13.5, color: "#1e3a5f", margin: 0 }}>Booking as Guest</p>
+                    <p style={{ fontSize: 12.5, color: "#3b5998", margin: "4px 0 0", lineHeight: 1.5 }}>
+                      No account needed. Fill your details and proceed to payment.{" "}
+                      <a href="/login" style={{ fontWeight: 700, color: "#1d4ed8" }}>Sign in</a> to track bookings later.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between mb-4.5">
-                <h2 className="text-[17px] font-bold">Passenger Details</h2>
+                <div>
+                  <h2 className="text-[17px] font-bold">Passenger Details</h2>
+                  {isAuthenticated() && (
+                    <p style={{ fontSize: 12, color: "#888", margin: "2px 0 0" }}>
+                      Pre-filled from your profile — all fields are editable
+                    </p>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {

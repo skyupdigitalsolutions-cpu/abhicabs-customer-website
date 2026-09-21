@@ -68,9 +68,6 @@ function toFareRequest(journey, vehicleCategory) {
     );
   }
 
-  if (tripType === "AIRPORT" && journey.flight) {
-    body.flightNumber = journey.flight;
-  }
 
   if (tripType === "HOURLY") {
     // Send rentalHours as fallback — backend requires one of rentalPackageId or rentalHours

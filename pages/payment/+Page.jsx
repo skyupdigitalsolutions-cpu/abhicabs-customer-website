@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback } from "react";
-import { useRequireAuth } from "../../src/hooks/useRequireAuth";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -18,7 +17,6 @@ import { IconPin, IconClose } from "../../src/components/Icons";
 const PARTIAL_ADVANCE_PERCENT = 25;
 
 export default function Page() {
-  const { checked, authed } = useRequireAuth();
   const dispatch  = useDispatch();
   const toast     = useToast();
   const selected  = useSelector(selectSelectedCab);
@@ -44,9 +42,6 @@ export default function Page() {
   // (e.g. after Razorpay failure) can reuse the same booking id instead of
   // creating a second one.
   const bookingRef = useRef(null);
-
-  if (!checked) return null;
-  if (!authed)  return null;
 
   if (!selected || !vehicle || !journey) {
     return (
@@ -109,7 +104,6 @@ export default function Page() {
       tripType:      journey.tripType,
       returnDate:    journey.returnDate,
       returnTime:    journey.returnTime,
-      flight:        journey.flight,
       vehicleId:     vehicle.id,
       vehicleCategory: vehicle.category,
       vehicle:       vehicle.name,

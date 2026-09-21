@@ -55,8 +55,16 @@ function CancelReasonModal({ open, onClose, onConfirm, cancelling }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 28, maxWidth: 440, width: "100%" }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Cancel this booking?</h3>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 28, maxWidth: 440, width: "100%", position: "relative" }} onClick={(e) => e.stopPropagation()}>
+        {/* Close X button */}
+        <button
+          onClick={onClose}
+          style={{ position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: "50%", border: "none", background: "#F3F4F6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "#666", lineHeight: 1 }}
+          aria-label="Close"
+        >
+          ×
+        </button>
+        <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, paddingRight: 36 }}>Cancel this booking?</h3>
         <p style={{ marginTop: 8, color: "#666", fontSize: 14.5 }}>
           Free cancellation applies before your cancellation window closes. This action cannot be undone.
         </p>

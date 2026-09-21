@@ -92,10 +92,6 @@ function toBookingRequest(p) {
     body.returnAt = new Date(`${returnDate}T${returnTime}:00`).toISOString();
   }
 
-  // AIRPORT — optional flight number
-  if (tripType === "AIRPORT" && p.flight) {
-    body.flightNumber = p.flight;
-  }
 
   // HOURLY — schema requires rentalPackageId OR rentalHours
   if (tripType === "HOURLY") {

@@ -34,7 +34,7 @@ function emptyFields() {
     pickup: "", drop: "", date: today, time: "10:00",
     returnDate: "", returnTime: "18:00",
     package: "8 hrs / 80 km",
-    flight: "", passengers: "2",
+    passengers: "2",
     airport: "Kempegowda International Airport (BLR)",
     airportDirection: "drop"
   };
@@ -203,15 +203,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   function handleSubmit(e) {
     e.preventDefault();
 
-    // Guard: booking search requires auth — redirect to login and come back
-    if (!isAuthenticated()) {
-      if (typeof sessionStorage !== "undefined") {
-        sessionStorage.setItem("abhicabs_login_return", "/booking-search");
-      }
-      navigate("/login");
-      return;
-    }
-
     if (mode !== "local" && !fields.pickup.trim()) {
       toast("Please enter a pickup location", "error"); return;
     }
@@ -250,7 +241,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       returnDate: fields.returnDate,
       returnTime: fields.returnTime,
       package: mode === "local" ? fields.package : "",
-      flight: mode === "airport" ? fields.flight : "",
       passengers: fields.passengers,
       stops: filledStops,          // intermediate waypoints
       surge,
@@ -488,9 +478,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                 <Field label="Time">
                   <Input type="time" value={fields.time} onChange={set("time")} required />
                 </Field>
-                <Field label="Flight Number (optional)">
-                  <Input placeholder="e.g. AI 505" value={fields.flight} onChange={set("flight")} />
-                </Field>
+
                 <div className="flex items-end">
                   <Button type="submit" size="lg" block>Search Available Cabs</Button>
                 </div>
