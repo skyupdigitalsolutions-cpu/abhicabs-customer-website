@@ -138,6 +138,8 @@ export default function Page() {
   const vehicle = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
   const saved = useSelector(selectCheckoutDetails);
 
+  const isGuest = !isAuthenticated();
+
   const [fullName, setFullName] = useState(saved.fullName || "");
   const [mobile, setMobile] = useState(saved.mobile || "");
   const [email, setEmail] = useState(saved.email || "");
