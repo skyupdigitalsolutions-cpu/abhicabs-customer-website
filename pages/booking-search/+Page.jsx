@@ -41,7 +41,8 @@ export default function Page() {
   const pageContext = usePageContext();
   const journeyId = pageContext.urlParsed?.search?.j || null;
   const browseType = pageContext.urlParsed?.search?.type || null; // e.g. "group"
-  const urlSeater  = pageContext.urlParsed?.search?.seater || null; // e.g. "13" from group section
+  const urlSeater  = pageContext.urlParsed?.search?.seater  || null; // e.g. "13" from group section
+  const urlVehicle = pageContext.urlParsed?.search?.vehicle || null; // e.g. "swift-desire" from fleet card
   const dispatch = useDispatch();
   const toast = useToast();
   const journey = useSelector(selectJourney(journeyId));
@@ -69,7 +70,7 @@ export default function Page() {
   const [typeFilters, setTypeFilters] = useState([]);
   // Pre-populate seat filter from URL param (e.g. ?seater=13 from group section)
   const [seatFilters, setSeatFilters] = useState(() =>
-    urlSeater ? [urlSeater] : []
+    urlSeater ? [Number(urlSeater)] : []
   );
   // Only meaningful in Group/Coach browse mode, where there's no real trip
   // type yet — lets the customer indicate one here, which then carries
@@ -212,7 +213,7 @@ export default function Page() {
   const vehicles = useMemo(() => {
     let list = source;
     if (typeFilters.length) list = list.filter((v) => typeFilters.includes(getVehicleType(v)));
-    if (seatFilters.length) list = list.filter((v) => seatFilters.includes(v.seats));
+    if (seatFilters.length) list = list.filter((v) => seatFilters.includes(Number(v.seats)));
     if (ac === "on") list = list.filter((v) => v.ac);
     if (ac === "off") list = list.filter((v) => !v.ac);
     list = list.map((v) => ({
@@ -230,7 +231,8 @@ export default function Page() {
     setTypeFilters((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   }
   function toggleSeat(s) {
-    setSeatFilters((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+    const n = Number(s);
+    setSeatFilters((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
   }
   function clearFilters() {
     setTypeFilters([]); setSeatFilters([]); setAc("all"); setSort("recommended"); setTripTypeFilter(null);
@@ -611,13 +613,26 @@ export default function Page() {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {vehicles.map((v, idx) => {
+                {[...vehicles].sort((a, b) => {
+                  // Pin the URL-selected vehicle to the top
+                  if (urlVehicle) {
+                    if (a.id === urlVehicle) return -1;
+                    if (b.id === urlVehicle) return 1;
+                  }
+                  return 0;
+                }).map((v, idx) => {
                   const type = getVehicleType(v);
+                  const isPinned = urlVehicle && v.id === urlVehicle;
                   // Use vehicleClass+idx as key to guarantee uniqueness even if
                   // two catalogue entries share the same id after merging
                   const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (
-                    <div key={cardKey} className="vehicle-card-wrap" style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap" }}>
+                    <div key={cardKey} className="vehicle-card-wrap" style={{ background: "#fff", border: isPinned ? "2px solid #FFC107" : "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap", position: "relative", boxShadow: isPinned ? "0 0 0 4px rgba(255,193,7,.15)" : "none" }}>
+                      {isPinned && (
+                        <div style={{ position: "absolute", top: 14, left: 14, zIndex: 10, background: "#FFC107", color: "#111", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", padding: "3px 10px", borderRadius: 9999, textTransform: "uppercase" }}>
+                          ✓ Your Selection
+                        </div>
+                      )}
                       <div className="vehicle-card-image" style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", minHeight: 200, position: "relative" }}>
                         <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
                       </div>
