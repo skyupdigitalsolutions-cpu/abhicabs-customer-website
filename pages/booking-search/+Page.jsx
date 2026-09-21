@@ -57,6 +57,11 @@ export default function Page() {
   // done and its id happens to match the fallback".
   const browseMode = !journeyId;
 
+  // Reset body scroll lock in case a modal from the previous page left it set
+  useEffect(() => {
+    document.body.style.overflow = "";
+  }, []);
+
   const [loading, setLoading] = useState(!browseMode);
   const [apiVehicles, setApiVehicles] = useState(null);
   const [serviceAreaError, setServiceAreaError] = useState(null);

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { navigate } from "vike/client/router";
 import { fmtINR } from "../data/mockData";
 
@@ -16,6 +16,14 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
     setActiveImg(0);
     document.body.style.overflow = "hidden";
   }
+
+  // Close modal and restore scroll when component unmounts (e.g. navigating away)
+  useEffect(() => {
+    return () => {
+      setModal(null);
+      document.body.style.overflow = "";
+    };
+  }, []);
 
   function closeModal() {
     setModal(null);
