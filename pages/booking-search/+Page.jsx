@@ -241,10 +241,18 @@ export default function Page() {
         <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 20px", color: "#fff", marginBottom: 22 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 19 }}>
-              {browseType === "group" ? "Group & Coach Vehicles" : "Browse Our Fleet"}
+              {urlVehicle
+                ? "Available Vehicles"
+                : browseType === "group"
+                  ? "Group & Coach Vehicles"
+                  : browseType === "fleet"
+                    ? "Available Vehicles"
+                    : "Browse Our Fleet"}
             </div>
             <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
-              Enter your pickup, drop and date to get a real fare for any of these.
+              {urlVehicle
+                ? "Your selected vehicle is shown first. Enter trip details to get a real fare."
+                : "Enter your pickup, drop and date to get a real fare for any of these."}
             </p>
           </div>
           <button
@@ -337,10 +345,10 @@ export default function Page() {
             <span style={{ fontSize: 20 }}>🚌</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: "#111" }}>
-                Showing {urlSeater} Seater coaches
+                Showing {urlSeater} Seater {urlVehicle ? "vehicles" : "coaches"}
               </p>
               <p style={{ fontSize: 12.5, color: "#666", margin: "2px 0 0" }}>
-                Vehicles with {urlSeater} seats are pre-filtered below.
+                {urlVehicle ? "Your selected vehicle is shown first." : `Vehicles with ${urlSeater} seats are pre-filtered below.`}
               </p>
             </div>
             <button

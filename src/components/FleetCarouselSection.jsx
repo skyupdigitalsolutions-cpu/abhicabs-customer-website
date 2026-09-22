@@ -33,7 +33,7 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
   function selectVehicle() {
     const seats = modal?.seats;
     const vehicleId = modal?.id;
-    const params = new URLSearchParams({ type: "group" });
+    const params = new URLSearchParams({ type: "fleet" }); // fleet = full catalogue, not coach-only
     if (seats) params.set("seater", String(seats));
     if (vehicleId) params.set("vehicle", vehicleId);
     closeModal();
