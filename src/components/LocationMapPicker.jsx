@@ -79,12 +79,13 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
   // ── Reset state every time picker opens ──────────────────────────────────
   useEffect(() => {
     if (!open) return;
+    const hasInitial = !!(initialAddress?.trim());
     setAddress(initialAddress || "");
     setStateName(null);
     setCity(null);
     setResolving(false);
     setLocating(false);
-    setPinned(false);
+    setPinned(hasInitial); // treat initialAddress as already-selected
     setNotice("");
     if (searchRef.current) searchRef.current.value = initialAddress || "";
     // Detach old autocomplete so it doesn't fire on stale input
@@ -154,12 +155,17 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
     };
   }, [open, mapsReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Attach Autocomplete after map built + search input mounted ────────────
+  // ── Ref callback: store the input element ────────────────────────────────
   const attachSearch = useCallback((el) => {
-    if (!el || !mapsReady || autocompleteRef.current) return;
+    if (!el) return;
     searchRef.current = el;
+  }, []);
+
+  // ── Attach Autocomplete once both input is mounted AND maps are ready ─────
+  useEffect(() => {
+    if (!mapsReady || !searchRef.current || autocompleteRef.current) return;
     const google = window.google;
-    const ac = new google.maps.places.Autocomplete(el, {
+    const ac = new google.maps.places.Autocomplete(searchRef.current, {
       componentRestrictions: { country: "in" },
       fields: ["geometry", "formatted_address", "address_components", "name"],
     });
@@ -175,9 +181,9 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
       setCity(getCity(place.address_components));
       setPinned(true);
       if (searchRef.current) searchRef.current.value = addr;
-      placePin(lat, lng, false); // false = don't re-geocode
+      placePin(lat, lng, false);
     });
-  }, [mapsReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapsReady, open]); // re-attach when map reopens // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Place pin on map ──────────────────────────────────────────────────────
   function placePin(lat, lng, doGeocode = true) {
@@ -331,7 +337,7 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
               )}
 
               {/* "Tap to pin" hint */}
-              {mapsReady && !pinned && !mapsError && (
+              {mapsReady && !address && !mapsError && (
                 <div style={{ position: "absolute", bottom: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(255,255,255,0.92)", borderRadius: 10, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, color: "#444", boxShadow: "0 2px 10px rgba(0,0,0,0.12)", pointerEvents: "none", whiteSpace: "nowrap" }}>
                   📍 Tap the map to drop a pin
                 </div>
@@ -340,8 +346,8 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
           )}
 
           {/* Selected location preview card */}
-          <div style={{ background: pinned || (noKey && address) ? "#FFFBEB" : "#F9F9F9", border: `1.5px solid ${pinned || (noKey && address) ? "#FCD34D" : "#EFEFEF"}`, borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10, minHeight: 54, transition: "all .2s" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1, color: pinned || (noKey && address) ? "#FFC107" : "#ccc" }}>
+          <div style={{ background: address ? "#FFFBEB" : "#F9F9F9", border: `1.5px solid ${address ? "#FCD34D" : "#EFEFEF"}`, borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10, minHeight: 54, transition: "all .2s" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1, color: address ? "#FFC107" : "#ccc" }}>
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="currentColor"/>
               <circle cx="12" cy="9" r="2.5" fill="#111"/>
             </svg>
