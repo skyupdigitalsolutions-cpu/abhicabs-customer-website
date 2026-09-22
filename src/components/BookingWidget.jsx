@@ -12,7 +12,6 @@ import { isAuthenticated } from "../api/tokens";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 import { createSupportTicket } from "../api/services/support";
 
-const MAPS_LIBRARIES = ["places"];
 
 // States this business actually operates in — matches the real "Serving
 // Karnataka & Hyderabad" copy already used in the Header/Footer, extended
@@ -172,11 +171,17 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   // someone starts typing, without needing to open the map first. Only two
   // handlers needed total: every mode reuses the same fields.pickup/
   // fields.drop state keys, so "pickup" and "drop" cover every occurrence.
-  const { isLoaded: mapsLoaded } = useJsApiLoader({
-    id: "abhi-cabs-google-maps",
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: MAPS_LIBRARIES,
-  });
+  // Maps SDK loaded by LocationMapPicker's singleton loader — poll until ready
+  const [mapsLoaded, setMapsLoaded] = useState(
+    () => typeof window !== "undefined" && !!window.google?.maps?.places
+  );
+  useEffect(() => {
+    if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
+    const iv = setInterval(() => {
+      if (window.google?.maps?.places) { setMapsLoaded(true); clearInterval(iv); }
+    }, 200);
+    return () => clearInterval(iv);
+  }, [mapsLoaded]);
   const pickupAutocompleteRef = useRef(null);
   const dropAutocompleteRef = useRef(null);
 
