@@ -77,6 +77,7 @@ export default function Page() {
   const [seatFilters, setSeatFilters] = useState(() =>
     urlSeater ? [Number(urlSeater)] : []
   );
+  const [tripTypeFilter, setTripTypeFilter] = useState(null);
   // Only meaningful in Group/Coach browse mode, where there's no real trip
   // type yet — lets the customer indicate one here, which then carries
   // through to a real search (see selectVehicle) instead of being lost.
@@ -164,6 +165,17 @@ export default function Page() {
     let list = source;
     if (typeFilters.length) list = list.filter((v) => typeFilters.includes(getVehicleType(v)));
     if (seatFilters.length) list = list.filter((v) => seatFilters.includes(Number(v.seats)));
+    // Trip type filter — vehicles expose which service types they support
+    if (tripTypeFilter) {
+      list = list.filter((v) => {
+        const tt = tripTypeFilter;
+        if (tt === "one-way")    return v.outstationPerKm > 0 || v.localPackage > 0;
+        if (tt === "round-trip") return v.outstationPerKm > 0;
+        if (tt === "local")      return v.localPackage > 0;
+        if (tt === "airport")    return true; // all vehicles do airport
+        return true;
+      });
+    }
     if (ac === "on") list = list.filter((v) => v.ac);
     if (ac === "off") list = list.filter((v) => !v.ac);
     list = list.map((v) => ({
@@ -391,6 +403,22 @@ export default function Page() {
               </div>
             </div>
 
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <button onClick={() => setTripTypeFilter(null)} style={filterPillStyle(!tripTypeFilter)}>All</button>
+                {[
+                  { key: "one-way",    label: "One Way"     },
+                  { key: "round-trip", label: "Round Trip"  },
+                  { key: "local",      label: "Local"       },
+                  { key: "airport",    label: "Airport"     },
+                ].map((t) => (
+                  <button key={t.key} onClick={() => setTripTypeFilter(tripTypeFilter === t.key ? null : t.key)} style={filterPillStyle(tripTypeFilter === t.key)}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Seats</div>
