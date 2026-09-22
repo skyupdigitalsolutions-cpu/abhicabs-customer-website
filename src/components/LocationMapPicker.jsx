@@ -1,393 +1,393 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 
-const LIBRARIES = ["places"];
-
-// Centered over Karnataka/Telangana operating region
-const DEFAULT_CENTER = { lat: 15.3, lng: 77.5 };
-const DEFAULT_ZOOM = 7;
-const PICKED_ZOOM = 15;
-
-const mapContainerStyle = { width: "100%", height: "100%" };
-
-function extractState(addressComponents) {
-  const comp = addressComponents?.find((c) => c.types.includes("administrative_area_level_1"));
-  return comp?.long_name || null;
-}
-
-function extractCity(addressComponents) {
-  const comp = addressComponents?.find(
-    (c) => c.types.includes("locality") || c.types.includes("administrative_area_level_2")
-  );
-  return comp?.long_name || null;
-}
-
-export default function LocationMapPicker({ open, title, initialAddress, onConfirm, onClose }) {
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "abhi-cabs-google-maps",
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES,
+// ─── Singleton Google Maps loader ─────────────────────────────────────────────
+// Loads the Maps JS API once per page; all LocationMapPicker instances share it.
+let _mapsPromise = null;
+function loadGoogleMaps() {
+  if (_mapsPromise) return _mapsPromise;
+  if (window.google?.maps?.places) {
+    _mapsPromise = Promise.resolve();
+    return _mapsPromise;
+  }
+  _mapsPromise = new Promise((resolve, reject) => {
+    const cb = "__abhiCabsMapsReady";
+    window[cb] = () => { delete window[cb]; resolve(); };
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=${cb}&loading=async`;
+    s.async = true;
+    s.defer = true;
+    s.onerror = () => { _mapsPromise = null; reject(new Error("Maps failed to load")); };
+    document.head.appendChild(s);
   });
+  return _mapsPromise;
+}
 
-  const [position, setPosition] = useState(null);
-  const [address, setAddress] = useState(initialAddress || "");
-  const [city, setCity] = useState(null);
-  const [stateName, setStateName] = useState(null);
-  const [resolving, setResolving] = useState(false);
-  const [locating, setLocating] = useState(false);
-  const [error, setError] = useState("");
-  const [mapCenter, setMapCenter] = useState(DEFAULT_CENTER);
-  const [mapZoom, setMapZoom] = useState(DEFAULT_ZOOM);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getState(comps) {
+  return comps?.find(c => c.types?.includes("administrative_area_level_1"))?.long_name || null;
+}
+function getCity(comps) {
+  return comps?.find(c =>
+    c.types?.includes("locality") || c.types?.includes("administrative_area_level_2")
+  )?.long_name || null;
+}
+
+const DEFAULT_CENTER = { lat: 14.5, lng: 77.5 }; // center of KA+TG
+const DEFAULT_ZOOM   = 7;
+const PICKED_ZOOM    = 15;
+
+// ─── Custom SVG pin ───────────────────────────────────────────────────────────
+const PIN_SVG = encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48">` +
+  `<path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30S36 31.5 36 18C36 8.06 27.94 0 18 0z" fill="#FFC107"/>` +
+  `<circle cx="18" cy="18" r="7" fill="#111"/>` +
+  `</svg>`
+);
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function LocationMapPicker({ open, title, initialAddress, onConfirm, onClose }) {
+  const [mapsReady, setMapsReady]   = useState(false);
+  const [mapsError, setMapsError]   = useState(null);
+  const [address,   setAddress]     = useState("");
+  const [stateName, setStateName]   = useState(null);
+  const [city,      setCity]        = useState(null);
+  const [resolving, setResolving]   = useState(false);
+  const [locating,  setLocating]    = useState(false);
+  const [pinned,    setPinned]      = useState(false); // true once user has placed a pin
+  const [notice,    setNotice]      = useState("");
+
+  const mapDivRef       = useRef(null);
+  const mapRef          = useRef(null);
+  const markerRef       = useRef(null);
+  const geocoderRef     = useRef(null);
   const autocompleteRef = useRef(null);
-  const geocoderRef = useRef(null);
-  const mapRef = useRef(null);
-  const searchInputRef = useRef(null);
+  const searchRef       = useRef(null);
+  const openRef         = useRef(open);
 
-  // Reset on open
+  // Track open state in ref so async callbacks can check it
+  useEffect(() => { openRef.current = open; }, [open]);
+
+  // ── Load Maps SDK once ────────────────────────────────────────────────────
   useEffect(() => {
-    if (open) {
-      setPosition(null);
-      setAddress(initialAddress || "");
-      setCity(null);
-      setStateName(null);
-      setError("");
-      setMapCenter(DEFAULT_CENTER);
-      setMapZoom(DEFAULT_ZOOM);
+    if (!GOOGLE_MAPS_API_KEY) return;
+    loadGoogleMaps()
+      .then(() => setMapsReady(true))
+      .catch(err => setMapsError(err.message));
+  }, []);
+
+  // ── Reset state every time picker opens ──────────────────────────────────
+  useEffect(() => {
+    if (!open) return;
+    setAddress(initialAddress || "");
+    setStateName(null);
+    setCity(null);
+    setResolving(false);
+    setLocating(false);
+    setPinned(false);
+    setNotice("");
+    if (searchRef.current) searchRef.current.value = initialAddress || "";
+    // Detach old autocomplete so it doesn't fire on stale input
+    if (autocompleteRef.current) {
+      window.google?.maps?.event?.clearInstanceListeners(autocompleteRef.current);
       autocompleteRef.current = null;
-      // Reset search input value
-      if (searchInputRef.current) searchInputRef.current.value = initialAddress || "";
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Build map after SDK ready + modal open ────────────────────────────────
   useEffect(() => {
-    if (isLoaded && !geocoderRef.current && window.google) {
-      geocoderRef.current = new window.google.maps.Geocoder();
-    }
-  }, [isLoaded]);
+    if (!open || !mapsReady || !mapDivRef.current) return;
+    if (mapRef.current) return; // already built this session
 
-  const reverseGeocode = useCallback((lat, lng) => {
+    const google = window.google;
+    geocoderRef.current = new google.maps.Geocoder();
+
+    const map = new google.maps.Map(mapDivRef.current, {
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      streetViewControl: false,
+      mapTypeControl: false,
+      fullscreenControl: false,
+      zoomControl: true,
+      clickableIcons: false,
+      gestureHandling: "greedy",
+      styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }],
+    });
+    mapRef.current = map;
+
+    // Custom pin marker (hidden until first pin)
+    const marker = new google.maps.Marker({
+      map,
+      visible: false,
+      animation: google.maps.Animation.DROP,
+      icon: {
+        url: `data:image/svg+xml;charset=UTF-8,${PIN_SVG}`,
+        scaledSize: new google.maps.Size(36, 48),
+        anchor: new google.maps.Point(18, 48),
+      },
+    });
+    markerRef.current = marker;
+
+    // Click to pin
+    map.addListener("click", (e) => {
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
+      placePin(lat, lng);
+    });
+
+    // If initialAddress, geocode it to center the map
+    if (initialAddress && geocoderRef.current) {
+      geocoderRef.current.geocode({ address: initialAddress }, (results, status) => {
+        if (status === "OK" && results?.[0]) {
+          const loc = results[0].geometry.location;
+          map.setCenter(loc);
+          map.setZoom(PICKED_ZOOM);
+        }
+      });
+    }
+
+    return () => {
+      // Cleanup on unmount
+      if (markerRef.current) markerRef.current.setMap(null);
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+  }, [open, mapsReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Attach Autocomplete after map built + search input mounted ────────────
+  const attachSearch = useCallback((el) => {
+    if (!el || !mapsReady || autocompleteRef.current) return;
+    searchRef.current = el;
+    const google = window.google;
+    const ac = new google.maps.places.Autocomplete(el, {
+      componentRestrictions: { country: "in" },
+      fields: ["geometry", "formatted_address", "address_components", "name"],
+    });
+    autocompleteRef.current = ac;
+    ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      if (!place?.geometry?.location) return;
+      const lat = place.geometry.location.lat();
+      const lng = place.geometry.location.lng();
+      const addr = place.formatted_address || place.name || "";
+      setAddress(addr);
+      setStateName(getState(place.address_components));
+      setCity(getCity(place.address_components));
+      setPinned(true);
+      if (searchRef.current) searchRef.current.value = addr;
+      placePin(lat, lng, false); // false = don't re-geocode
+    });
+  }, [mapsReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Place pin on map ──────────────────────────────────────────────────────
+  function placePin(lat, lng, doGeocode = true) {
+    const marker = markerRef.current;
+    const map    = mapRef.current;
+    if (!marker || !map) return;
+    const pos = new window.google.maps.LatLng(lat, lng);
+    marker.setPosition(pos);
+    marker.setVisible(true);
+    marker.setAnimation(window.google.maps.Animation.DROP);
+    map.panTo(pos);
+    if (map.getZoom() < PICKED_ZOOM) map.setZoom(PICKED_ZOOM);
+    setPinned(true);
+    if (doGeocode) reverseGeocode(lat, lng);
+  }
+
+  // ── Reverse geocode ───────────────────────────────────────────────────────
+  function reverseGeocode(lat, lng) {
     if (!geocoderRef.current) return;
     setResolving(true);
-    setError("");
+    setNotice("");
     geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+      if (!openRef.current) return;
       setResolving(false);
       if (status === "OK" && results?.[0]) {
         const addr = results[0].formatted_address;
         setAddress(addr);
-        setStateName(extractState(results[0].address_components));
-        setCity(extractCity(results[0].address_components));
-        // Sync search input
-        if (searchInputRef.current) searchInputRef.current.value = addr;
+        setStateName(getState(results[0].address_components));
+        setCity(getCity(results[0].address_components));
+        if (searchRef.current) searchRef.current.value = addr;
       } else {
-        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        setError("Couldn't resolve address — coordinates saved.");
+        const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         setAddress(fallback);
-        if (searchInputRef.current) searchInputRef.current.value = fallback;
         setStateName(null);
+        setCity(null);
+        if (searchRef.current) searchRef.current.value = fallback;
+        setNotice("Address not found — coordinates saved.");
       }
     });
-  }, []);
-
-  function handleMapClick(e) {
-    const lat = e.latLng.lat();
-    const lng = e.latLng.lng();
-    setPosition({ lat, lng });
-    setMapCenter({ lat, lng });
-    reverseGeocode(lat, lng);
   }
 
-  function handlePlaceChanged(place) {
-    if (!place?.geometry?.location) return;
-    const lat = place.geometry.location.lat();
-    const lng = place.geometry.location.lng();
-    const addr = place.formatted_address || place.name || "";
-    setPosition({ lat, lng });
-    setAddress(addr);
-    setStateName(extractState(place.address_components));
-    setCity(extractCity(place.address_components));
-    setMapCenter({ lat, lng });
-    setMapZoom(PICKED_ZOOM);
-    if (mapRef.current) {
-      mapRef.current.panTo({ lat, lng });
-      mapRef.current.setZoom(PICKED_ZOOM);
-    }
-    if (searchInputRef.current) searchInputRef.current.value = addr;
-  }
-
-  // Use browser geolocation
+  // ── Live location ─────────────────────────────────────────────────────────
   function handleLocateMe() {
     if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser.");
+      setNotice("Geolocation is not supported by your browser.");
       return;
     }
     setLocating(true);
-    setError("");
+    setNotice("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!openRef.current) return;
         setLocating(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setPosition({ lat, lng });
-        setMapCenter({ lat, lng });
-        setMapZoom(PICKED_ZOOM);
-        if (mapRef.current) {
-          mapRef.current.panTo({ lat, lng });
-          mapRef.current.setZoom(PICKED_ZOOM);
-        }
-        reverseGeocode(lat, lng);
+        placePin(pos.coords.latitude, pos.coords.longitude);
       },
       () => {
         setLocating(false);
-        setError("Couldn't get your location. Please allow location access or pick manually.");
+        setNotice("Could not get your location. Please enable location access or pick manually.");
       },
-      { timeout: 10000 }
+      { timeout: 10000, enableHighAccuracy: true }
     );
   }
 
-  function attachAutocomplete(el) {
-    if (!el || autocompleteRef.current) return;
-    searchInputRef.current = el;
-    const places = window.google?.maps?.places;
-    if (!places) return;
-    if (places.Autocomplete) {
-      const ac = new places.Autocomplete(el, {
-        componentRestrictions: { country: "in" },
-        fields: ["geometry", "formatted_address", "name", "address_components"],
-      });
-      autocompleteRef.current = ac;
-      ac.addListener("place_changed", () => handlePlaceChanged(ac.getPlace()));
-    } else if (places.PlaceAutocompleteElement) {
-      const ac = new places.PlaceAutocompleteElement({
-        inputElement: el,
-        componentRestrictions: { country: "in" },
-      });
-      autocompleteRef.current = { _new: ac };
-      ac.addEventListener("gmp-placeselect", async ({ place }) => {
-        await place.fetchFields({ fields: ["formattedAddress", "displayName", "location", "addressComponents"] });
-        const lat = place.location?.lat() ?? 0;
-        const lng = place.location?.lng() ?? 0;
-        const addr = place.formattedAddress || place.displayName || "";
-        setPosition({ lat, lng });
-        setAddress(addr);
-        setMapCenter({ lat, lng });
-        setMapZoom(PICKED_ZOOM);
-        if (mapRef.current) {
-          mapRef.current.panTo({ lat, lng });
-          mapRef.current.setZoom(PICKED_ZOOM);
-        }
-        if (searchInputRef.current) searchInputRef.current.value = addr;
-      });
-    }
+  // ── Confirm ────────────────────────────────────────────────────────────────
+  function handleConfirm() {
+    if (!address || resolving) return;
+    onConfirm(address, stateName);
   }
 
   if (!open) return null;
 
+  const noKey = !GOOGLE_MAPS_API_KEY;
+
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[22px] w-full overflow-hidden shadow-2xl"
-        style={{ maxWidth: 680, maxHeight: "92vh", display: "flex", flexDirection: "column" }}
-        onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: 700, maxHeight: "94vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.28)", overflow: "hidden" }}
+        onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        {/* ── Header ── */}
+        <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #F0F0F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div>
-            <h3 style={{ fontWeight: 800, fontSize: 16, margin: 0, color: "#111" }}>{title || "Pick a Location"}</h3>
-            <p style={{ fontSize: 12, color: "#888", margin: "3px 0 0" }}>Search, or tap anywhere on the map to pin</p>
+            <div style={{ fontWeight: 800, fontSize: 16, color: "#111" }}>{title || "Pick a Location"}</div>
+            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+              {noKey ? "Enter address manually below" : "Search, use live location, or tap map to pin"}
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#F5F5F5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#666" strokeWidth="2.2" strokeLinecap="round" /></svg>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", border: "none", background: "#F5F5F5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#555" strokeWidth="2.2" strokeLinecap="round"/></svg>
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: "14px 16px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* ── Body ── */}
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, padding: "14px 16px" }}>
 
-          {!GOOGLE_MAPS_API_KEY ? (
-            <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 12, padding: "16px 18px", textAlign: "center" }}>
-              <p style={{ fontWeight: 700, fontSize: 14, color: "#92400E", margin: "0 0 6px" }}>Map not configured</p>
-              <p style={{ fontSize: 13, color: "#78350F", margin: 0 }}>
-                Add <code style={{ background: "#FEF3C7", padding: "1px 6px", borderRadius: 4 }}>VITE_GOOGLE_MAPS_API_KEY</code> to your <code style={{ background: "#FEF3C7", padding: "1px 6px", borderRadius: 4 }}>.env</code> file.
-              </p>
-            </div>
-          ) : loadError ? (
-            <div style={{ background: "#FFF5F5", border: "1px solid #FCA5A5", borderRadius: 12, padding: "16px 18px", textAlign: "center" }}>
-              <p style={{ fontWeight: 700, fontSize: 14, color: "#991B1B", margin: "0 0 4px" }}>Couldn't load Google Maps</p>
-              <p style={{ fontSize: 13, color: "#B91C1C", margin: 0 }}>Check your API key and ensure Maps JavaScript + Places APIs are enabled.</p>
-            </div>
-          ) : !isLoaded ? (
-            <div style={{ height: 380, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "#999" }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-              <span style={{ fontSize: 13 }}>Loading map…</span>
-            </div>
-          ) : (
-            <>
-              {/* Search + Locate Me row */}
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  ref={attachAutocomplete}
-                  defaultValue={initialAddress || ""}
-                  placeholder="Search city, area or landmark…"
-                  style={{
-                    flex: 1, border: "1.5px solid #E5E5E5", borderRadius: 10,
-                    padding: "10px 14px", fontSize: 14, outline: "none",
-                    fontFamily: "inherit",
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = "#111"}
-                  onBlur={(e) => e.target.style.borderColor = "#E5E5E5"}
-                />
-                <button
-                  type="button"
-                  onClick={handleLocateMe}
-                  disabled={locating}
-                  title="Use my current location"
-                  style={{
-                    flexShrink: 0, width: 44, height: 44, borderRadius: 10,
-                    border: "1.5px solid #E5E5E5", background: locating ? "#FFF7DE" : "#fff",
-                    cursor: locating ? "wait" : "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {locating ? (
-                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2.5px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="4" fill="#FFC107" />
-                      <circle cx="12" cy="12" r="8" stroke="#FFC107" strokeWidth="1.8" />
-                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#FFC107" strokeWidth="1.8" strokeLinecap="round" />
+          {/* Search row */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              ref={attachSearch}
+              defaultValue={initialAddress || ""}
+              placeholder={noKey ? "Type your location here…" : "Search city, area or landmark…"}
+              style={{ flex: 1, border: "1.5px solid #E0E0E0", borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", transition: "border-color .2s" }}
+              onFocus={e => e.target.style.borderColor = "#111"}
+              onBlur={e => e.target.style.borderColor = "#E0E0E0"}
+              onChange={e => { if (noKey) setAddress(e.target.value); }}
+            />
+            {!noKey && (
+              <button
+                type="button"
+                onClick={handleLocateMe}
+                disabled={locating || !mapsReady}
+                title="Use my current location"
+                style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 10, border: "1.5px solid #E0E0E0", background: locating ? "#FFFBEB" : "#fff", cursor: locating ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                {locating
+                  ? <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2.5px solid #FFC107", borderTopColor: "transparent", animation: "lmpSpin .8s linear infinite" }} />
+                  : <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="4" fill="#FFC107"/>
+                      <circle cx="12" cy="12" r="8" stroke="#FFC107" strokeWidth="1.6"/>
+                      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#FFC107" strokeWidth="1.6" strokeLinecap="round"/>
                     </svg>
-                  )}
-                </button>
-              </div>
+                }
+              </button>
+            )}
+          </div>
 
-              {/* Map */}
-              <div style={{ height: 360, borderRadius: 14, overflow: "hidden", border: "1px solid #EFEFEF", position: "relative" }}>
-                <GoogleMap
-                  mapContainerStyle={mapContainerStyle}
-                  center={mapCenter}
-                  zoom={mapZoom}
-                  onClick={handleMapClick}
-                  onLoad={(map) => { mapRef.current = map; }}
-                  options={{
-                    streetViewControl: false,
-                    mapTypeControl: false,
-                    fullscreenControl: true,
-                    zoomControlOptions: { position: 7 },
-                    clickableIcons: false,
-                    styles: [
-                      { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-                    ],
-                  }}
-                >
-                  {position && (
-                    <MarkerF
-                      position={position}
-                      animation={window.google?.maps?.Animation?.DROP}
-                      icon={{
-                        url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(`
-                          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="48" viewBox="0 0 36 48">
-                            <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30s18-16.5 18-30C36 8.06 27.94 0 18 0z" fill="#FFC107"/>
-                            <circle cx="18" cy="18" r="8" fill="#111"/>
-                          </svg>`),
-                        scaledSize: { width: 36, height: 48 },
-                        anchor: { x: 18, y: 48 },
-                      }}
-                    />
-                  )}
-                </GoogleMap>
+          {/* Map area */}
+          {!noKey && (
+            <div style={{ position: "relative", height: 370, borderRadius: 14, overflow: "hidden", border: "1px solid #EFEFEF", background: "#f0ece4", flexShrink: 0 }}>
+              {/* The map renders into this div */}
+              <div ref={mapDivRef} style={{ width: "100%", height: "100%" }} />
 
-                {/* Crosshair hint */}
-                {!position && (
-                  <div style={{
-                    position: "absolute", inset: 0, display: "flex", alignItems: "center",
-                    justifyContent: "center", pointerEvents: "none",
-                  }}>
-                    <div style={{
-                      background: "rgba(255,255,255,0.88)", borderRadius: 10,
-                      padding: "8px 14px", fontSize: 12.5, fontWeight: 600, color: "#444",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                    }}>
-                      📍 Tap the map to drop a pin
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Selected location preview */}
-              <div style={{
-                background: position ? "#FFFBEB" : "#F9F9F9",
-                border: `1px solid ${position ? "#FCD34D" : "#EFEFEF"}`,
-                borderRadius: 12, padding: "12px 14px",
-                display: "flex", alignItems: "flex-start", gap: 10,
-                minHeight: 52,
-              }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 2, color: position ? "#FFC107" : "#ccc" }}>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="currentColor" />
-                  <circle cx="12" cy="9" r="2.5" fill="#111" />
-                </svg>
-                <div style={{ flex: 1 }}>
-                  {resolving ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#888", fontSize: 13 }}>
-                      <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-                      Resolving address…
-                    </div>
-                  ) : address ? (
-                    <>
-                      <div style={{ fontWeight: 600, fontSize: 13.5, color: "#111", lineHeight: 1.4 }}>{address}</div>
-                      {(city || stateName) && (
-                        <div style={{ fontSize: 11.5, color: "#888", marginTop: 3 }}>
-                          {[city, stateName].filter(Boolean).join(", ")}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span style={{ fontSize: 13, color: "#aaa" }}>No location selected yet</span>
-                  )}
-                </div>
-              </div>
-
-              {error && (
-                <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, color: "#92400E" }}>
-                  ⚠️ {error}
+              {/* Loading overlay */}
+              {!mapsReady && !mapsError && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: "#f8f6f1" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid #FFC107", borderTopColor: "transparent", animation: "lmpSpin .8s linear infinite" }} />
+                  <span style={{ fontSize: 13, color: "#888" }}>Loading map…</span>
                 </div>
               )}
-            </>
+
+              {/* Error overlay */}
+              {mapsError && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "#fff5f5", padding: 24, textAlign: "center" }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#EF4444" strokeWidth="1.8"/><path d="M12 8v4M12 16h.01" stroke="#EF4444" strokeWidth="2" strokeLinecap="round"/></svg>
+                  <div style={{ fontWeight: 700, color: "#B91C1C", fontSize: 14 }}>Map failed to load</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>Check your Maps API key. You can still type your location manually above.</div>
+                </div>
+              )}
+
+              {/* "Tap to pin" hint */}
+              {mapsReady && !pinned && !mapsError && (
+                <div style={{ position: "absolute", bottom: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(255,255,255,0.92)", borderRadius: 10, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, color: "#444", boxShadow: "0 2px 10px rgba(0,0,0,0.12)", pointerEvents: "none", whiteSpace: "nowrap" }}>
+                  📍 Tap the map to drop a pin
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected location preview card */}
+          <div style={{ background: pinned || (noKey && address) ? "#FFFBEB" : "#F9F9F9", border: `1.5px solid ${pinned || (noKey && address) ? "#FCD34D" : "#EFEFEF"}`, borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10, minHeight: 54, transition: "all .2s" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1, color: pinned || (noKey && address) ? "#FFC107" : "#ccc" }}>
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="currentColor"/>
+              <circle cx="12" cy="9" r="2.5" fill="#111"/>
+            </svg>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {resolving
+                ? <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#888", fontSize: 13 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #FFC107", borderTopColor: "transparent", animation: "lmpSpin .8s linear infinite" }} />
+                    Resolving address…
+                  </div>
+                : address
+                  ? <>
+                      <div style={{ fontWeight: 600, fontSize: 13.5, color: "#111", lineHeight: 1.4, wordBreak: "break-word" }}>{address}</div>
+                      {(city || stateName) && <div style={{ fontSize: 11.5, color: "#888", marginTop: 3 }}>{[city, stateName].filter(Boolean).join(", ")}</div>}
+                    </>
+                  : <span style={{ fontSize: 13, color: "#aaa" }}>{noKey ? "Type an address above" : "No location selected yet"}</span>
+              }
+            </div>
+          </div>
+
+          {/* Notice / warning */}
+          {notice && (
+            <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, color: "#92400E" }}>
+              ⚠️ {notice}
+            </div>
           )}
         </div>
 
-        {/* Footer */}
+        {/* ── Footer ── */}
         <div style={{ padding: "12px 16px 16px", borderTop: "1px solid #F0F0F0", display: "flex", gap: 10, flexShrink: 0 }}>
           <button
             onClick={onClose}
-            style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+            style={{ flex: 1, padding: "13px 0", borderRadius: 12, border: "1.5px solid #E0E0E0", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
           >
             Cancel
           </button>
           <button
-            onClick={() => address && onConfirm(address, stateName)}
-            disabled={!address || resolving || !GOOGLE_MAPS_API_KEY}
-            style={{
-              flex: 2, padding: "12px 0", borderRadius: 12, border: "none",
-              background: address && !resolving ? "#FFC107" : "#F5F5F5",
-              color: address && !resolving ? "#111" : "#aaa",
-              fontWeight: 700, fontSize: 14, cursor: address && !resolving ? "pointer" : "not-allowed",
-              transition: "background .2s",
-            }}
+            onClick={handleConfirm}
+            disabled={!address || resolving}
+            style={{ flex: 2, padding: "13px 0", borderRadius: 12, border: "none", background: address && !resolving ? "#FFC107" : "#F0F0F0", color: address && !resolving ? "#111" : "#aaa", fontWeight: 700, fontSize: 14, cursor: address && !resolving ? "pointer" : "not-allowed", transition: "background .2s, color .2s" }}
           >
-            {resolving ? "Resolving…" : address ? "Confirm Location" : "Pick a location first"}
+            {resolving ? "Resolving address…" : address ? "✓ Confirm Location" : "Pick a location first"}
           </button>
         </div>
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes lmpSpin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -8,7 +8,6 @@ import { IconArrowRight, IconSwap, IconClock, IconPlane, IconPin, IconZap } from
 import Button from "./ui/Button";
 import { FIELD_INPUT, FIELD_LABEL } from "./ui/classNames";
 import LocationMapPicker from "./LocationMapPicker";
-import { useJsApiLoader } from "@react-google-maps/api";
 import { isAuthenticated } from "../api/tokens";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 import { createSupportTicket } from "../api/services/support";
@@ -40,13 +39,59 @@ function getMinTime(selectedDate) {
   return `${hh}:${mm}`;
 }
 
+
+// ── Airport list with terminals ───────────────────────────────────────────────
+const AIRPORTS = [
+  {
+    code: "BLR", city: "Bengaluru",
+    name: "Kempegowda International Airport (BLR)",
+    terminals: ["Terminal 1 (T1) — Domestic", "Terminal 2 (T2) — International & Domestic"],
+  },
+  {
+    code: "HYD", city: "Hyderabad",
+    name: "Rajiv Gandhi International Airport (HYD)",
+    terminals: ["Terminal 1 (T1) — Domestic & International"],
+  },
+  {
+    code: "MAA", city: "Chennai",
+    name: "Chennai International Airport (MAA)",
+    terminals: ["Terminal 1 (T1) — Domestic", "Terminal 4 (T4) — International"],
+  },
+  {
+    code: "BOM", city: "Mumbai",
+    name: "Chhatrapati Shivaji Maharaj International Airport (BOM)",
+    terminals: ["Terminal 1 (T1) — Domestic", "Terminal 2 (T2) — International & Domestic"],
+  },
+  {
+    code: "MYQ", city: "Mysuru",
+    name: "Mysore Airport (MYQ)",
+    terminals: ["Terminal 1 — Domestic"],
+  },
+  {
+    code: "HBX", city: "Hubballi",
+    name: "Hubballi Airport (HBX)",
+    terminals: ["Terminal 1 — Domestic"],
+  },
+  {
+    code: "VGA", city: "Vijayawada",
+    name: "Vijayawada International Airport (VGA)",
+    terminals: ["Terminal 1 — Domestic & International"],
+  },
+  {
+    code: "GOP", city: "Gorakhpur",
+    name: "Mangaluru International Airport (IXE)",
+    terminals: ["Terminal 1 — Domestic & International"],
+  },
+];
+
 function emptyFields() {
   return {
     pickup: "", drop: "", date: today, time: "",
     returnDate: "", returnTime: "",
     package: "8 hrs / 80 km",
     passengers: "2",
-    airport: "Kempegowda International Airport (BLR)",
+    airport: "BLR",
+    airportTerminal: "",
     airportDirection: "drop"
   };
 }
@@ -214,33 +259,81 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   function handleSubmit(e) {
     e.preventDefault();
 
-    if (mode !== "local" && !fields.pickup.trim()) {
+    // ── 1. PICKUP LOCATION ─────────────────────────────────────────────────
+    if (mode !== "local" && mode !== "airport" && !fields.pickup.trim()) {
       toast("Please enter a pickup location", "error"); return;
     }
-    if (mode !== "local" && mode !== "airport" && !fields.drop.trim()) {
-      toast("Please enter a drop location", "error"); return;
+    if (mode === "airport" && fields.airportDirection === "pickup" && !fields.drop.trim()) {
+      toast("Please enter your drop location", "error"); return;
+    }
+    if (mode === "airport" && fields.airportDirection === "drop" && !fields.pickup.trim()) {
+      toast("Please enter your pickup location", "error"); return;
+    }
+    if (mode === "local" && !fields.pickup.trim()) {
+      toast("Please enter a pickup location for local trip", "error"); return;
     }
 
-    // Validate via stops — no empty stop boxes
-    const filledStops = stops.filter((s) => s.trim());
-    if (stops.length > 0 && filledStops.length < stops.length) {
-      toast("Please fill in all via stop fields or remove empty ones", "error"); return;
+    // ── 2. DROP / DESTINATION ──────────────────────────────────────────────
+    if (mode === "one-way" && !fields.drop.trim()) {
+      toast("Please enter a destination", "error"); return;
+    }
+    if (mode === "round-trip" && !fields.drop.trim()) {
+      toast("Please enter a destination", "error"); return;
     }
 
-    // Time required check
+    // ── 3. AIRPORT SPECIFICS ───────────────────────────────────────────────
+    if (mode === "airport") {
+      if (!fields.airport) {
+        toast("Please select an airport", "error"); return;
+      }
+      if (!fields.airportTerminal) {
+        toast("Please select the airport terminal", "error"); return;
+      }
+    }
+
+    // ── 4. LOCAL PACKAGE ──────────────────────────────────────────────────
+    if (mode === "local" && !fields.package) {
+      toast("Please select a local package (e.g. 4 hrs / 40 km)", "error"); return;
+    }
+
+    // ── 5. DATE ───────────────────────────────────────────────────────────
+    if (!fields.date) {
+      toast("Please select a pickup date", "error"); return;
+    }
+    if (mode === "round-trip" && !fields.returnDate) {
+      toast("Please select a return date", "error"); return;
+    }
+    if (mode === "round-trip" && fields.returnDate && fields.returnDate < fields.date) {
+      toast("Return date cannot be before the pickup date", "error"); return;
+    }
+
+    // ── 6. TIME ───────────────────────────────────────────────────────────
     if (!fields.time) {
       toast("Please select a pickup time", "error"); return;
     }
     if (mode === "round-trip" && !fields.returnTime) {
       toast("Please select a return time", "error"); return;
     }
-    // Past date/time check
+
+    // ── 7. PAST DATE/TIME CHECK ───────────────────────────────────────────
     if (fields.date && fields.time) {
       const pickupDt = new Date(fields.date + "T" + fields.time);
       if (pickupDt < new Date(Date.now() + 30 * 60 * 1000)) {
-        toast("Please select a pickup time at least 30 minutes from now", "error");
-        return;
+        toast("Pickup time must be at least 30 minutes from now", "error"); return;
       }
+    }
+    if (mode === "round-trip" && fields.returnDate && fields.returnTime) {
+      const returnDt = new Date(fields.returnDate + "T" + fields.returnTime);
+      const pickupDt = new Date(fields.date + "T" + (fields.time || "00:00"));
+      if (returnDt <= pickupDt) {
+        toast("Return date & time must be after the pickup time", "error"); return;
+      }
+    }
+
+    // ── 8. VIA STOPS ─────────────────────────────────────────────────────
+    const filledStops = stops.filter((s) => s.trim());
+    if (stops.length > 0 && filledStops.length < stops.length) {
+      toast("Please fill in all stop fields or remove empty ones", "error"); return;
     }
 
     // Out-of-service-area check — only when we actually have confirmed
@@ -262,7 +355,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     const journey = {
       tripType: mode,
       pickup: fields.pickup,
-      drop: mode === "airport" ? fields.drop || fields.airport : fields.drop,
+      drop: mode === "airport"
+        ? (fields.airportDirection === "drop"
+          ? (AIRPORTS.find(a => a.code === fields.airport)?.name || fields.airport) + (fields.airportTerminal ? " — " + fields.airportTerminal : "")
+          : fields.drop)
+        : fields.drop,
+      pickup: mode === "airport" && fields.airportDirection === "pickup"
+        ? (AIRPORTS.find(a => a.code === fields.airport)?.name || fields.airport) + (fields.airportTerminal ? " — " + fields.airportTerminal : "")
+        : fields.pickup,
       date: fields.date,
       time: fields.time,
       returnDate: fields.returnDate,
@@ -276,6 +376,16 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
     const action = dispatch(createJourney(journey));
     navigate("/booking-search?j=" + action.payload.id);
+  }
+
+  // Track which fields have been interacted with for inline error hints
+  const [touched, setTouched] = useState({});
+  const touch = (key) => () => setTouched((t) => ({ ...t, [key]: true }));
+
+  function fieldErr(key, condition, msg) {
+    return touched[key] && condition ? (
+      <p style={{ color: "#DC2626", fontSize: 11.5, marginTop: 4, fontWeight: 500 }}>⚠ {msg}</p>
+    ) : null;
   }
 
   // Stops (via) are added/removed with addStop/updateStop/removeStop below,
@@ -505,13 +615,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {/* ── AIRPORT ── */}
           {mode === "airport" && (
             <>
+              {/* Pickup / Drop direction toggle */}
               <div className="flex gap-2 mb-3.5">
-                {[["drop", "Drop to Airport"], ["pickup", "Pickup from Airport"]].map(([val, label]) => (
+                {[["drop", "✈ Drop to Airport"], ["pickup", "✈ Pickup from Airport"]].map(([val, label]) => (
                   <button type="button" key={val}
                     onClick={() => setFields((f) => ({ ...f, airportDirection: val }))}
                     className={`border rounded-full px-4.5 py-2 font-semibold text-[13.5px] transition-colors ${
                       fields.airportDirection === val
-                        ? "bg-primary border-primary text-white"
+                        ? "bg-primary border-primary text-brand-black"
                         : "border-border text-text-secondary bg-white"
                     }`}
                   >
@@ -519,23 +630,93 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                <Field label="Airport">
-                  <select className={FIELD_INPUT} value={fields.airport} onChange={set("airport")}>
-                    <option>Kempegowda International Airport (BLR)</option>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {/* Airport selector */}
+                <Field label="Select Airport">
+                  <select
+                    className={FIELD_INPUT}
+                    value={fields.airport}
+                    onChange={(e) => { setFields((f) => ({ ...f, airport: e.target.value, airportTerminal: "" })); touch("airport")(); }}
+                    onBlur={touch("airport")}
+                    required
+                  >
+                    <option value="">— Choose airport —</option>
+                    {AIRPORTS.map((a) => (
+                      <option key={a.code} value={a.code}>
+                        {a.city} — {a.name.split("(")[0].trim()}
+                      </option>
+                    ))}
                   </select>
+                  {fieldErr("airport", !fields.airport, "Please select an airport")}
                 </Field>
-                <Field label={fields.airportDirection === "pickup" ? "Airport (Pickup)" : "Pickup Location"}>
-                  <Input placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+
+                {/* Terminal selector — shown only when airport chosen */}
+                {fields.airport && (
+                  <Field label="Terminal">
+                    <select
+                      className={FIELD_INPUT}
+                      value={fields.airportTerminal}
+                      onChange={(e) => { set("airportTerminal")(e); touch("airportTerminal")(); }}
+                      onBlur={touch("airportTerminal")}
+                    >
+                      <option value="">— Select terminal —</option>
+                      {(AIRPORTS.find((a) => a.code === fields.airport)?.terminals || []).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {fieldErr("airportTerminal", !fields.airportTerminal, "Please select a terminal")}
+                  </Field>
+                )}
+
+                {/* Non-airport location — with live location button */}
+                <Field label={fields.airportDirection === "pickup" ? "Drop Location" : "Pickup Location"}>
+                  <div className="flex gap-2 items-stretch">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Enter city or address"
+                        value={fields.airportDirection === "pickup" ? fields.drop : fields.pickup}
+                        onChange={set(fields.airportDirection === "pickup" ? "drop" : "pickup")}
+                        required
+                        onMapClick={() => setMapPickerField(fields.airportDirection === "pickup" ? "drop" : "pickup")}
+                        autocomplete={fields.airportDirection === "pickup" ? dropAutocomplete : pickupAutocomplete}
+                      />
+                    </div>
+                    {/* Live location button */}
+                    <button
+                      type="button"
+                      title="Use my current location"
+                      onClick={() => {
+                        const field = fields.airportDirection === "pickup" ? "drop" : "pickup";
+                        if (!navigator.geolocation) return;
+                        navigator.geolocation.getCurrentPosition((pos) => {
+                          const { latitude: lat, longitude: lng } = pos.coords;
+                          if (window.google?.maps) {
+                            const gc = new window.google.maps.Geocoder();
+                            gc.geocode({ location: { lat, lng } }, (results, status) => {
+                              if (status === "OK" && results?.[0]) {
+                                setFieldDirect(field, results[0].formatted_address);
+                                if (field === "pickup") setPickupState(results[0].address_components?.find(c => c.types.includes("administrative_area_level_1"))?.long_name || null);
+                              }
+                            });
+                          }
+                        }, () => {});
+                      }}
+                      className="flex-none w-11 rounded-[10px] border border-border bg-[#fffbeb] flex items-center justify-center hover:bg-primary/10 transition-colors"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="4" fill="#FFC107"/>
+                        <circle cx="12" cy="12" r="8" stroke="#FFC107" strokeWidth="1.6"/>
+                        <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#FFC107" strokeWidth="1.6" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  </div>
                 </Field>
-                <Field label={fields.airportDirection === "pickup" ? "Drop Location" : "Destination"}>
-                  <Input placeholder="Enter destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
-                </Field>
+
                 <Field label="Date">
                   <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
                 </Field>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-3.5">
+
                 <Field label="Time">
                   <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
                 </Field>
@@ -796,6 +977,57 @@ function TimePicker12hr({ value, onChange, min }) {
   );
 }
 
+
+
+// ── Live Location Button ───────────────────────────────────────────────────
+function LiveLocationButton({ onLocate }) {
+  const [loading, setLoading] = React.useState(false);
+
+  function handleClick() {
+    if (!navigator.geolocation) return;
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLoading(false);
+        const { latitude: lat, longitude: lng } = pos.coords;
+        if (window.google?.maps) {
+          new window.google.maps.Geocoder().geocode(
+            { location: { lat, lng } },
+            (results, status) => {
+              if (status === "OK" && results?.[0]) {
+                onLocate(results[0].formatted_address, results[0].address_components);
+              }
+            }
+          );
+        } else {
+          onLocate(`${lat.toFixed(5)}, ${lng.toFixed(5)}`, []);
+        }
+      },
+      () => setLoading(false),
+      { timeout: 8000 }
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Use my current location"
+      onClick={handleClick}
+      disabled={loading}
+      className="flex-none w-11 rounded-[10px] border border-border bg-[#fffbeb] flex items-center justify-center hover:bg-primary/10 transition-colors disabled:opacity-50"
+    >
+      {loading ? (
+        <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2.5px solid #FFC107", borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="4" fill="#FFC107"/>
+          <circle cx="12" cy="12" r="8" stroke="#FFC107" strokeWidth="1.6"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="#FFC107" strokeWidth="1.6" strokeLinecap="round"/>
+        </svg>
+      )}
+    </button>
+  );
+}
 
 function Input({ icon, className = "", onMapClick, autocomplete, ...props }) {
   // autocomplete?.attachTo is a stable useCallback — pass it as the ref

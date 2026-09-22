@@ -80,27 +80,14 @@ export default function Page() {
   // Only meaningful in Group/Coach browse mode, where there's no real trip
   // type yet — lets the customer indicate one here, which then carries
   // through to a real search (see selectVehicle) instead of being lost.
-  const [tripTypeFilter, setTripTypeFilter] = useState(null);
   // Inline trip-detail fields for the Group/Coach filter — filled in right
   // here instead of redirecting to the homepage widget, so the customer
   // never loses their place. Same field set BookingWidget itself collects.
-  const [groupTripFields, setGroupTripFields] = useState({ pickup: "", drop: "", date: "", time: "", returnDate: "" });
   const todayStr = new Date().toISOString().slice(0, 10);
   // Via stops — same feature as the main booking widget, and same
   // restriction: only meaningful for one-way/round-trip (a Local package or
   // an Airport transfer doesn't have intermediate stops the way a
   // point-to-point trip does).
-  const [groupStops, setGroupStops] = useState([]);
-  function addGroupStop() {
-    if (groupStops.length >= 4) return;
-    setGroupStops((s) => [...s, ""]);
-  }
-  function updateGroupStop(i, val) {
-    setGroupStops((s) => s.map((v, idx) => (idx === i ? val : v)));
-  }
-  function removeGroupStop(i) {
-    setGroupStops((s) => s.filter((_, idx) => idx !== i));
-  }
 
   // Real map integration — same Google Places Autocomplete + map-pin
   // picker used on the main booking widget, so these fields aren't a
@@ -110,54 +97,8 @@ export default function Page() {
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries: MAPS_LIBRARIES,
   });
-  const groupPickupAutoRef = useRef(null);
-  const groupDropAutoRef = useRef(null);
-  const [groupMapPickerField, setGroupMapPickerField] = useState(null);
 
-  function makeGroupAutocomplete(key, ref) {
-    return {
-      onLoad: (autocomplete) => { ref.current = autocomplete; autocomplete.setComponentRestrictions({ country: "in" }); },
-      onPlaceChanged: () => {
-        const place = ref.current?.getPlace();
-        const value = place?.formatted_address || place?.name;
-        if (value) setGroupTripFields((f) => ({ ...f, [key]: value }));
-      },
-    };
-  }
-  const groupPickupAutocomplete = mapsLoaded && GOOGLE_MAPS_API_KEY ? makeGroupAutocomplete("pickup", groupPickupAutoRef) : null;
-  const groupDropAutocomplete = mapsLoaded && GOOGLE_MAPS_API_KEY ? makeGroupAutocomplete("drop", groupDropAutoRef) : null;
 
-  useEffect(() => {
-    if (tripTypeFilter === "local" || tripTypeFilter === "airport") setGroupStops([]);
-  }, [tripTypeFilter]);
-
-  function submitGroupTrip() {
-    if (!groupTripFields.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
-    if (tripTypeFilter !== "local" && !groupTripFields.drop.trim()) { toast("Please enter a drop location", "error"); return; }
-    if (!groupTripFields.date || !groupTripFields.time) { toast("Please choose a date and time", "error"); return; }
-    if (tripTypeFilter === "round-trip" && !groupTripFields.returnDate) { toast("Please choose a return date", "error"); return; }
-    const filledStops = groupStops.filter((s) => s.trim());
-    if (groupStops.length > 0 && filledStops.length < groupStops.length) {
-      toast("Please fill in all via stop fields or remove empty ones", "error"); return;
-    }
-
-    const action = dispatch(createJourney({
-      tripType: tripTypeFilter,
-      pickup: groupTripFields.pickup.trim(),
-      drop: tripTypeFilter === "local" ? "" : groupTripFields.drop.trim(),
-      stops: filledStops,
-      date: groupTripFields.date,
-      time: groupTripFields.time,
-      returnDate: tripTypeFilter === "round-trip" ? groupTripFields.returnDate : "",
-      returnTime: "18:00",
-      package: tripTypeFilter === "local" ? "8hr80km" : "",
-      passengers: "2",
-    }));
-    // type=group is kept in the URL alongside the new real journey id, so
-    // the vehicle list stays scoped to Coach vehicles (see `source` below)
-    // even though this is no longer a browse-only view.
-    navigate(`/booking-search?j=${action.payload.id}&type=group`);
-  }
 
   const [ac, setAc] = useState("all"); // all | on | off
   const [sort, setSort] = useState("recommended");
@@ -325,9 +266,15 @@ export default function Page() {
           <span style={{ width: 1, height: 22, background: "rgba(255,255,255,.2)" }} className="hidden sm:block" />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
             <span>{journey.date}</span>
-            <span>{journey.time}</span>
-            <span>{journey.tripType}</span>
-            <span>{journey.passengers} passenger(s)</span>
+            <span>{(() => {
+              if (!journey.time) return "";
+              const [hh, mm] = journey.time.split(":").map(Number);
+              const ap = hh < 12 ? "AM" : "PM";
+              const h  = hh % 12 || 12;
+              return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
+            })()}</span>
+            <span style={{ textTransform: "capitalize" }}>{journey.tripType?.replace("-", " ")}</span>
+            {journey.passengers && <span>{journey.passengers} passenger(s)</span>}
           </div>
           <button
             onClick={() => navigate("/#booking")}
@@ -436,142 +383,6 @@ export default function Page() {
               </div>
             </div>
 
-            {browseType === "group" && (
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {[
-                    { key: "one-way", label: "One Way" },
-                    { key: "round-trip", label: "Round Trip" },
-                    { key: "local", label: "Local" },
-                    { key: "airport", label: "Airport" },
-                  ].map((t) => (
-                    <button
-                      key={t.key}
-                      onClick={() => setTripTypeFilter(tripTypeFilter === t.key ? null : t.key)}
-                      style={filterPillStyle(tripTypeFilter === t.key)}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Filled in right here instead of redirecting anywhere —
-                    exactly the fields BookingWidget itself would ask for
-                    this trip type. */}
-                {tripTypeFilter && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12, padding: 12, background: "#FAFAFA", border: "1px solid #EFEFEF", borderRadius: 12 }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {groupPickupAutocomplete ? (
-                        <Autocomplete onLoad={groupPickupAutocomplete.onLoad} onPlaceChanged={groupPickupAutocomplete.onPlaceChanged} className="flex-1 min-w-0">
-                          <input
-                            placeholder="Pickup city"
-                            value={groupTripFields.pickup}
-                            onChange={(e) => setGroupTripFields((f) => ({ ...f, pickup: e.target.value }))}
-                            style={groupFieldStyle}
-                          />
-                        </Autocomplete>
-                      ) : (
-                        <input
-                          placeholder="Pickup city"
-                          value={groupTripFields.pickup}
-                          onChange={(e) => setGroupTripFields((f) => ({ ...f, pickup: e.target.value }))}
-                          style={{ ...groupFieldStyle, flex: 1 }}
-                        />
-                      )}
-                      <button type="button" onClick={() => setGroupMapPickerField("pickup")} aria-label="Pick pickup on map" style={groupMapBtnStyle}>
-                        <MapPinIcon />
-                      </button>
-                    </div>
-
-                    {/* Via stops — same feature as the main widget, only for
-                        one-way/round-trip trips. */}
-                    {(tripTypeFilter === "one-way" || tripTypeFilter === "round-trip") && (
-                      <>
-                        {groupStops.map((stop, i) => (
-                          <div key={i} style={{ display: "flex", gap: 6 }}>
-                            <input
-                              placeholder={`Via Stop ${i + 1}`}
-                              value={stop}
-                              onChange={(e) => updateGroupStop(i, e.target.value)}
-                              style={{ ...groupFieldStyle, flex: 1 }}
-                            />
-                            <button type="button" onClick={() => removeGroupStop(i)} aria-label="Remove stop" style={{ ...groupMapBtnStyle, color: "#B23B00" }}>
-                              −
-                            </button>
-                          </div>
-                        ))}
-                        {groupStops.length < 4 && (
-                          <button
-                            type="button"
-                            onClick={addGroupStop}
-                            style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#B8860B", fontWeight: 700, fontSize: 12, cursor: "pointer", padding: "2px 0" }}
-                          >
-                            + Add a Stop
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {tripTypeFilter !== "local" && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {groupDropAutocomplete ? (
-                          <Autocomplete onLoad={groupDropAutocomplete.onLoad} onPlaceChanged={groupDropAutocomplete.onPlaceChanged} className="flex-1 min-w-0">
-                            <input
-                              placeholder={tripTypeFilter === "airport" ? "Airport / destination" : "Drop city"}
-                              value={groupTripFields.drop}
-                              onChange={(e) => setGroupTripFields((f) => ({ ...f, drop: e.target.value }))}
-                              style={groupFieldStyle}
-                            />
-                          </Autocomplete>
-                        ) : (
-                          <input
-                            placeholder={tripTypeFilter === "airport" ? "Airport / destination" : "Drop city"}
-                            value={groupTripFields.drop}
-                            onChange={(e) => setGroupTripFields((f) => ({ ...f, drop: e.target.value }))}
-                            style={{ ...groupFieldStyle, flex: 1 }}
-                          />
-                        )}
-                        <button type="button" onClick={() => setGroupMapPickerField("drop")} aria-label="Pick drop on map" style={groupMapBtnStyle}>
-                          <MapPinIcon />
-                        </button>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        type="date"
-                        min={todayStr}
-                        value={groupTripFields.date}
-                        onChange={(e) => setGroupTripFields((f) => ({ ...f, date: e.target.value }))}
-                        style={{ ...groupFieldStyle, flex: 1 }}
-                      />
-                      <input
-                        type="time"
-                        value={groupTripFields.time}
-                        onChange={(e) => setGroupTripFields((f) => ({ ...f, time: e.target.value }))}
-                        style={{ ...groupFieldStyle, flex: 1 }}
-                      />
-                    </div>
-                    {tripTypeFilter === "round-trip" && (
-                      <input
-                        type="date"
-                        min={groupTripFields.date || todayStr}
-                        value={groupTripFields.returnDate}
-                        onChange={(e) => setGroupTripFields((f) => ({ ...f, returnDate: e.target.value }))}
-                        style={groupFieldStyle}
-                        placeholder="Return date"
-                      />
-                    )}
-                    <button
-                      onClick={submitGroupTrip}
-                      className="hover:!bg-[#FFB300]"
-                      style={{ marginTop: 4, padding: "10px", borderRadius: 9, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-                    >
-                      Search
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Seats</div>
@@ -688,17 +499,6 @@ export default function Page() {
         </div>
         </>
       )}
-
-      <LocationMapPicker
-        open={!!groupMapPickerField}
-        title={groupMapPickerField === "drop" ? "Select Drop Location" : "Select Pickup Location"}
-        initialAddress={groupMapPickerField ? groupTripFields[groupMapPickerField] : ""}
-        onClose={() => setGroupMapPickerField(null)}
-        onConfirm={(address) => {
-          setGroupTripFields((f) => ({ ...f, [groupMapPickerField]: address }));
-          setGroupMapPickerField(null);
-        }}
-      />
     </main>
   );
 }
