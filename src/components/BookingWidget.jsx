@@ -701,7 +701,10 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                 )}
 
                 {/* Non-airport location — with live location button */}
-                <Field label={fields.airportDirection === "pickup" ? "Drop Location" : "Pickup Location"}>
+                <FilledField
+                  label={fields.airportDirection === "pickup" ? "Drop Location" : "Pickup Location"}
+                  value={fields.airportDirection === "pickup" ? fields.drop : fields.pickup}
+                >
                   <div className="flex gap-2 items-stretch">
                     <div className="flex-1">
                       <Input
@@ -742,7 +745,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                       </svg>
                     </button>
                   </div>
-                </Field>
+                </FilledField>
 
                 <Field label="Date">
                   <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
@@ -1057,6 +1060,32 @@ function LiveLocationButton({ onLocate }) {
         </svg>
       )}
     </button>
+  );
+}
+
+
+// ── FilledField — highlights a field with yellow border + check when filled ──
+function FilledField({ label, value, children }) {
+  const filled = !!(value && String(value).trim());
+  return (
+    <div style={{ position: "relative" }}>
+      {label && (
+        <label className="block text-[11px] font-bold tracking-widest uppercase mb-1.5" style={{ color: filled ? "#B8860B" : undefined }}>
+          {filled && <span style={{ color: "#FFC107", marginRight: 4 }}>✓</span>}
+          {label}
+        </label>
+      )}
+      <div style={{
+        borderRadius: 10,
+        outline: filled ? "2px solid #FFC107" : "none",
+        outlineOffset: 1,
+        boxShadow: filled ? "0 0 0 4px rgba(255,193,7,0.12)" : "none",
+        transition: "outline .2s, box-shadow .2s",
+        background: filled ? "#FFFDF0" : "transparent",
+      }}>
+        {children}
+      </div>
+    </div>
   );
 }
 
