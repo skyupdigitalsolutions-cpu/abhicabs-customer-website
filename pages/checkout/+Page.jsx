@@ -233,22 +233,24 @@ export default function Page() {
   async function continueToPayment() {
     if (!validate()) { toast("Please fix the highlighted fields", "error"); return; }
 
-    // Guest user — silently register with checkout details so the backend
-    // can associate the booking with a real account. No OTP required.
+    // Guest user — silently register so the backend can associate the booking
+    // with a real account. Uses phone as the unique key; generates a
+    // placeholder email if the user didn't provide one.
     if (!isAuthenticated()) {
       try {
+        const guestEmail = email.trim() ||
+          `guest.${mobile.trim()}@placeholder.local`;
         await authApi.register({
           name: fullName.trim(),
-          email: email.trim(),
+          email: guestEmail,
           phone: mobile.trim(),
         });
-        toast("Account created automatically — you can log in later to view bookings.", "success");
+        // Silently succeed — no toast needed, guest just continues to payment
       } catch (err) {
-        // If email already registered, try OTP login (account exists)
-        // For now just proceed — backend will create the booking anyway
-        // since the booking endpoint doesn't require auth for guests
-        if (!err?.code?.includes("EMAIL_TAKEN")) {
-          // Non-duplicate error — show it but don't block
+        // EMAIL_TAKEN or PHONE_TAKEN = account already exists, safe to proceed
+        // Any other error: log but don't block — booking endpoint accepts guests
+        const code = err?.code || err?.message || "";
+        if (!code.includes("TAKEN") && !code.includes("already")) {
           console.warn("Guest auto-register:", err.message);
         }
       }
@@ -268,7 +270,7 @@ export default function Page() {
 
   return (
     <>
-      {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
+      {/* Terms now expand inline in the form — no popup */}
 
       <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
         <a href="/booking-search" className="inline-flex items-center gap-1.5 hover:!text-[#111]" style={{ color: "#666", fontWeight: 600, fontSize: 13.5, marginBottom: 18 }}>
@@ -369,6 +371,54 @@ export default function Page() {
                     <textarea className={`${FIELD_INPUT} min-h-[80px]`} placeholder="Anything the driver should know…" value={notes} onChange={(e) => setNotes(e.target.value)} />
                   </FormField>
                 </div>
+
+                {/* Terms & Conditions — expandable inline (no popup) */}
+                <div className="sm:col-span-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTerms((s) => !s)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "#FAFAFA", border: "1px solid #EFEFEF", borderRadius: 12, padding: "13px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13.5, color: "#111" }}
+                  >
+                    <span>Terms &amp; Conditions — inclusions &amp; exclusions</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: showTerms ? "rotate(180deg)" : "none", transition: "transform .2s" }}>
+                      <path d="M6 9l6 6 6-6" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {showTerms && (
+                    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+                      {/* Inclusions */}
+                      <div style={{ background: "#F0FFF4", border: "1px solid #BBF7D0", borderRadius: 14, padding: "16px 18px" }}>
+                        <p style={{ fontWeight: 700, fontSize: 13, color: "#166534", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: ".04em" }}>✓ What's Included</p>
+                        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                          {INCLUSIONS.map((item, i) => (
+                            <li key={i} style={{ display: "flex", gap: 9, fontSize: 13, color: "#15803D" }}>
+                              <span style={{ flexShrink: 0, marginTop: 1 }}>✓</span><span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      {/* Exclusions */}
+                      <div style={{ background: "#FFF7F7", border: "1px solid #FECACA", borderRadius: 14, padding: "16px 18px" }}>
+                        <p style={{ fontWeight: 700, fontSize: 13, color: "#991B1B", margin: "0 0 10px", textTransform: "uppercase", letterSpacing: ".04em" }}>✗ Not Included</p>
+                        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                          {EXCLUSIONS.map((item, i) => (
+                            <li key={i} style={{ display: "flex", gap: 9, fontSize: 13, color: "#B91C1C" }}>
+                              <span style={{ flexShrink: 0, marginTop: 1 }}>✗</span><span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      {/* General terms */}
+                      <div style={{ fontSize: 12.5, color: "#666", lineHeight: 1.7, padding: "0 2px" }}>
+                        <p style={{ fontWeight: 700, color: "#333", fontSize: 13, marginBottom: 8 }}>General Terms</p>
+                        <p style={{ margin: "0 0 7px" }}>Cancellations made more than 24 hours before pickup receive a full refund. Cancellations within 24 hours may attract a cancellation fee as per our policy.</p>
+                        <p style={{ margin: "0 0 7px" }}>ABHI CABS reserves the right to substitute a vehicle of equivalent or superior category in case of unforeseen circumstances.</p>
+                        <p style={{ margin: 0 }}>By proceeding with the booking, you agree to these terms and conditions.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -395,10 +445,35 @@ export default function Page() {
 
                 {/* Route details */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13, paddingBottom: 16, borderBottom: "1px dashed #EFEFEF" }}>
-                  <SummaryRow label="Route" value={`${journey.pickup} → ${journey.drop}`} />
-                  <SummaryRow label="Date" value={journey.date} />
-                  <SummaryRow label="Time" value={journey.time} />
-                  <SummaryRow label="Trip" value={journey.tripType} />
+                  <SummaryRow label="Trip Type" value={
+                    journey.tripType === "one-way" ? "One Way" :
+                    journey.tripType === "round-trip" ? "Round Trip" :
+                    journey.tripType === "local" ? "Local" :
+                    journey.tripType === "airport" ? "Airport" :
+                    journey.tripType
+                  } />
+                  <SummaryRow label="From" value={journey.pickup || "—"} />
+                  {journey.stops?.length > 0 && journey.stops.map((s, i) => (
+                    <SummaryRow key={i} label={`Stop ${i + 1}`} value={s} />
+                  ))}
+                  <SummaryRow label="To" value={journey.drop || "—"} />
+                  <SummaryRow label="Pickup Date" value={journey.date} />
+                  <SummaryRow label="Pickup Time" value={(() => {
+                    if (!journey.time) return "—";
+                    const [hh, mm] = journey.time.split(":").map(Number);
+                    const ap = hh < 12 ? "AM" : "PM";
+                    const h = hh % 12 || 12;
+                    return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
+                  })()} />
+                  {journey.tripType === "round-trip" && journey.returnDate && (
+                    <SummaryRow label="Return Date" value={journey.returnDate} />
+                  )}
+                  {journey.tripType === "local" && journey.package && (
+                    <SummaryRow label="Package" value={journey.package} />
+                  )}
+                  {journey.passengers && (
+                    <SummaryRow label="Passengers" value={journey.passengers} />
+                  )}
                 </div>
 
                 {/* Fare breakdown */}
@@ -415,17 +490,9 @@ export default function Page() {
                   <span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 800, fontSize: 24, color: "#111" }}>{fmtINR(totalPayable)}</span>
                 </div>
 
-                {/* Terms & Conditions link */}
+                {/* Terms note — full details expandable on the left form */}
                 <p style={{ fontSize: 12, color: "#888", textAlign: "center", margin: "0 0 14px", lineHeight: 1.6 }}>
-                  By continuing you agree to our{" "}
-                  <button
-                    type="button"
-                    onClick={() => setShowTerms(true)}
-                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#B8860B", fontWeight: 700, fontSize: 12, textDecoration: "underline" }}
-                  >
-                    Terms &amp; Conditions
-                  </button>
-                  {" "}including inclusions &amp; exclusions.
+                  By continuing you agree to our Terms &amp; Conditions, including inclusions &amp; exclusions.
                 </p>
 
                 {/* CTA */}
