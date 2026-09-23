@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { navigate } from "vike/client/router";
 import { useToast } from "../../src/hooks/useToast";
 import { createSupportTicket } from "../../src/api/services/support";
 import Button from "../../src/components/ui/Button";
@@ -52,13 +53,26 @@ export default function Page() {
         topic,
         message: message.trim(),
       });
-      toast(
-        result?.id
-          ? "Message sent — our team will get back to you shortly."
-          : "Message sent — our team will get back to you shortly.",
-        "success"
-      );
+      // Save ticket locally so user can track status later
+      if (result?.id && typeof window !== "undefined") {
+        try {
+          const stored = JSON.parse(localStorage.getItem("abhicabs_tickets") || "[]");
+          stored.unshift({
+            id: result.id,
+            topic,
+            message: message.trim(),
+            name: name.trim(),
+            email: email.trim(),
+            phone: mobile.trim(),
+            status: "Open",
+            submittedAt: result.createdAt || new Date().toISOString(),
+          });
+          localStorage.setItem("abhicabs_tickets", JSON.stringify(stored.slice(0, 20)));
+        } catch { /* ignore */ }
+      }
+      toast("Ticket raised! Redirecting to your ticket status…", "success");
       setName(""); setMobile(""); setEmail(""); setMessage(""); setTopic("Booking Support");
+      setTimeout(() => navigate("/support-tickets"), 1500);
     } catch (err) {
       toast(err.message || "Couldn't send your message — please try again.", "error");
     } finally {
