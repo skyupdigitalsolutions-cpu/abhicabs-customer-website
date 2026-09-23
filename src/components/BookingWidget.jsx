@@ -647,15 +647,31 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {mode === "airport" && (
             <>
               {/* Pickup / Drop direction toggle */}
+              <style>{`
+                @keyframes airportPulse {
+                  0%   { box-shadow: 0 0 0 0 rgba(255,193,7,0.55); }
+                  60%  { box-shadow: 0 0 0 10px rgba(255,193,7,0); }
+                  100% { box-shadow: 0 0 0 0 rgba(255,193,7,0); }
+                }
+                .airport-btn-active {
+                  animation: airportPulse 0.6s ease-out forwards;
+                }
+              `}</style>
               <div className="flex gap-2 mb-3.5">
                 {[["drop", "✈ Drop to Airport"], ["pickup", "✈ Pickup from Airport"]].map(([val, label]) => (
-                  <button type="button" key={val}
+                  <button
+                    type="button"
+                    key={val}
                     onClick={() => setFields((f) => ({ ...f, airportDirection: val }))}
                     className={`border-2 rounded-full px-4.5 py-2 font-semibold text-[13.5px] transition-all ${
                       fields.airportDirection === val
-                        ? "bg-primary border-primary text-brand-black shadow-md"
-                        : "border-brand-black text-brand-black bg-white hover:bg-gray-50"
+                        ? "airport-btn-active bg-primary border-primary text-brand-black shadow-md scale-105"
+                        : "border-brand-black text-brand-black bg-white hover:bg-gray-50 hover:scale-105"
                     }`}
+                    style={{
+                      transform: fields.airportDirection === val ? "scale(1.05)" : "scale(1)",
+                      transition: "transform .2s, background .2s, box-shadow .2s, border-color .2s",
+                    }}
                   >
                     {label}
                   </button>
