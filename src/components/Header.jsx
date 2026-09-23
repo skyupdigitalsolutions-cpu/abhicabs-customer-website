@@ -78,7 +78,7 @@ export default function Header() {
     <>
       {/* ── Utility bar ─────────────────────────────────────────────── */}
       <div className="bg-brand-black text-white">
-        <div className="max-w-[1280px] mx-auto px-[22px] h-[38px] flex items-center justify-between gap-4 text-[12.5px] font-medium">
+        <div className="ac-util-bar max-w-[1280px] mx-auto px-4 sm:px-[22px] h-[38px] flex items-center justify-between gap-4 text-[12.5px] font-medium">
           <span className="inline-flex items-center gap-1.5 text-white/85">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#FFC107" strokeWidth="2" strokeLinejoin="round" />
@@ -110,16 +110,16 @@ export default function Header() {
 
       {/* ── Main nav ─────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-white border-b border-black/5">
-        <div className="max-w-[1280px] mx-auto px-[22px] h-[72px] flex items-center justify-between gap-4 relative">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-[22px] h-[60px] sm:h-[72px] flex items-center justify-between gap-4 relative">
 
           {/* Logo */}
           <a href="/" className="flex items-center gap-2.5 shrink-0">
-            <img src="/images/abhi-cabs-icon.svg" alt="Abhi Cabs" className="w-10 h-10 object-contain" />
+            <img src="/images/abhi-cabs-icon.svg" alt="Abhi Cabs" className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
             <span className="leading-none">
-              <span className="block font-extrabold text-[20px] tracking-[.01em] text-brand-black" style={{ fontFamily: "'Montserrat',sans-serif" }}>
+              <span className="ac-logo-text block font-extrabold text-[17px] sm:text-[20px] tracking-[.01em] text-brand-black" style={{ fontFamily: "'Montserrat',sans-serif" }}>
                 ABHI<span className="text-primary">CABS</span>
               </span>
-              <span className="block text-[8.5px] font-semibold tracking-[.24em] text-[#999] mt-0.5">
+              <span className="ac-logo-tag block text-[8.5px] font-semibold tracking-[.24em] text-[#999] mt-0.5">
                 RIDE WITH TRUST
               </span>
             </span>
@@ -219,7 +219,7 @@ export default function Header() {
 
             {/* Mobile hamburger */}
             <button
-              className="lg:hidden w-[42px] h-[42px] rounded-[11px] border-[1.5px] border-[#E5E5E5] bg-white flex items-center justify-center cursor-pointer"
+              className="lg:hidden w-[44px] h-[44px] rounded-[12px] border-[1.5px] border-[#E5E5E5] bg-white flex items-center justify-center cursor-pointer touch-manipulation"
               onClick={() => dispatch(setMobileNavOpen(!open))}
               aria-label="Menu"
             >
@@ -234,13 +234,13 @@ export default function Header() {
       </header>
 
       {/* ── Mobile drawer ────────────────────────────────────────────── */}
-      <div className={`lg:hidden fixed inset-x-0 top-[110px] bottom-0 bg-white z-40 overflow-y-auto px-6 py-5 transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}>
+      <div className={`ac-drawer lg:hidden fixed inset-x-0 top-[92px] sm:top-[110px] bottom-0 bg-white z-40 overflow-y-auto px-5 py-4 ${open ? "translate-x-0" : "translate-x-full"}`}>
         {NAV_LINKS.map((l) => (
           <a
             key={l.label}
             href={l.href}
             onClick={() => dispatch(setMobileNavOpen(false))}
-            className="block py-4 text-[15px] font-semibold border-b border-[#E5E5E5] text-brand-black"
+            className="block py-3.5 text-[15px] font-semibold border-b border-[#F0F0F0] text-brand-black active:bg-[#F7F7F7] rounded-lg px-2 -mx-2"
           >
             {l.label}
           </a>
@@ -262,6 +262,13 @@ export default function Header() {
                 className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center text-brand-black"
               >
                 My Bookings
+              </a>
+              <a
+                href="/support-tickets"
+                onClick={() => dispatch(setMobileNavOpen(false))}
+                className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center text-brand-black"
+              >
+                My Tickets
               </a>
               <button
                 onClick={() => { handleLogout(); dispatch(setMobileNavOpen(false)); }}
@@ -292,9 +299,9 @@ export default function Header() {
           <a
             href="/#booking"
             onClick={() => dispatch(setMobileNavOpen(false))}
-            className="w-full py-3 rounded-full text-center font-bold bg-primary text-brand-black"
+            className="w-full py-3.5 rounded-full text-center font-bold text-[15px] bg-primary text-brand-black shadow-[0_4px_16px_rgba(255,193,7,.4)]"
           >
-            Book Now
+            🚕 Book Now
           </a>
         </div>
       </div>

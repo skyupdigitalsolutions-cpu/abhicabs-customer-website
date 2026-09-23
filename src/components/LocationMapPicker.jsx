@@ -259,11 +259,11 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}
+      className="lmp-dialog" style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}
       onClick={onClose}
     >
       <div
-        style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: 700, maxHeight: "94vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.28)", overflow: "hidden" }}
+        className="lmp-card" style={{ background: "#fff", borderRadius: 22, width: "100%", maxWidth: 700, maxHeight: "94vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.28)", overflow: "hidden" }}
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}

@@ -657,7 +657,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   animation: airportPulse 0.6s ease-out forwards;
                 }
               `}</style>
-              <div className="flex gap-2 mb-3.5">
+              <div className="bw-airport-toggles flex gap-2 mb-3.5">
                 {[["drop", "✈ Drop to Airport"], ["pickup", "✈ Pickup from Airport"]].map(([val, label]) => (
                   <button
                     type="button"
