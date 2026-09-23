@@ -220,7 +220,10 @@ export default function Page() {
   }
 
   const filterPillStyle = (active) => ({
-    padding: "8px 14px", borderRadius: 9999, border: active ? "1.5px solid #111" : "1.5px solid #E5E5E5",
+    height: 38,
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0 16px", borderRadius: 9999, border: active ? "1.5px solid #111" : "1.5px solid #E5E5E5",
     background: active ? "#111" : "#fff", color: active ? "#FFC107" : "#666", fontWeight: 600, fontSize: 12.5, cursor: "pointer",
   });
 
@@ -461,7 +464,7 @@ export default function Page() {
               <div style={{ background: "#fff", border: "1px dashed #E5E5E5", borderRadius: 20, padding: 48, textAlign: "center" }}>
                 <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>No vehicles match these filters</div>
                 <p style={{ fontSize: 14, color: "#666", margin: "0 0 16px" }}>Try clearing some filters or reducing passenger count.</p>
-                <button onClick={clearFilters} style={{ padding: "11px 22px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 600, fontSize: 13.5, border: "none", cursor: "pointer" }}>Clear Filters</button>
+                <button onClick={clearFilters} style={{ height: 48, padding: "0 28px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer" }}>Clear Filters</button>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -506,14 +509,14 @@ export default function Page() {
                         <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap" }}>
                           <button
                             onClick={() => { dispatch(setSelectedCab({ vehicleId: v.id, fare: v.fare, journeyId: journey.id })); navigate("/cab-details"); }}
-                            style={{ flex: "1 1 130px", padding: 12, borderRadius: 11, border: "1.5px solid #111", background: "#fff", color: "#111", fontWeight: 600, fontSize: 13.5, cursor: "pointer" }}
+                            style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "2px solid #111", background: "#fff", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
                             View Details
                           </button>
                           <button
                             onClick={() => selectVehicle(v)}
                             className="hover:!bg-[#FFB300]"
-                            style={{ flex: "1 1 130px", padding: 12, borderRadius: 11, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}
+                            style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
                             Select Vehicle
                           </button>

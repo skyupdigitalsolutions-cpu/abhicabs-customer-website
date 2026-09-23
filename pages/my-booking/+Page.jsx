@@ -89,11 +89,11 @@ function CancelReasonModal({ open, onClose, onConfirm, cancelling }) {
         )}
 
         <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 13, borderRadius: 11, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, cursor: "pointer" }}>Keep Booking</button>
+          <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 9999, border: "2px solid #111", background: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Keep Booking</button>
           <button
             disabled={!isValid || cancelling}
             onClick={() => onConfirm(finalReason)}
-            style={{ flex: 1, padding: 13, borderRadius: 11, border: "none", background: (!isValid || cancelling) ? "#f3a8a8" : "#DC2626", color: "#fff", fontWeight: 700, cursor: (!isValid || cancelling) ? "default" : "pointer" }}
+            style={{ flex: 1, height: 48, borderRadius: 9999, border: "none", background: (!isValid || cancelling) ? "#f3a8a8" : "#DC2626", color: "#fff", fontWeight: 700, fontSize: 14, cursor: (!isValid || cancelling) ? "default" : "pointer" }}
           >
             {cancelling ? "Cancelling…" : "Cancel Booking"}
           </button>
@@ -164,7 +164,14 @@ export default function Page() {
   useEffect(() => {
     const authed = isAuthenticated();
     setLoggedIn(authed);
-    if (!authed) return;
+    if (!authed) {
+      // Save return URL and redirect to login
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem("abhicabs_login_return", "/my-booking");
+      }
+      navigate("/login");
+      return;
+    }
     loadBookings(1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
