@@ -649,10 +649,10 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                 {[["drop", "✈ Drop to Airport"], ["pickup", "✈ Pickup from Airport"]].map(([val, label]) => (
                   <button type="button" key={val}
                     onClick={() => setFields((f) => ({ ...f, airportDirection: val }))}
-                    className={`border rounded-full px-4.5 py-2 font-semibold text-[13.5px] transition-colors ${
+                    className={`border-2 rounded-full px-4.5 py-2 font-semibold text-[13.5px] transition-all ${
                       fields.airportDirection === val
-                        ? "bg-primary border-primary text-brand-black"
-                        : "border-border text-text-secondary bg-white"
+                        ? "bg-primary border-primary text-brand-black shadow-md"
+                        : "border-brand-black text-brand-black bg-white hover:bg-gray-50"
                     }`}
                   >
                     {label}
