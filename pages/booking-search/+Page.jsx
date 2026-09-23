@@ -82,7 +82,7 @@ export default function Page() {
   // right here without redirecting to the home booking widget.
   const today = new Date().toISOString().split("T")[0];
   const [inlineTrip, setInlineTrip] = useState({
-    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "",
+    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", stops: [],
   });
   const [inlineMapField, setInlineMapField] = useState(null);
   const setInline = (k) => (e) => setInlineTrip((f) => ({ ...f, [k]: e.target.value }));
@@ -252,116 +252,19 @@ export default function Page() {
           completed; a simple heading + prompt to search when just browsing
           (e.g. arrived via a homepage tile with no trip specified yet). */}
       {browseMode ? (
-        <div style={{ background: "#111", borderRadius: 18, padding: "20px 22px", color: "#fff", marginBottom: 22 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 20px", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 19 }}>
-                {urlVehicle
+        <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", color: "#fff", marginBottom: 22 }}>
+          <div style={{ fontWeight: 700, fontSize: 19 }}>
+            {urlVehicle
+              ? "Available Vehicles"
+              : browseType === "group"
+                ? "Group & Coach Vehicles"
+                : browseType === "fleet"
                   ? "Available Vehicles"
-                  : browseType === "group"
-                    ? "Group & Coach Vehicles"
-                    : browseType === "fleet"
-                      ? "Available Vehicles"
-                      : "Browse Our Fleet"}
-              </div>
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
-                Pick a trip type below, then enter pickup, drop &amp; date to get a real fare.
-              </p>
-            </div>
+                  : "Browse Our Fleet"}
           </div>
-
-          {/* Inline trip form — set trip type + details right here, no redirect */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-            {[
-              { key: "one-way",    label: "One Way"    },
-              { key: "round-trip", label: "Round Trip" },
-              { key: "local",      label: "Local"      },
-              { key: "airport",    label: "Airport"    },
-            ].map((t) => {
-              const active = inlineTrip.tripType === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setInlineTrip((f) => ({ ...f, tripType: t.key }))}
-                  style={{
-                    height: 40, padding: "0 18px", borderRadius: 9999,
-                    border: active ? "2px solid #FFC107" : "2px solid rgba(255,255,255,.2)",
-                    background: active ? "#FFC107" : "transparent",
-                    color: active ? "#111" : "rgba(255,255,255,.75)",
-                    fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-                    transition: "all .2s",
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, alignItems: "end" }}>
-            {inlineTrip.tripType !== "local" && (
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 6 }}>
-                  {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
-                </label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={inlineTrip.pickup}
-                    onChange={setInline("pickup")}
-                    placeholder="Pickup location"
-                    style={{ flex: 1, height: 44, borderRadius: 9, border: "none", padding: "0 12px", fontSize: 13.5, outline: "none", minWidth: 0 }}
-                  />
-                  <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
-                    style={{ flexShrink: 0, width: 40, height: 44, borderRadius: 9, border: "none", background: "#FFC107", color: "#111", cursor: "pointer", fontSize: 16 }}>📍</button>
-                </div>
-              </div>
-            )}
-
-            {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 6 }}>
-                  {inlineTrip.tripType === "local" ? "Pickup" : "To"}
-                </label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    value={inlineTrip.drop}
-                    onChange={setInline("drop")}
-                    placeholder="Destination"
-                    style={{ flex: 1, height: 44, borderRadius: 9, border: "none", padding: "0 12px", fontSize: 13.5, outline: "none", minWidth: 0 }}
-                  />
-                  <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
-                    style={{ flexShrink: 0, width: 40, height: 44, borderRadius: 9, border: "none", background: "#FFC107", color: "#111", cursor: "pointer", fontSize: 16 }}>📍</button>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 6 }}>Date</label>
-              <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
-                style={{ width: "100%", height: 44, borderRadius: 9, border: "none", padding: "0 12px", fontSize: 13.5, outline: "none" }} />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 6 }}>Time</label>
-              <input type="time" value={inlineTrip.time} onChange={setInline("time")}
-                style={{ width: "100%", height: 44, borderRadius: 9, border: "none", padding: "0 12px", fontSize: 13.5, outline: "none" }} />
-            </div>
-
-            {inlineTrip.tripType === "round-trip" && (
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 6 }}>Return Date</label>
-                <input type="date" min={inlineTrip.date || today} value={inlineTrip.returnDate} onChange={setInline("returnDate")}
-                  style={{ width: "100%", height: 44, borderRadius: 9, border: "none", padding: "0 12px", fontSize: 13.5, outline: "none" }} />
-              </div>
-            )}
-
-            <button
-              onClick={submitInlineTrip}
-              style={{ height: 44, borderRadius: 9, border: "none", background: "#FFC107", color: "#111", fontWeight: 800, fontSize: 14, cursor: "pointer", padding: "0 24px", whiteSpace: "nowrap" }}
-            >
-              Search →
-            </button>
-          </div>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
+            Set your trip details in the filters panel to get a real fare.
+          </p>
         </div>
       ) : (
         <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
@@ -478,6 +381,101 @@ export default function Page() {
               <h3 style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>Filters</h3>
               <button onClick={clearFilters} style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}>Clear all</button>
             </div>
+
+            {/* ── Trip details (browse mode only — set trip type + route inline) ── */}
+            {browseMode && (
+              <div style={{ marginBottom: 22, paddingBottom: 20, borderBottom: "1px solid #F0F0F0" }}>
+                <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                  {[
+                    { key: "one-way",    label: "One Way"    },
+                    { key: "round-trip", label: "Round Trip" },
+                    { key: "local",      label: "Local"      },
+                    { key: "airport",    label: "Airport"    },
+                  ].map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setInlineTrip((f) => ({ ...f, tripType: t.key }))}
+                      style={filterPillStyle(inlineTrip.tripType === t.key)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {inlineTrip.tripType !== "local" && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
+                        {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
+                      </label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input value={inlineTrip.pickup} onChange={setInline("pickup")} placeholder="Pickup location"
+                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
+                        <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
+                          style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>To</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input value={inlineTrip.drop} onChange={setInline("drop")} placeholder="Destination"
+                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
+                        <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
+                          style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stops (one-way & round-trip) */}
+                  {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Stops</label>
+                      {(inlineTrip.stops || []).map((s, i) => (
+                        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                          <input value={s} onChange={(e) => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = e.target.value; return { ...f, stops: st }; })} placeholder={`Stop ${i + 1}`}
+                            style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
+                          <button type="button" onClick={() => setInlineTrip((f) => ({ ...f, stops: (f.stops||[]).filter((_, x) => x !== i) }))}
+                            style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#fff", cursor: "pointer" }}>−</button>
+                        </div>
+                      ))}
+                      {(inlineTrip.stops || []).length < 4 && (
+                        <button type="button" onClick={() => setInlineTrip((f) => ({ ...f, stops: [...(f.stops||[]), ""] }))}
+                          style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: "2px 0" }}>+ Add a stop</button>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
+                    <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
+                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
+                    <input type="time" value={inlineTrip.time} onChange={setInline("time")}
+                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                  </div>
+
+                  {inlineTrip.tripType === "round-trip" && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Return Date</label>
+                      <input type="date" min={inlineTrip.date || today} value={inlineTrip.returnDate} onChange={setInline("returnDate")}
+                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    </div>
+                  )}
+
+                  <button onClick={submitInlineTrip}
+                    style={{ height: 46, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 800, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
+                    Search Available Cabs →
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Vehicle Type</div>
