@@ -138,6 +138,7 @@ const TABS = [
   { id: "upcoming", label: "Upcoming" },
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
+  { id: "tickets", label: "Support Tickets" },
 ];
 
 export default function Page() {
@@ -160,6 +161,15 @@ export default function Page() {
   // already computes. "Ongoing" folds into "Upcoming" since the spec only
   // has 3 tabs, not 4.
   const [bkTab, setBkTab] = useState("upcoming");
+  const [tickets, setTickets] = useState([]);
+
+  // Load locally-stored support tickets
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("abhicabs_tickets") || "[]");
+      setTickets(stored);
+    } catch { setTickets([]); }
+  }, []);
 
   useEffect(() => {
     const authed = isAuthenticated();
@@ -277,7 +287,8 @@ export default function Page() {
             ))}
           </div>
 
-          {/* Date range search — real backend filter (GET /bookings ?from/&to) */}
+          {/* Date range search — only for booking tabs, not tickets */}
+          {bkTab !== "tickets" && (
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginBottom: 22, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 16, padding: 16 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label style={{ fontSize: 12.5, fontWeight: 700, color: "#666" }}>From</label>
@@ -296,10 +307,64 @@ export default function Page() {
               </button>
             )}
           </div>
+          )}
 
-          {loadStatus === "loading" && <p style={{ textAlign: "center", padding: "40px 0", color: "#666" }}>Loading your bookings…</p>}
+          {/* ── SUPPORT TICKETS TAB ── */}
+          {bkTab === "tickets" && (
+            tickets.length === 0 ? (
+              <div style={{ background: "#fff", border: "1px dashed #E5E5E5", borderRadius: 20, padding: 56, textAlign: "center" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🎫</div>
+                <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>No support tickets yet</div>
+                <p style={{ fontSize: 14, color: "#666", margin: "0 0 18px" }}>Tickets you raise through our Contact page will appear here so you can track their status.</p>
+                <a href="/contact" style={{ display: "inline-block", padding: "12px 24px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14 }}>Contact Support</a>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                  <p style={{ fontSize: 13.5, color: "#666", margin: 0 }}>{tickets.length} ticket{tickets.length !== 1 ? "s" : ""} raised</p>
+                  <a href="/contact" style={{ padding: "9px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>+ Raise New Ticket</a>
+                </div>
+                {tickets.map((t) => {
+                  const statusColors = {
+                    Open:        { bg: "#FFF7ED", fg: "#C2410C", dot: "#F97316" },
+                    "In Review": { bg: "#EFF6FF", fg: "#1D4ED8", dot: "#3B82F6" },
+                    Resolved:    { bg: "#F0FDF4", fg: "#15803D", dot: "#22C55E" },
+                    Closed:      { bg: "#F9FAFB", fg: "#6B7280", dot: "#9CA3AF" },
+                  };
+                  const sc = statusColors[t.status] || statusColors.Open;
+                  const date = t.submittedAt ? new Date(t.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+                  return (
+                    <div key={t.id} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>#{t.id?.slice(-8).toUpperCase()}</span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 9999, background: sc.bg, fontSize: 12, fontWeight: 700, color: sc.fg }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.dot }} />
+                              {t.status || "Open"}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 12.5, color: "#888", marginTop: 4 }}>Submitted {date}</div>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#B8860B", background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 8, padding: "4px 10px" }}>{t.topic}</span>
+                      </div>
+                      <div style={{ background: "#F9F9F9", borderRadius: 10, padding: "12px 14px", fontSize: 13.5, color: "#444", lineHeight: 1.6 }}>
+                        {t.message?.length > 200 ? t.message.slice(0, 200) + "…" : t.message}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#999" }}>{[t.name, t.phone, t.email].filter(Boolean).join(" · ")}</div>
+                    </div>
+                  );
+                })}
+                <a href="/support-tickets" style={{ alignSelf: "center", marginTop: 6, fontSize: 13, fontWeight: 600, color: "#B8860B", textDecoration: "none" }}>
+                  Open full ticket tracker →
+                </a>
+              </div>
+            )
+          )}
 
-          {loadStatus === "error" && (
+          {bkTab !== "tickets" && loadStatus === "loading" && <p style={{ textAlign: "center", padding: "40px 0", color: "#666" }}>Loading your bookings…</p>}
+
+          {bkTab !== "tickets" && loadStatus === "error" && (
             <div style={{ maxWidth: 480, margin: "0 auto" }}>
               <StateBlock tone="error" icon={<IconAlert className="w-6 h-6" />}
                 title="Couldn't load your bookings"
@@ -308,7 +373,7 @@ export default function Page() {
             </div>
           )}
 
-          {loadStatus === "ready" && (
+          {bkTab !== "tickets" && loadStatus === "ready" && (
             filtered.length === 0 ? (
               <div style={{ background: "#fff", border: "1px dashed #E5E5E5", borderRadius: 20, padding: 56, textAlign: "center" }}>
                 <div style={{ width: 60, height: 60, margin: "0 auto 16px", borderRadius: 16, background: "#F7F7F7", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -376,7 +441,7 @@ export default function Page() {
             )
           )}
 
-          {loadStatus === "ready" && bookings.length > 0 && page < totalPages && (
+          {bkTab !== "tickets" && loadStatus === "ready" && bookings.length > 0 && page < totalPages && (
             <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
               <button onClick={() => loadBookings(page + 1, true)} disabled={loadingMore} style={{ padding: "12px 24px", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, cursor: "pointer" }}>
                 {loadingMore ? "Loading…" : "Load More Bookings"}
