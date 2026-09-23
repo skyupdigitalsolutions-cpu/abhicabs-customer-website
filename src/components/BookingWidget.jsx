@@ -454,15 +454,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                         className="flex-1 py-3 bg-primary text-brand-black font-bold">+</button>
                     </div>
                   </Field>
-                  <DateTimeField
-                    label="Pick Up Date & Time"
-                    dateValue={fields.date}
-                    timeValue={fields.time}
-                    onDateChange={set("date")}
-                    onTimeChange={set("time")}
-                    minDate={today}
-                    minTime={getMinTime(fields.date)}
-                  />
+                  <Field label="Pick Up Date">
+                    <Input type="date" min={today} value={fields.date} onChange={(e) => { set("date")(e); touch("date")(); }} required />
+                    {fieldErr("date", !fields.date, "Please select a date")}
+                  </Field>
+                  <Field label="Time">
+                    <TimePicker12hr value={fields.time} onChange={(e) => { set("time")(e); touch("time")(); }} min={getMinTime(fields.date)} />
+                    {fieldErr("time", !fields.time, "Please select a time")}
+                  </Field>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3.5 items-end">
@@ -517,16 +516,15 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                       <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
                     </Field>
                   </div>
-                  <div className="w-full sm:w-[260px]">
-                    <DateTimeField
-                      label="Pick Up Date & Time"
-                      dateValue={fields.date}
-                      timeValue={fields.time}
-                      onDateChange={set("date")}
-                      onTimeChange={set("time")}
-                      minDate={today}
-                      minTime={getMinTime(fields.date)}
-                    />
+                  <div className="w-full sm:w-[170px]">
+                    <Field label="Pick Up Date">
+                      <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
+                    </Field>
+                  </div>
+                  <div className="w-full sm:w-[160px]">
+                    <Field label="Time">
+                      <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
+                    </Field>
                   </div>
                 </div>
               )}
@@ -553,15 +551,12 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                       <button type="button" onClick={addStop} className="flex-1 py-3 bg-primary text-brand-black font-bold">+</button>
                     </div>
                   </Field>
-                  <DateTimeField
-                    label="Pick Up Date & Time"
-                    dateValue={fields.date}
-                    timeValue={fields.time}
-                    onDateChange={set("date")}
-                    onTimeChange={set("time")}
-                    minDate={today}
-                    minTime={getMinTime(fields.date)}
-                  />
+                  <Field label="Pick Up Date">
+                    <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
+                  </Field>
+                  <Field label="Time">
+                    <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
+                  </Field>
                   <Field label="Return Date">
                     <Input type="date" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} required />
                   </Field>
@@ -599,16 +594,15 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                       <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
                     </Field>
                   </div>
-                  <div className="w-full sm:w-[260px]">
-                    <DateTimeField
-                      label="Pick Up Date & Time"
-                      dateValue={fields.date}
-                      timeValue={fields.time}
-                      onDateChange={set("date")}
-                      onTimeChange={set("time")}
-                      minDate={today}
-                      minTime={getMinTime(fields.date)}
-                    />
+                  <div className="w-full sm:w-[160px]">
+                    <Field label="Pick Up Date">
+                      <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
+                    </Field>
+                  </div>
+                  <div className="w-full sm:w-[150px]">
+                    <Field label="Time">
+                      <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
+                    </Field>
                   </div>
                   <div className="w-full sm:w-[160px]">
                     <Field label="Return Date">
@@ -750,15 +744,13 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                   </div>
                 </Field>
 
-                <DateTimeField
-                  label="Pick Up Date & Time"
-                  dateValue={fields.date}
-                  timeValue={fields.time}
-                  onDateChange={set("date")}
-                  onTimeChange={set("time")}
-                  minDate={today}
-                  minTime={getMinTime(fields.date)}
-                />
+                <Field label="Date">
+                  <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
+                </Field>
+
+                <Field label="Time">
+                  <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
+                </Field>
 
                 <div className="flex items-end">
                   <Button type="submit" size="lg" block>Search Available Cabs</Button>
@@ -1065,53 +1057,6 @@ function LiveLocationButton({ onLocate }) {
         </svg>
       )}
     </button>
-  );
-}
-
-// ── Combined Date + Time field ─────────────────────────────────────────────
-function DateTimeField({ label, dateValue, timeValue, onDateChange, onTimeChange, minDate, minTime }) {
-  const displayDate = dateValue
-    ? new Date(dateValue + "T00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-    : "";
-  const displayTime = (() => {
-    if (!timeValue) return "";
-    const [hh, mm] = timeValue.split(":").map(Number);
-    const ap = hh < 12 ? "AM" : "PM";
-    const h  = hh % 12 || 12;
-    return `${h}:${String(mm).padStart(2, "0")} ${ap}`;
-  })();
-
-  return (
-    <div>
-      {label && <label className="block text-[11px] font-bold tracking-widest uppercase text-text-secondary mb-1.5">{label}</label>}
-      <div className="flex border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe] divide-x divide-border" style={{ minWidth: 0 }}>
-        {/* Date half */}
-        <div className="relative flex-1 min-w-0">
-          <div className="flex items-center gap-2 px-3 py-3 pointer-events-none select-none">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-text-secondary shrink-0">
-              <rect x="3" y="4" width="18" height="17" rx="2.5" stroke="currentColor" strokeWidth="1.7"/>
-              <path d="M16 2v4M8 2v4M3 9h18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
-            </svg>
-            <span className="text-[13.5px] font-medium truncate" style={{ color: dateValue ? "#111" : "#aaa" }}>
-              {displayDate || "Date"}
-            </span>
-          </div>
-          <input
-            type="date"
-            min={minDate}
-            value={dateValue}
-            onChange={onDateChange}
-            required
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-            style={{ zIndex: 2 }}
-          />
-        </div>
-        {/* Time half */}
-        <div className="flex-none">
-          <TimePicker12hr value={timeValue} onChange={onTimeChange} min={minTime} inlined />
-        </div>
-      </div>
-    </div>
   );
 }
 
