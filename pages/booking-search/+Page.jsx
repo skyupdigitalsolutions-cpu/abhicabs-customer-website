@@ -243,30 +243,53 @@ export default function Page() {
           completed; a simple heading + prompt to search when just browsing
           (e.g. arrived via a homepage tile with no trip specified yet). */}
       {browseMode ? (
-        <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 20px", color: "#fff", marginBottom: 22 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 19 }}>
-              {urlVehicle
-                ? "Available Vehicles"
-                : browseType === "group"
-                  ? "Group & Coach Vehicles"
-                  : browseType === "fleet"
-                    ? "Available Vehicles"
-                    : "Browse Our Fleet"}
+        <div style={{ background: "#111", borderRadius: 18, padding: "20px 22px", color: "#fff", marginBottom: 22 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "14px 20px", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 19 }}>
+                {urlVehicle
+                  ? "Available Vehicles"
+                  : browseType === "group"
+                    ? "Group & Coach Vehicles"
+                    : browseType === "fleet"
+                      ? "Available Vehicles"
+                      : "Browse Our Fleet"}
+              </div>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
+                Pick a trip type below, then enter pickup, drop &amp; date to get a real fare.
+              </p>
             </div>
-            <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
-              {urlVehicle
-                ? "Your selected vehicle is shown first. Enter trip details to get a real fare."
-                : "Enter your pickup, drop and date to get a real fare for any of these."}
-            </p>
           </div>
-          <button
-            onClick={() => navigate("/#booking")}
-            className="hover:!bg-[#FFB300]"
-            style={{ marginLeft: "auto", padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}
-          >
-            Start a Search
-          </button>
+
+          {/* Trip type quick-select — takes user to the booking widget with the mode pre-selected */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {[
+              { key: "one-way",    label: "One Way",    icon: "→" },
+              { key: "round-trip", label: "Round Trip", icon: "⇄" },
+              { key: "local",      label: "Local",      icon: "◷" },
+              { key: "airport",    label: "Airport",    icon: "✈" },
+            ].map((t) => {
+              const params = new URLSearchParams({ mode: t.key });
+              if (urlVehicle) params.set("vehicle", urlVehicle);
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => navigate(`/?${params.toString()}#booking`)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 8,
+                    height: 44, padding: "0 20px", borderRadius: 9999,
+                    background: "#FFC107", color: "#111", border: "none",
+                    fontWeight: 700, fontSize: 14, cursor: "pointer",
+                    transition: "transform .15s, box-shadow .15s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(255,193,7,.4)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
+                >
+                  <span style={{ fontSize: 15 }}>{t.icon}</span> {t.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
