@@ -40,7 +40,7 @@ const WHY_US = [
   { title: "Comfortable & Maintained Vehicles", desc: "Clean, serviced and journey-ready.", icon: <IconCar className="w-5 h-5" /> },
   { title: "Transparent Pricing", desc: "Clear rates, no hidden charges.", icon: <IconTag className="w-5 h-5" /> },
   { title: "Regional Route Expertise", desc: "Built for Karnataka & Hyderabad.", icon: <IconClock className="w-5 h-5" /> },
-  { title: "Flexible Vehicle Options", desc: "4-seaters to 49-seat coaches.", icon: <IconShield className="w-5 h-5" /> },
+  { title: "Flexible Vehicle Options", desc: "4-seaters to 33-seat coaches.", icon: <IconShield className="w-5 h-5" /> },
   { title: "24×7 Customer Support", desc: "Help whenever you travel.", icon: <IconClock className="w-5 h-5" /> }
 ];
 
@@ -66,13 +66,9 @@ const GROUP_FLEET = [
   { name: "22 Seater BharatBenz",       type: "A/C · Coach",           seats: "22 Seater", img: "/images/22seater.jpg" },
   { name: "28 Seater BharatBenz",       type: "A/C · Coach",           seats: "28 Seater", img: "/images/28seater.jpg" },
   { name: "33 Seater BharatBenz",       type: "A/C · Coach",           seats: "33 Seater", img: "/images/33seater.jpg" },
-  { name: "40 Seater Ashok Leyland",    type: "A/C · Coach",           seats: "40 Seater", img: "/images/40seater.jpg" },
-  { name: "45 Seater Ashok Leyland",    type: "A/C · Coach",           seats: "45 Seater", img: "/images/45seater.jpg" },
-  { name: "49 Seater Ashok Leyland Executive", type: "A/C · Coach",     seats: "49 Seater", img: "/images/49seater.jpg" },
-  { name: "49 Seater Ashok Leyland (Non-AC)",  type: "Non-AC · Coach",  seats: "49 Seater", img: "/images/49seaternon-ac.jpg" },
 ];
 
-const SEATER_OPTIONS = ["12", "13", "16", "17", "22", "28", "33", "40", "45", "49"];
+const SEATER_OPTIONS = ["12", "13", "16", "17", "22", "28", "33"];
 
 // NEW: coverage cities list — real service areas, matching what's already
 // established elsewhere in this project (Karnataka + Hyderabad/Telangana,
@@ -98,7 +94,7 @@ const FAQS = [
   { q: "Do you provide round-trip travel?", a: "Yes — Round Trip keeps the same driver and cab for your entire outstation itinerary, including any return leg." },
   { q: "Do you provide airport transfers?", a: "Yes — on-time pickups and drops with live flight tracking, for both arrivals and departures." },
   { q: "Can I book a Tempo Traveller?", a: "Yes — 12 and 17 seater Tempo Travellers are available under Group / Coach bookings." },
-  { q: "Can I book a 49-seater coach?", a: "Yes — 49 seater coaches (Ashok Leyland, AC and Non-AC) are available for large groups via Group / Coach." },
+  { q: "Can I book a large coach?", a: "Yes — coaches up to 33 seaters are available for groups via Group / Coach. For larger requirements, contact us for a custom quote." },
   { q: "How is outstation pricing calculated?", a: "Outstation fares are based on distance travelled, with a minimum per-day kilometre allowance and applicable driver allowance for multi-day trips." },
   { q: "Can I schedule a cab in advance?", a: "Yes — choose any future pickup date and time when booking; there's no need to book only for immediate travel." },
   { q: "What payment options are available?", a: "UPI, card, net banking, and cash on trip completion are all supported, along with partial and pay-later options at checkout." },

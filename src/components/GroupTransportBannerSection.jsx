@@ -20,7 +20,7 @@ export default function GroupTransportBannerSection({ seaterOptions, onRequestQu
             Travelling With a Group?
           </h2>
           <p style={{ fontSize: 16, lineHeight: 1.6, color: "rgba(255,255,255,.65)", fontWeight: 400, margin: "16px 0 0", maxWidth: 520 }}>
-            From family tours and corporate travel to school and college groups, travel together in comfort — 12 to 49 seat coaches available.
+            From family tours and corporate travel to school and college groups, travel together in comfort — 12 to 33 seat coaches available.
           </p>
         </div>
 

@@ -141,7 +141,8 @@ export default function Page() {
   }
 
   const GROUP_TYPES = ["Coach"];
-  const allSource = apiVehicles && apiVehicles.length ? apiVehicles : VEHICLE_RATES;
+  const allSource = (apiVehicles && apiVehicles.length ? apiVehicles : VEHICLE_RATES)
+    .filter((v) => Number(v.seats) <= 33); // show vehicles up to 33 seaters only
   // Arriving via "Group / Coach" scopes the whole page to actual
   // coaches/buses only — not the smaller Tempo Traveller/Urbania vans,
   // which are a different vehicle class even though they're also used for
