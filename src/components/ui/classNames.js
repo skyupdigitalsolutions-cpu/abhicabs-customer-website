@@ -4,7 +4,7 @@
 // avoiding repeating the same utility string at every call site.
 
 export const FIELD_INPUT =
-  "w-full border border-border rounded-[10px] px-3.5 py-3 text-base md:text-[14.5px] text-text " +
+  "w-full h-12 border border-border rounded-[10px] px-3.5 text-base md:text-[14.5px] text-text " +
   "bg-[#fbfbfe] outline-none transition-colors focus:border-primary focus:bg-white";
 
 export const FIELD_LABEL = "text-[12.5px] font-bold text-text-secondary uppercase tracking-wide";

@@ -439,7 +439,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {mode === "one-way" && (
             <>
               {stops.length === 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_160px_150px_140px] gap-3.5 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_130px_150px_150px] gap-3.5 items-end">
                   <Field label="From">
                     <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                   </Field>
@@ -447,11 +447,11 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                     <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
                   </Field>
                   <Field label="Add Stops">
-                    <div className="flex items-center border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
-                      <button type="button" disabled className="flex-1 py-3 text-text-secondary font-bold disabled:opacity-40">−</button>
+                    <div className="flex items-center h-12 border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
+                      <button type="button" disabled className="flex-1 h-full text-text-secondary font-bold text-lg disabled:opacity-40 hover:bg-black/5">−</button>
                       <span className="px-2 font-bold text-[14px] text-text">0</span>
                       <button type="button" onClick={addStop}
-                        className="flex-1 py-3 bg-primary text-brand-black font-bold">+</button>
+                        className="flex-1 h-full bg-primary text-brand-black font-bold text-lg">+</button>
                     </div>
                   </Field>
                   <Field label="Pick Up Date">
@@ -537,7 +537,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {mode === "round-trip" && (
             <>
               {stops.length === 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_160px_150px_140px_150px] gap-3.5 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_130px_150px_150px_150px] gap-3.5 items-end">
                   <Field label="From">
                     <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
                   </Field>
@@ -545,10 +545,10 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                     <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
                   </Field>
                   <Field label="Add Stops">
-                    <div className="flex items-center border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
-                      <button type="button" disabled className="flex-1 py-3 text-text-secondary font-bold disabled:opacity-40">−</button>
+                    <div className="flex items-center h-12 border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
+                      <button type="button" disabled className="flex-1 h-full text-text-secondary font-bold text-lg disabled:opacity-40 hover:bg-black/5">−</button>
                       <span className="px-2 font-bold text-[14px] text-text">0</span>
-                      <button type="button" onClick={addStop} className="flex-1 py-3 bg-primary text-brand-black font-bold">+</button>
+                      <button type="button" onClick={addStop} className="flex-1 h-full bg-primary text-brand-black font-bold text-lg">+</button>
                     </div>
                   </Field>
                   <Field label="Pick Up Date">
@@ -647,35 +647,27 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {mode === "airport" && (
             <>
               {/* Pickup / Drop direction toggle */}
-              <style>{`
-                @keyframes airportPulse {
-                  0%   { box-shadow: 0 0 0 0 rgba(255,193,7,0.55); }
-                  60%  { box-shadow: 0 0 0 10px rgba(255,193,7,0); }
-                  100% { box-shadow: 0 0 0 0 rgba(255,193,7,0); }
-                }
-                .airport-btn-active {
-                  animation: airportPulse 0.6s ease-out forwards;
-                }
-              `}</style>
-              <div className="bw-airport-toggles flex gap-2 mb-3.5">
-                {[["drop", "✈ Drop to Airport"], ["pickup", "✈ Pickup from Airport"]].map(([val, label]) => (
-                  <button
-                    type="button"
-                    key={val}
-                    onClick={() => setFields((f) => ({ ...f, airportDirection: val }))}
-                    className={`border-2 rounded-full px-4.5 py-2 font-semibold text-[13.5px] transition-all ${
-                      fields.airportDirection === val
-                        ? "airport-btn-active bg-primary border-primary text-brand-black shadow-md scale-105"
-                        : "border-brand-black text-brand-black bg-white hover:bg-gray-50 hover:scale-105"
-                    }`}
-                    style={{
-                      transform: fields.airportDirection === val ? "scale(1.05)" : "scale(1)",
-                      transition: "transform .2s, background .2s, box-shadow .2s, border-color .2s",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="bw-airport-toggles flex flex-wrap gap-2.5 mb-4">
+                {[["drop", "Drop to Airport"], ["pickup", "Pickup from Airport"]].map(([val, label]) => {
+                  const active = fields.airportDirection === val;
+                  return (
+                    <button
+                      type="button"
+                      key={val}
+                      onClick={() => setFields((f) => ({ ...f, airportDirection: val }))}
+                      className={`inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full border-2 font-semibold text-[14px] transition-all ${
+                        active
+                          ? "bg-primary border-primary text-brand-black shadow-[0_4px_14px_rgba(255,193,7,0.4)]"
+                          : "bg-white border-[#E0E0E0] text-brand-black hover:border-brand-black"
+                      }`}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                        <path d="M22 16.5 12 12V4a1.5 1.5 0 0 0-3 0v8L2 16.5V19l7-2v3l-2 1.5V23l3.5-1 3.5 1v-1.5L12 20v-3l7 2v-2.5Z" fill="currentColor"/>
+                      </svg>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
@@ -1008,7 +1000,7 @@ function TimePicker12hr({ value, onChange, min }) {
       {/* Trigger button */}
       <div
         onClick={openPicker}
-        className="flex items-center gap-2.5 border border-border rounded-[10px] px-3.5 py-3 bg-[#fbfbfe] hover:border-brand-black transition-colors cursor-pointer select-none"
+        className="flex items-center gap-2.5 h-12 border border-border rounded-[10px] px-3.5 bg-[#fbfbfe] hover:border-brand-black transition-colors cursor-pointer select-none"
         style={{ minWidth: 110 }}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.45 }}>
@@ -1118,7 +1110,7 @@ function Input({ icon, className = "", onMapClick, autocomplete, ...props }) {
     />
   );
   return (
-    <div className="flex items-center gap-2.5 border border-border rounded-[10px] px-3.5 py-3 bg-[#fbfbfe] focus-within:border-brand-black focus-within:bg-white transition-colors">
+    <div className="flex items-center gap-2.5 h-12 border border-border rounded-[10px] px-3.5 bg-[#fbfbfe] focus-within:border-brand-black focus-within:bg-white transition-colors">
       {icon}
       {inputEl}
       {onMapClick && (
