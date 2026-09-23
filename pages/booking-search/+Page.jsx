@@ -196,7 +196,35 @@ export default function Page() {
     setSeatFilters((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
   }
   function clearFilters() {
-    setTypeFilters([]); setSeatFilters([]); setAc("all"); setSort("recommended"); setTripTypeFilter(null);
+    setTypeFilters([]); setSeatFilters([]); setAc("all"); setSort("recommended");
+  }
+
+  // Submit the inline trip form — creates a journey and stays on this page,
+  // updating the URL so fares load without a redirect to home.
+  function submitInlineTrip(e) {
+    e?.preventDefault?.();
+    if (inlineTrip.tripType !== "local" && !inlineTrip.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
+    if ((inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && !inlineTrip.drop.trim()) { toast("Please enter a destination", "error"); return; }
+    if (inlineTrip.tripType === "local" && !inlineTrip.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
+    if (!inlineTrip.date) { toast("Please select a date", "error"); return; }
+    if (!inlineTrip.time) { toast("Please select a time", "error"); return; }
+    if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnDate) { toast("Please select a return date", "error"); return; }
+
+    const journeyObj = {
+      tripType: inlineTrip.tripType,
+      pickup: inlineTrip.pickup,
+      drop: inlineTrip.drop,
+      date: inlineTrip.date,
+      time: inlineTrip.time,
+      returnDate: inlineTrip.returnDate,
+      stops: (inlineTrip.stops || []).filter((s) => s.trim()),
+    };
+    const action = dispatch(createJourney(journeyObj));
+    const newId = action.payload.id;
+    const params = new URLSearchParams();
+    params.set("j", newId);
+    if (urlVehicle) params.set("vehicle", urlVehicle);
+    navigate(`/booking-search?${params.toString()}`);
   }
 
   function selectVehicle(v) {
