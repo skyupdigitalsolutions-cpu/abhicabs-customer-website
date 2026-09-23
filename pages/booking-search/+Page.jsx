@@ -396,30 +396,6 @@ export default function Page() {
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {[
-                  { key: "one-way",    label: "One Way"    },
-                  { key: "round-trip", label: "Round Trip" },
-                  { key: "local",      label: "Local"      },
-                  { key: "airport",    label: "Airport"    },
-                ].map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => navigate(`/?mode=${t.key}#booking`)}
-                    style={filterPillStyle(false)}
-                    title={`Search a ${t.label} trip`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <p style={{ fontSize: 11, color: "#999", marginTop: 8, lineHeight: 1.5 }}>
-                Select a trip type to go back and enter your pickup, drop, date &amp; time.
-              </p>
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Seats</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {availableSeats.map((s) => (
