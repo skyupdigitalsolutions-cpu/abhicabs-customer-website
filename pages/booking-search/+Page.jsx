@@ -9,11 +9,9 @@ import { faresApi } from "../../src/api";
 import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
 import { useToast } from "../../src/hooks/useToast";
-import { useJsApiLoader, Autocomplete } from "@react-google-maps/api";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
 
-const MAPS_LIBRARIES = ["places"];
 
 // Derives a customer-facing "type" from the vehicle's real name, since the
 // raw `category` field (sedan/suv/premium/tempo/bus/luxury) doesn't match
@@ -98,14 +96,35 @@ export default function Page() {
   // an Airport transfer doesn't have intermediate stops the way a
   // point-to-point trip does).
 
-  // Real map integration — same Google Places Autocomplete + map-pin
-  // picker used on the main booking widget, so these fields aren't a
-  // step down just because they live in a filter sidebar.
-  const { isLoaded: mapsLoaded } = useJsApiLoader({
-    id: "abhi-cabs-google-maps",
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: MAPS_LIBRARIES,
-  });
+  // Maps SDK is loaded by LocationMapPicker's singleton loader — poll for it.
+  const [mapsLoaded, setMapsLoaded] = useState(
+    () => typeof window !== "undefined" && !!window.google?.maps?.places
+  );
+  useEffect(() => {
+    if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
+    const iv = setInterval(() => {
+      if (window.google?.maps?.places) { setMapsLoaded(true); clearInterval(iv); }
+    }, 200);
+    return () => clearInterval(iv);
+  }, [mapsLoaded]);
+
+  // Attach Google Places Autocomplete to an inline input by ref.
+  const inlinePickupAcRef = useRef(null);
+  const inlineDropAcRef = useRef(null);
+  function attachInlineAc(field, storedRef) {
+    return (el) => {
+      if (!el || !mapsLoaded || storedRef.current) return;
+      storedRef.current = new window.google.maps.places.Autocomplete(el, {
+        componentRestrictions: { country: "in" },
+        fields: ["formatted_address", "name"],
+      });
+      storedRef.current.addListener("place_changed", () => {
+        const p = storedRef.current.getPlace();
+        const addr = p?.formatted_address || p?.name || el.value;
+        setInlineTrip((f) => ({ ...f, [field]: addr }));
+      });
+    };
+  }
 
 
 
@@ -432,31 +451,44 @@ export default function Page() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {inlineTrip.tripType !== "local" && (
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
-                        {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
-                      </label>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <input value={inlineTrip.pickup} onChange={setInline("pickup")} placeholder="Pickup location"
-                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
-                        <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
-                          style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
+                  {/* From + To side by side */}
+                  <div style={{ display: "grid", gridTemplateColumns: inlineTrip.tripType === "local" ? "1fr" : "1fr 1fr", gap: 10 }}>
+                    {inlineTrip.tripType !== "local" && (
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
+                          {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
+                        </label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            ref={attachInlineAc("pickup", inlinePickupAcRef)}
+                            value={inlineTrip.pickup}
+                            onChange={setInline("pickup")}
+                            placeholder="Pickup location"
+                            style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+                          />
+                          <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
+                            style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>To</label>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <input value={inlineTrip.drop} onChange={setInline("drop")} placeholder="Destination"
-                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
-                        <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
-                          style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
+                    {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>To</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            ref={attachInlineAc("drop", inlineDropAcRef)}
+                            value={inlineTrip.drop}
+                            onChange={setInline("drop")}
+                            placeholder="Destination"
+                            style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+                          />
+                          <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
+                            style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Stops (one-way & round-trip) */}
                   {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") && (
@@ -477,16 +509,19 @@ export default function Page() {
                     </div>
                   )}
 
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
-                    <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
-                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
-                  </div>
+                  {/* Date + Time side by side */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
+                      <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
+                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    </div>
 
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
-                    <input type="time" value={inlineTrip.time} onChange={setInline("time")}
-                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
+                      <input type="time" value={inlineTrip.time} onChange={setInline("time")}
+                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    </div>
                   </div>
 
                   {inlineTrip.tripType === "round-trip" && (
