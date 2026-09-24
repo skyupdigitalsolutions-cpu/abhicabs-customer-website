@@ -439,29 +439,39 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {mode === "one-way" && (
             <>
               {stops.length === 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_130px_150px_150px] gap-3.5 items-end">
-                  <Field label="From">
-                    <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
-                  </Field>
-                  <Field label="To">
-                    <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
-                  </Field>
-                  <Field label="Add Stops">
-                    <div className="flex items-center h-12 border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
-                      <button type="button" disabled className="flex-1 h-full text-text-secondary font-bold text-lg disabled:opacity-40 hover:bg-black/5">−</button>
-                      <span className="px-2 font-bold text-[14px] text-text">0</span>
-                      <button type="button" onClick={addStop}
-                        className="flex-1 h-full bg-primary text-brand-black font-bold text-lg">+</button>
-                    </div>
-                  </Field>
-                  <Field label="Pick Up Date">
-                    <Input type="date" min={today} value={fields.date} onChange={(e) => { set("date")(e); touch("date")(); }} required />
-                    {fieldErr("date", !fields.date, "Please select a date")}
-                  </Field>
-                  <Field label="Time">
-                    <TimePicker12hr value={fields.time} onChange={(e) => { set("time")(e); touch("time")(); }} min={getMinTime(fields.date)} />
-                    {fieldErr("time", !fields.time, "Please select a time")}
-                  </Field>
+                <div className="flex flex-wrap gap-3.5 items-end">
+                  <div className="flex-1 min-w-[200px]">
+                    <Field label="From">
+                      <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                    </Field>
+                  </div>
+                  <div className="flex-1 min-w-[200px]">
+                    <Field label="To">
+                      <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
+                    </Field>
+                  </div>
+                  <div className="w-[120px]">
+                    <Field label="Add Stops">
+                      <div className="flex items-center h-12 border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
+                        <button type="button" disabled className="flex-1 h-full text-text-secondary font-bold text-lg disabled:opacity-40 hover:bg-black/5">−</button>
+                        <span className="px-2 font-bold text-[14px] text-text">0</span>
+                        <button type="button" onClick={addStop}
+                          className="flex-1 h-full bg-primary text-brand-black font-bold text-lg">+</button>
+                      </div>
+                    </Field>
+                  </div>
+                  <div className="w-[150px]">
+                    <Field label="Pick Up Date">
+                      <Input type="date" min={today} value={fields.date} onChange={(e) => { set("date")(e); touch("date")(); }} required />
+                      {fieldErr("date", !fields.date, "Please select a date")}
+                    </Field>
+                  </div>
+                  <div className="w-[150px]">
+                    <Field label="Time">
+                      <TimePicker12hr value={fields.time} onChange={(e) => { set("time")(e); touch("time")(); }} min={getMinTime(fields.date)} />
+                      {fieldErr("time", !fields.time, "Please select a time")}
+                    </Field>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3.5 items-end">
@@ -537,29 +547,41 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           {mode === "round-trip" && (
             <>
               {stops.length === 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_130px_150px_150px_150px] gap-3.5 items-end">
-                  <Field label="From">
-                    <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
-                  </Field>
-                  <Field label="To">
-                    <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
-                  </Field>
-                  <Field label="Add Stops">
-                    <div className="flex items-center h-12 border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
-                      <button type="button" disabled className="flex-1 h-full text-text-secondary font-bold text-lg disabled:opacity-40 hover:bg-black/5">−</button>
-                      <span className="px-2 font-bold text-[14px] text-text">0</span>
-                      <button type="button" onClick={addStop} className="flex-1 h-full bg-primary text-brand-black font-bold text-lg">+</button>
-                    </div>
-                  </Field>
-                  <Field label="Pick Up Date">
-                    <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
-                  </Field>
-                  <Field label="Time">
-                    <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
-                  </Field>
-                  <Field label="Return Date">
-                    <Input type="date" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} required />
-                  </Field>
+                <div className="flex flex-wrap gap-3.5 items-end">
+                  <div className="flex-1 min-w-[200px]">
+                    <Field label="From">
+                      <Input icon={<IconPin className="w-4 h-4 text-primary" />} placeholder="Enter pickup city or address" value={fields.pickup} onChange={set("pickup")} required onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete} />
+                    </Field>
+                  </div>
+                  <div className="flex-1 min-w-[200px]">
+                    <Field label="To">
+                      <Input icon={<IconPin className="w-4 h-4 text-amber-400" />} placeholder="Select destination" value={fields.drop} onChange={set("drop")} required onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete} />
+                    </Field>
+                  </div>
+                  <div className="w-[120px]">
+                    <Field label="Add Stops">
+                      <div className="flex items-center h-12 border border-border rounded-[10px] overflow-hidden bg-[#fbfbfe]">
+                        <button type="button" disabled className="flex-1 h-full text-text-secondary font-bold text-lg disabled:opacity-40 hover:bg-black/5">−</button>
+                        <span className="px-2 font-bold text-[14px] text-text">0</span>
+                        <button type="button" onClick={addStop} className="flex-1 h-full bg-primary text-brand-black font-bold text-lg">+</button>
+                      </div>
+                    </Field>
+                  </div>
+                  <div className="w-[150px]">
+                    <Field label="Pick Up Date">
+                      <Input type="date" min={today} value={fields.date} onChange={set("date")} required />
+                    </Field>
+                  </div>
+                  <div className="w-[150px]">
+                    <Field label="Time">
+                      <TimePicker12hr value={fields.time} onChange={set("time")} min={getMinTime(fields.date)} />
+                    </Field>
+                  </div>
+                  <div className="w-[150px]">
+                    <Field label="Return Date">
+                      <Input type="date" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} required />
+                    </Field>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-3.5 items-end">

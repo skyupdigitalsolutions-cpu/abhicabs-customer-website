@@ -451,44 +451,42 @@ export default function Page() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {/* From + To side by side */}
-                  <div style={{ display: "grid", gridTemplateColumns: inlineTrip.tripType === "local" ? "1fr" : "1fr 1fr", gap: 10 }}>
-                    {inlineTrip.tripType !== "local" && (
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
-                          {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
-                        </label>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <input
-                            ref={attachInlineAc("pickup", inlinePickupAcRef)}
-                            value={inlineTrip.pickup}
-                            onChange={setInline("pickup")}
-                            placeholder="Pickup location"
-                            style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
-                          />
-                          <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
-                            style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
-                        </div>
+                  {/* From + To — stacked (sidebar is narrow) */}
+                  {inlineTrip.tripType !== "local" && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
+                        {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
+                      </label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input
+                          ref={attachInlineAc("pickup", inlinePickupAcRef)}
+                          value={inlineTrip.pickup}
+                          onChange={setInline("pickup")}
+                          placeholder="Pickup location"
+                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+                        />
+                        <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
+                          style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
-                      <div>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>To</label>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <input
-                            ref={attachInlineAc("drop", inlineDropAcRef)}
-                            value={inlineTrip.drop}
-                            onChange={setInline("drop")}
-                            placeholder="Destination"
-                            style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
-                          />
-                          <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
-                            style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", fontSize: 15 }}>📍</button>
-                        </div>
+                  {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>To</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input
+                          ref={attachInlineAc("drop", inlineDropAcRef)}
+                          value={inlineTrip.drop}
+                          onChange={setInline("drop")}
+                          placeholder="Destination"
+                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+                        />
+                        <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
+                          style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Stops (one-way & round-trip) */}
                   {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") && (
@@ -509,19 +507,17 @@ export default function Page() {
                     </div>
                   )}
 
-                  {/* Date + Time side by side */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
-                      <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
-                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
-                    </div>
+                  {/* Date + Time — stacked */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
+                    <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
+                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                  </div>
 
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
-                      <input type="time" value={inlineTrip.time} onChange={setInline("time")}
-                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
-                    </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
+                    <input type="time" value={inlineTrip.time} onChange={setInline("time")}
+                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
                   </div>
 
                   {inlineTrip.tripType === "round-trip" && (
