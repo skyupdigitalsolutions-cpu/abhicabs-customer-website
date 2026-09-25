@@ -131,8 +131,13 @@ export default function Page() {
   const [ac, setAc] = useState("all"); // all | on | off
   const [sort, setSort] = useState("recommended");
 
-  const surge = !browseMode && (journey?.surge || false);
-  const surgeMultiplier = !browseMode && journey?.surgeMultiplier ? journey.surgeMultiplier : 1.0;
+  // Real surge, straight from the backend's quote — every option in
+  // apiVehicles carries the same surge info (one demand-pricing decision per
+  // list, priced once for the whole journey), so the first one speaks for all.
+  const realSurge = !browseMode && apiVehicles?.length ? apiVehicles[0] : null;
+  const surge = Boolean(realSurge?.surge);
+  const surgeMultiplier = realSurge?.surgeMultiplier || 1.0;
+  const surgePct = realSurge?.surgePct || 0;
 
   useEffect(() => {
     if (browseMode || !journey) return;
@@ -266,12 +271,20 @@ export default function Page() {
       baseFare: Math.round(v.fare / surgeMultiplier),
       surge,
       surgeMultiplier,
+      surgePct: v.surgePct ?? surgePct,
       surgeFee: surge ? Math.round(v.fare - v.fare / surgeMultiplier) : 0,
-      driverBhata: v.outstation?.driverBhata || 0,
+      driverBhata: v.driverAllowance || v.outstation?.driverBhata || 0,
       journeyId: journey.id,
       vehicleName: v.name,
       vehicleSeats: v.seats,
       vehicleAc: v.ac,
+      vehicleImg: v.img,
+      // Real backend fields — carried through so checkout can render the
+      // actual fare breakdown (driver allowance, night allowance, surge,
+      // minimum-fare top-up, rounding) without re-quoting.
+      vehicleClass: v.vehicleClass || null,
+      breakdown: v.breakdown || [],
+      nightAllowance: v.nightAllowance || 0,
     }));
     navigate("/checkout");
   }
@@ -348,8 +361,11 @@ export default function Page() {
         <div style={{ marginBottom: 22, background: "#FFF4E5", border: "1px solid #FBBF77", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
           <IconZap className="w-5 h-5 text-amber-500 shrink-0" />
           <div>
-            <b style={{ color: "#92400E", fontSize: 14.5 }}>Surge pricing active — 5% added</b>
-            <p style={{ color: "#B45309", fontSize: 13, margin: 0 }}>Immediate bookings (within 30 mins) carry a 5% surge. Prices below include this fee.</p>
+            <b style={{ color: "#92400E", fontSize: 14.5 }}>Surge pricing active — {surgePct}% added</b>
+            <p style={{ color: "#B45309", fontSize: 13, margin: 0 }}>
+              {realSurge?.surgeTier ? `Demand is high in this area right now. ` : ""}
+              Prices below already include this fee.
+            </p>
           </div>
         </div>
       )}
@@ -630,11 +646,31 @@ export default function Page() {
                           <span>{v.ac ? "A/C" : "Non-A/C"}</span>
                           <span>{v.bags} Bags</span>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 24, padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
-                          <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Local (8/12 hr · 80 km)</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.local?.base8hr80km ?? 0)}</div></div>
-                          <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Outstation per km</div><div style={{ fontWeight: 700, fontSize: 15, color: "#B8860B" }}>₹{v.outstation?.perKm ?? 0}/km</div></div>
-                          <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Extra KM</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>₹{v.local?.extraKm ?? 0}/km</div></div>
-                        </div>
+                        {!browseMode && v.vehicleClass ? (
+                          // Real quote for THIS journey, straight from the backend —
+                          // not a rate-card reference number.
+                          <div style={{ padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                              <span style={{ fontWeight: 800, fontSize: 22, color: "#111" }}>{fmtINR(v.fare)}</span>
+                              <span style={{ fontSize: 12, color: "#999" }}>total for this trip</span>
+                              {v.surge && (
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "#B45309", background: "#FFF4E5", padding: "3px 9px", borderRadius: 9999 }}>
+                                  +{v.surgePct}% surge
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 6, fontSize: 11.5, color: "#888" }}>
+                              {v.driverAllowance > 0 && <span>Incl. driver allowance {fmtINR(v.driverAllowance)}</span>}
+                              {v.nightAllowance > 0 && <span>Incl. night allowance {fmtINR(v.nightAllowance)}</span>}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
+                            <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Local (8/12 hr · 80 km)</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.local?.base8hr80km ?? 0)}</div></div>
+                            <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Outstation per km</div><div style={{ fontWeight: 700, fontSize: 15, color: "#B8860B" }}>₹{v.outstation?.perKm ?? 0}/km</div></div>
+                            <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Extra KM</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>₹{v.local?.extraKm ?? 0}/km</div></div>
+                          </div>
+                        )}
                         <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap" }}>
                           <button
                             onClick={() => { dispatch(setSelectedCab({ vehicleId: v.id, fare: v.fare, journeyId: journey.id })); navigate("/cab-details"); }}
@@ -657,7 +693,9 @@ export default function Page() {
               </div>
             )}
             <p style={{ marginTop: 18, fontSize: 11.5, color: "#999", fontWeight: 400, textAlign: "center" }}>
-              Fares are from the client rate sheet. Outstation totals use a sample 150 km estimate until a routing API is connected.
+              {apiVehicles?.length
+                ? "Fares are calculated live for your exact route, including surge, driver allowance and night charges where they apply."
+                : "Showing sample fares from the rate sheet — search a real trip above to get live pricing for your route."}
             </p>
           </div>
         </div>

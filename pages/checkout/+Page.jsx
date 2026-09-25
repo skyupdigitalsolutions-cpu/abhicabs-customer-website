@@ -13,6 +13,8 @@ import Button from "../../src/components/ui/Button";
 import { FIELD_INPUT } from "../../src/components/ui/classNames";
 import { useToast } from "../../src/hooks/useToast";
 import { IconPin } from "../../src/components/Icons";
+import { FareBreakupSection } from "../../src/components/checkout/FareBreakupSection";
+import { CouponOffersSection } from "../../src/components/checkout/CouponOffersSection";
 
 const INCLUSIONS = [
   "Driver allowance (bata) included for outstation trips",
@@ -151,6 +153,11 @@ export default function Page() {
   const [customerType, setCustomerType] = useState(saved.customerType || "retail");
   const [errors, setErrors] = useState({});
   const [showTerms, setShowTerms] = useState(false);
+  // The applied promo, if any — { ok, code, description, amount, payable }
+  // straight from POST /discounts/check via CouponOffersSection.
+  const [discount, setDiscount] = useState(
+    saved.discountCode ? { ok: true, code: saved.discountCode, description: saved.discountDescription, amount: saved.discountAmount } : null
+  );
 
   const bookingCompletedRef = useRef(false);
   const abandonmentSentRef = useRef(false);
@@ -188,11 +195,19 @@ export default function Page() {
   const baseFare = selected.baseFare || selected.fare;
   const surgeFee = selected.surgeFee || 0;
   const driverBhata = selected.driverBhata || vehicle?.outstation?.driverBhata || 0;
-  const subTotal = baseFare + surgeFee;
+  // The real, backend-quoted total for this trip (already includes surge,
+  // driver allowance, night allowance, minimum-fare top-up — see breakdown).
+  const quotedTotal = selected.fare;
+  const hasRealBreakdown = Array.isArray(selected.breakdown) && selected.breakdown.length > 0;
   const isCorporate = customerType === "corporate";
-  const cgst = isCorporate ? Math.round(subTotal * 0.025) : 0;
-  const sgst = isCorporate ? Math.round(subTotal * 0.025) : 0;
-  const totalPayable = subTotal + cgst + sgst;
+  // GST is shown only when the backend's own breakdown didn't already price
+  // it in (corporate invoicing is applied server-side at booking time via
+  // customerService.resolveBillingEntity) — this is a display-only estimate
+  // for the corporate toggle, not a separate charge collected here.
+  const cgst = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
+  const sgst = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
+  const discountAmount = discount?.ok ? Number(discount.amount || 0) : 0;
+  const totalPayable = Math.max(0, quotedTotal + cgst + sgst - discountAmount);
 
   useEffect(() => {
     function trySendAbandonment() {
@@ -264,6 +279,14 @@ export default function Page() {
       companyName: isCorporate ? companyName.trim() : "",
       notes: notes.trim(), customerType,
       paymentMode: saved.paymentMode || "FULL",
+      // Carried to the Payment page. NOTE: /bookings has no discountCode
+      // field, so this is display/local-total metadata only — it was checked
+      // live against POST /discounts/check (real), but nothing server-side
+      // records the redemption or enforces single-use. See
+      // CouponOffersSection's header comment for the full picture.
+      discountCode: discount?.ok ? discount.code : null,
+      discountAmount: discount?.ok ? Number(discount.amount || 0) : 0,
+      discountDescription: discount?.ok ? discount.description : null,
     }));
     navigate("/payment");
   }
@@ -424,13 +447,18 @@ export default function Page() {
           </div>
 
           {/* ── Right: Fare Summary ────────────────────────────────── */}
-          <div style={{ position: "sticky", top: 120, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Sticky only from lg up — on a phone this panel is now taller
+              (fare breakdown + coupon section), so keeping it sticky at every
+              width would pin a tall block over the passenger form while
+              scrolling. Matches the same lg:sticky pattern the Payment page
+              already uses for its summary panel. */}
+          <div className="lg:sticky lg:top-[120px]" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden" }}>
               {/* Vehicle banner — actual selected vehicle photo */}
               <div style={{ height: 180, overflow: "hidden", position: "relative", background: "#F7F7F7" }}>
                 <img
-                  src={vehicle.img}
-                  alt={vehicle.name}
+                  src={selected.vehicleImg || vehicle.img}
+                  alt={selected.vehicleName || vehicle.name}
                   style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
                 />
                 {/* subtle gradient overlay so vehicle name below blends cleanly */}
@@ -438,9 +466,9 @@ export default function Page() {
               </div>
 
               <div style={{ padding: 22 }}>
-                <h3 style={{ fontWeight: 700, fontSize: 17, margin: "0 0 3px" }}>{vehicle.name}</h3>
+                <h3 style={{ fontWeight: 700, fontSize: 17, margin: "0 0 3px" }}>{selected.vehicleName || vehicle.name}</h3>
                 <div style={{ fontSize: 12.5, color: "#666", fontWeight: 500, marginBottom: 16 }}>
-                  {vehicle.seats} Seats · {vehicle.ac ? "A/C" : "Non-A/C"}
+                  {selected.vehicleSeats || vehicle.seats} Seats · {(selected.vehicleAc ?? vehicle.ac) ? "A/C" : "Non-A/C"}
                 </div>
 
                 {/* Route details */}
@@ -476,17 +504,44 @@ export default function Page() {
                   )}
                 </div>
 
-                {/* Fare breakdown */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13, padding: "16px 0", borderBottom: "1px dashed #EFEFEF" }}>
-                  <SummaryRow label="Base Fare" value={fmtINR(baseFare)} />
-                  {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
-                  {surgeFee > 0 && <SummaryRow label="Surge Fee (5%)" value={`+ ${fmtINR(surgeFee)}`} />}
-                  {isCorporate && <SummaryRow label="Taxes (5%)" value={`+ ${fmtINR(cgst + sgst)}`} />}
+                {/* Fare breakdown — real, from the backend when available
+                    (base fare, driver allowance, night allowance, surge,
+                    minimum-fare top-up, rounding); falls back to the simpler
+                    summary if this cab was picked without a live quote. */}
+                <div style={{ padding: "16px 0", borderBottom: "1px dashed #EFEFEF" }}>
+                  {hasRealBreakdown ? (
+                    <FareBreakupSection breakdown={selected.breakdown} total={quotedTotal} />
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
+                      <SummaryRow label="Base Fare" value={fmtINR(baseFare)} />
+                      {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
+                      {surgeFee > 0 && <SummaryRow label={`Surge Fee${selected.surgePct ? ` (${selected.surgePct}%)` : ""}`} value={`+ ${fmtINR(surgeFee)}`} />}
+                      {isCorporate && <SummaryRow label="Taxes (5%)" value={`+ ${fmtINR(cgst + sgst)}`} />}
+                    </div>
+                  )}
                 </div>
+
+                {/* Coupon & Offers — real promo codes, checked live against
+                    this fare total */}
+                <div style={{ padding: "16px 0", borderBottom: "1px dashed #EFEFEF" }}>
+                  <CouponOffersSection
+                    fareTotal={quotedTotal}
+                    tripType={journey.tripType}
+                    applied={discount}
+                    onApplied={setDiscount}
+                  />
+                </div>
+
+                {discountAmount > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0 0", fontSize: 13.5 }}>
+                    <span style={{ color: "#666" }}>Promo ({discount.code})</span>
+                    <span style={{ fontWeight: 700, color: "#15803D" }}>− {fmtINR(discountAmount)}</span>
+                  </div>
+                )}
 
                 {/* Total */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 0 14px" }}>
-                  <span style={{ fontWeight: 700, fontSize: 15 }}>Estimated Total</span>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{discountAmount > 0 ? "Payable Total" : "Estimated Total"}</span>
                   <span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 800, fontSize: 24, color: "#111" }}>{fmtINR(totalPayable)}</span>
                 </div>
 

@@ -9,11 +9,9 @@ import { CouponOffersSection } from "./CouponOffersSection";
  *   [Journey card]
  *   [ONE card: Payment Options → Coupon & Offers → PROCEED → Fare Break-up]
  *
- * Real vs honestly-non-functional, for anyone reading this later:
- *   REAL    — Journey, Payment Options (ZERO/PARTIAL/FULL), Fare Break-up
- *             (all backed by data/fields your backend genuinely has)
- *   UI-ONLY — Coupon & Offers (no backend coupon system exists at all;
- *             see CouponOffersSection's own header comment)
+ * Everything here is backed by real backend data — Journey, Payment Options
+ * (ZERO/PARTIAL/FULL), Fare Break-up, and Coupon & Offers all read from
+ * fields the backend genuinely returns (see each component's own header).
  *
  * Props:
  *   journey          { pickup, drop, dateLabel, vehicleName, seats }
@@ -30,6 +28,8 @@ import { CouponOffersSection } from "./CouponOffersSection";
  *                    that env var to 60)
  *   onConfirmPay()   wires to your existing confirm/pay handler
  *   confirming       boolean — disables PROCEED + shows a loading label
+ *   discount         the applied discount check-result, or null
+ *   onDiscountApplied(result | null)   lifted state for CouponOffersSection
  */
 export function CheckoutSidebar({
   journey,
@@ -40,6 +40,8 @@ export function CheckoutSidebar({
   cancellationWindowLabel = "30 min",
   onConfirmPay,
   confirming,
+  discount,
+  onDiscountApplied,
 }) {
   return (
     <div className="space-y-4">
@@ -65,7 +67,12 @@ export function CheckoutSidebar({
         />
 
         <div className="mt-4 pt-4 border-t border-border">
-          <CouponOffersSection />
+          <CouponOffersSection
+            fareTotal={quote?.total ?? totalPayable}
+            tripType={journey?.tripType}
+            applied={discount}
+            onApplied={onDiscountApplied}
+          />
         </div>
 
         <Button block className="mt-4" onClick={onConfirmPay} disabled={confirming}>

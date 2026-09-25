@@ -70,11 +70,27 @@ export default function Page() {
   const baseFare     = selected.baseFare || selected.fare;
   const surgeFee     = selected.surgeFee || 0;
   const driverBhata  = selected.driverBhata || vehicle?.outstation?.driverBhata || 0;
-  const subTotal     = baseFare + surgeFee;
+  // The real, backend-quoted total for this trip (already includes surge,
+  // driver allowance, night allowance, minimum-fare top-up where they apply).
+  const quotedTotal  = selected.fare;
   const isCorporate  = details.customerType === "corporate";
-  const cgst         = isCorporate ? Math.round(subTotal * 0.025) : 0;
-  const sgst         = isCorporate ? Math.round(subTotal * 0.025) : 0;
-  const totalPayable = subTotal + cgst + sgst;
+  const hasRealBreakdown = Array.isArray(selected.breakdown) && selected.breakdown.length > 0;
+  const cgst         = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
+  const sgst         = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
+  // Checked live at Checkout against POST /discounts/check (real, unchanged
+  // backend endpoint). IMPORTANT LIMITATION: that endpoint only validates a
+  // code — booking creation has no discountCode field, so nothing server-side
+  // records this redemption or decrements the code's use count. The amount
+  // below is what the rider is actually charged (both here and at Razorpay,
+  // since this page already controls the checkout-widget amount directly),
+  // but there is currently no backend record tying "this code was used" to
+  // "this booking" — enforcing that (single-use limits, usedCount, audit)
+  // needs a small backend change this pass intentionally left untouched.
+  const discountCode        = details.discountCode || null;
+  const discountAmount      = discountCode ? Number(details.discountAmount || 0) : 0;
+  const discountDescription = details.discountDescription || null;
+  const subTotal     = quotedTotal + cgst + sgst;
+  const totalPayable = Math.max(0, subTotal - discountAmount);
 
   const payNowAmount =
     paymentMode === "ZERO"    ? 0 :
@@ -124,6 +140,11 @@ export default function Page() {
       balanceDue:    payLaterAmount,
       surgeFee, cgst, sgst, driverBhata,
       surge:         selected.surge,
+      // Local-only metadata (see the comment above `discountCode`'s
+      // declaration): createBooking() below does NOT forward this to the
+      // backend, since /bookings has no field for it. Kept here only so the
+      // confirmation page can display which code was used if it wants to.
+      discountCode, discountAmount, discountDescription,
       paymentMethod: payMethod,
       paymentMode,
       paymentStatus:
@@ -314,11 +335,11 @@ export default function Page() {
           <h3 style={{ fontWeight: 700, fontSize: 15, margin: "0 0 14px" }}>Booking Summary</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
             <span style={{ width: 56, height: 40, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
-              <img src={vehicle.img} alt={vehicle.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+              <img src={selected.vehicleImg || vehicle.img} alt={selected.vehicleName || vehicle.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
             </span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{vehicle.name}</div>
-              <div style={{ fontSize: 12, color: "#666" }}>{vehicle.seats} Seats · {vehicle.ac ? "A/C" : "Non-A/C"}</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{selected.vehicleName || vehicle.name}</div>
+              <div style={{ fontSize: 12, color: "#666" }}>{selected.vehicleSeats || vehicle.seats} Seats · {(selected.vehicleAc ?? vehicle.ac) ? "A/C" : "Non-A/C"}</div>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
@@ -326,8 +347,14 @@ export default function Page() {
             <SummaryRow label="Date · Time"  value={`${journey.date} · ${journey.time}`} />
             <SummaryRow label="Base Fare"    value={fmtINR(baseFare)} />
             {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
-            {surgeFee > 0    && <SummaryRow label="Surge Fee (5%)"   value={`+ ${fmtINR(surgeFee)}`} />}
+            {surgeFee > 0    && <SummaryRow label={`Surge Fee${selected.surgePct ? ` (${selected.surgePct}%)` : ""}`} value={`+ ${fmtINR(surgeFee)}`} />}
             {isCorporate     && <SummaryRow label="Taxes (5%)"        value={`+ ${fmtINR(cgst + sgst)}`} />}
+            {discountAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "#666" }}>Promo ({discountCode})</span>
+                <span style={{ fontWeight: 600, color: "#15803D" }}>− {fmtINR(discountAmount)}</span>
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 14, marginTop: 14, borderTop: "1px dashed #EFEFEF" }}>
             <span style={{ fontWeight: 700, fontSize: 15 }}>Total</span>
@@ -360,7 +387,9 @@ export default function Page() {
       {showInvoice && (
         <InvoiceModal
           journey={journey} vehicle={vehicle} details={details}
-          baseFare={baseFare} surgeFee={surgeFee} cgst={cgst} sgst={sgst} totalPayable={totalPayable}
+          baseFare={baseFare} surgeFee={surgeFee} cgst={cgst} sgst={sgst}
+          discountCode={discountCode} discountAmount={discountAmount}
+          totalPayable={totalPayable}
           onClose={() => setShowInvoice(false)}
           onConfirm={() => { setShowInvoice(false); confirmAndPay(); }}
         />
@@ -378,7 +407,7 @@ function SummaryRow({ label, value }) {
   );
 }
 
-function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgst, totalPayable, onClose, onConfirm }) {
+function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgst, discountCode, discountAmount, totalPayable, onClose, onConfirm }) {
   const isCorporate  = details.customerType === "corporate";
   const invoiceNumber = "INV-" + Date.now().toString().slice(-9);
   const billedOn     = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -492,6 +521,9 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
                       <div className="flex justify-between w-full"><span className="text-gray-500">CGST (2.5%)</span><span className="font-bold">₹ {cgst.toLocaleString("en-IN")}</span></div>
                       <div className="flex justify-between w-full"><span className="text-gray-500">SGST (2.5%)</span><span className="font-bold">₹ {sgst.toLocaleString("en-IN")}</span></div>
                     </>)}
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between w-full"><span className="text-green-700">Promo ({discountCode})</span><span className="font-bold text-green-700">− ₹ {discountAmount.toLocaleString("en-IN")}</span></div>
+                    )}
                     <div className="border-t border-gray-300 pt-1.5 mt-0.5 w-full flex justify-between">
                       <span className="font-bold">Total</span>
                       <span className="font-bold text-[14px]">₹ {totalPayable.toLocaleString("en-IN")}</span>
