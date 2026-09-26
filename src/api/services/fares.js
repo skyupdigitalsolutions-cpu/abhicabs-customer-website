@@ -12,8 +12,7 @@ import { api } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
 import { VEHICLE_RATES, computeFare } from "../../data/mockData";
 import { getVehicleCatalogueMap } from "./vehicles";
-
-const DEFAULT_CITY_ID = 1;
+import { resolveCityId, ensureCitiesLoaded } from "../cities";
 
 // Backend vehicleClass enum values (from fareConfig rows seeded in DB)
 // Backend fare_configs only has: hatchback, sedan, suv, tempo
@@ -57,7 +56,9 @@ function toIsoDateTime(date, time) {
 function toFareRequest(journey, vehicleCategory) {
   const tripType = toRealTripType(journey.tripType);
   const body = {
-    cityId: DEFAULT_CITY_ID,
+    // Correct city's rate card for this pickup (Bengaluru today; routes
+    // automatically once more cities exist — see src/api/cities.js).
+    cityId: resolveCityId(journey),
     tripType,
     pickup: { address: journey.pickup || "Bengaluru" },
     drop:   { address: journey.drop   || "Mysuru" },
@@ -154,6 +155,9 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
     bags:           mockMatch.bags,
     ac:             mockMatch.ac,
     img:            realVehicle?.heroUrl || mockMatch.img,
+    // A guaranteed-local image for this class, used if the real heroUrl (a
+    // Cloudinary URL that can 404 or be replaced) fails to load in the browser.
+    imgFallback:    mockMatch.img,
     gallery:        (realVehicle?.images?.length ? realVehicle.images.map((i) => i.url) : mockMatch.gallery),
     tagline:        realVehicle?.blurb || mockMatch.tagline,
     rating:         realVehicle?.rating ?? null,
@@ -191,6 +195,9 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
 export async function getFareOptions(journey) {
   if (USE_MOCK) return mockOptions(journey);
   try {
+    // Make sure the serviced-city list is loaded so this pickup prices against
+    // the right city's rate card (auto-picks up cities added on the backend).
+    await ensureCitiesLoaded();
     // POST /fares/options — requires auth (router.use(requireAuth))
     const [data, catalogueMap] = await Promise.all([
       api.post("/fares/options", toFareRequest(journey)),
@@ -219,6 +226,7 @@ export async function getFareOptions(journey) {
 export async function estimateFare(journey, vehicleId) {
   if (USE_MOCK) return mockEstimate(journey, vehicleId);
   try {
+    await ensureCitiesLoaded();
     const vehicle = VEHICLE_RATES.find((v) => v.id === vehicleId);
     const data = await api.post(
       "/fares/estimate",

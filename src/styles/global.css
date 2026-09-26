@@ -281,3 +281,34 @@ button { cursor: pointer; }
     max-width: 320px !important;
   }
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   Cross-device safety net — mobile / tablet / laptop
+   Additive only. Appended AFTER all the tuned responsive rules above so it
+   never overrides them; it just catches the common cross-device issues
+   (overflow, media sizing, iOS input zoom, long-word blowout) consistently.
+   ═══════════════════════════════════════════════════════════════════════════ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Stop stray horizontal scrolling on phones. Wide, intentionally-scrolling
+   strips (fleet cards, tables) keep their OWN inner overflow containers. */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Media never overflows its column. */
+img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
+
+/* Long words / URLs shouldn't break out of narrow columns. */
+p, h1, h2, h3, h4, li, td, th, dd, dt { overflow-wrap: break-word; }
+
+/* iOS zooms the page when a focused field's font-size is < 16px. */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
+/* Tables stay within the viewport; a wrapper with overflow-x scrolls them. */
+table { max-width: 100%; }
+
+/* Comfortable tap targets on touch devices without changing desktop sizing. */
+@media (hover: none) and (pointer: coarse) {
+  button, a[role="button"], .btn { min-height: 40px; }
+}

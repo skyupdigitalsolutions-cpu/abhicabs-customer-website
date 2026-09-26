@@ -33,7 +33,7 @@ export default function Page() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 22 }} className="lg:!grid-cols-[1fr_360px]">
           <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 22, overflow: "hidden" }}>
             <div style={{ position: "relative", height: 260, background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)" }}>
-              <img src={vehicle.img} alt={vehicle.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={selected?.img || selected?.vehicleImg || vehicle.img} alt={vehicle.name} onError={(e) => { const fb = selected?.vehicleImgFallback || vehicle.img || "/images/sedan-studio.jpg"; if (e.currentTarget.src.indexOf(fb) === -1) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
             <div style={{ padding: 26 }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>

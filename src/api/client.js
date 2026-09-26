@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { API_BASE_URL, REQUEST_TIMEOUT } from "./config";
-import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./tokens";
+import { getAccessToken, getRefreshToken, setTokens, setGuestToken, clearTokens } from "./tokens";
 
 // Thrown for any non-successful API response. Carries the backend error object.
 export class ApiError extends Error {
@@ -65,6 +65,47 @@ async function refreshAccessToken() {
   return refreshPromise;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Guest sessions — LOGIN IS NOT MANDATORY.
+// A visitor who hasn't signed in still needs a bearer token, because /fares,
+// /bookings and /payments all require auth. POST /guest/session (public) mints
+// a short-lived USER token with no signup and no OTP, so browsing, quoting,
+// booking and paying all work anonymously. Contact details (name/phone) are
+// collected on the booking form and sent as guestName/guestPhone at booking
+// time — never demanded up front.
+// Guest tokens are short-lived and have no refresh token, so on expiry we just
+// mint a fresh one and retry (see the 401 handler below).
+// ─────────────────────────────────────────────────────────────────────────────
+let guestPromise = null;
+
+async function ensureGuestSession(force = false) {
+  if (!force && getAccessToken()) return getAccessToken();
+  if (guestPromise) return guestPromise;
+
+  guestPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/guest/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json().catch(() => ({}));
+      const token = json?.data?.accessToken;
+      if (!res.ok || !json.success || !token) {
+        throw new ApiError("Could not start a guest session", {
+          code: "GUEST_SESSION_FAILED", status: res.status || 0,
+        });
+      }
+      setGuestToken(token);
+      return token;
+    } finally {
+      guestPromise = null;
+    }
+  })();
+
+  return guestPromise;
+}
+
 // Build a query string from a plain object, skipping null/undefined/"" values.
 // FIX: api.get(path, { params }) used to silently drop `params` entirely —
 // `request()` never read it, so no query string was ever appended. This broke
@@ -87,6 +128,14 @@ async function request(method, path, { body, headers = {}, auth = true, idempote
   const reqHeaders = { Accept: "application/json", ...headers };
   if (body !== undefined) reqHeaders["Content-Type"] = "application/json";
   if (idempotent) reqHeaders["Idempotency-Key"] = explicitIdemKey || idempotencyKey();
+
+  // Login is NOT mandatory: if this call needs auth and there is no token yet,
+  // transparently start a guest session so fares/booking/payment all work for
+  // an anonymous visitor. auth:false calls (register, otp, guest/session,
+  // public catalogue, draft tracking) skip this entirely.
+  if (auth && !getAccessToken()) {
+    try { await ensureGuestSession(); } catch { /* fall through; request may still 401 and recover below */ }
+  }
 
   const token = auth ? getAccessToken() : null;
   if (token) reqHeaders["Authorization"] = `Bearer ${token}`;
@@ -111,15 +160,27 @@ async function request(method, path, { body, headers = {}, auth = true, idempote
   }
   clearTimeout(timer);
 
-  // 401 → try one token refresh, then retry the original request once
-  if (res.status === 401 && auth && !_retried && getRefreshToken()) {
+  // 401 → recover ONCE, then retry the original request.
+  //   • Logged-in user (has a refresh token): rotate the access token.
+  //   • Guest / no session (or refresh fails): mint a fresh guest token.
+  // Either way the visitor is never bounced to a login wall mid-flow.
+  if (res.status === 401 && auth && !_retried) {
     try {
-      await refreshAccessToken();
-      return request(method, path, { body, headers, auth, idempotent, idempotencyKey: explicitIdemKey, params, _retried: true });
+      if (getRefreshToken()) {
+        await refreshAccessToken();
+      } else {
+        await ensureGuestSession(true);
+      }
     } catch {
+      // A real refresh failed — don't dead-end; continue as a guest.
       clearTokens();
-      throw new ApiError("Session expired — please log in again", { code: "UNAUTHENTICATED", status: 401 });
+      try {
+        await ensureGuestSession(true);
+      } catch {
+        throw new ApiError("Could not start a session", { code: "SESSION_FAILED", status: 401 });
+      }
     }
+    return request(method, path, { body, headers, auth, idempotent, idempotencyKey: explicitIdemKey, params, _retried: true });
   }
 
   const json = await res.json().catch(() => ({}));

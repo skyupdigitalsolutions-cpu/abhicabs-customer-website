@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -30,6 +30,21 @@ export default function Page() {
   const [payFailOpen,  setPayFailOpen]  = useState(false);
   const [showInvoice,  setShowInvoice]  = useState(false);
   const [step,         setStep]         = useState(1);
+
+  // Funnel: reaching the payment screen is the deepest pre-booking stage. The
+  // backend merges this into the same attempt row started at FARES_VIEWED, so
+  // an abandon here is visible in the ERP as a PAYMENT_CHOSEN drop-off.
+  useEffect(() => {
+    if (!selected || !journey) return;
+    bookingsApi.trackDraft({
+      stage: "PAYMENT_CHOSEN",
+      vehicleClass: selected.vehicleClass || undefined,
+      pickupAddress: journey.pickup,
+      dropAddress: journey.drop,
+      estimatedFare: selected.fare,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.journeyId]);
 
   // ── Single-flight guard ───────────────────────────────────────────────────
   // One ref that is set to true the moment confirmAndPay starts, and never
@@ -124,6 +139,7 @@ export default function Page() {
       vehicleCategory: vehicle.category,
       vehicle:       vehicle.name,
       vehicleImg:    vehicle.img,
+      vehicleImgFallback: vehicle.imgFallback || vehicle.img,
       vehicleSeats:  vehicle.seats,
       passengerName: details.fullName,
       mobile:        details.mobile,
@@ -166,7 +182,10 @@ export default function Page() {
         if (!USE_MOCK) {
           await paymentsApi.openRazorpayCheckout({
             order,
-            amount:      payNowAmount,
+            // Charge the backend-priced amount tied to this order, not the
+            // client estimate — Razorpay rejects a charge that doesn't match
+            // the order it was created for.
+            amount:      order.amount ?? payNowAmount,
             name:        details.fullName,
             email:       details.email,
             contact:     details.mobile,
@@ -174,9 +193,9 @@ export default function Page() {
           });
         }
 
-        const result = await paymentsApi.waitForPayment(
-          order.orderId || order.paymentId || order.id
-        );
+        // Poll the INTERNAL payment id (GET /payments/:id), which the Razorpay
+        // webhook advances to CAPTURED server-side — not the gateway order id.
+        const result = await paymentsApi.waitForPayment(order.paymentId);
         if (!result.success) {
           // Payment failed — allow retry (only payment, NOT booking creation)
           setProcessing(false);
@@ -274,7 +293,7 @@ export default function Page() {
                 Back to Payment Options
               </button>
               <h2 className="text-[17px] font-bold mb-1">Choose Payment Method</h2>
-              <p style={{ fontSize: 13, color: "#666", margin: "0 0 18px" }}>This is a demo flow — no real payment is processed.</p>
+              <p style={{ fontSize: 13, color: "#666", margin: "0 0 18px" }}>{USE_MOCK ? "This is a demo flow — no real payment is processed." : "Payments are processed securely via Razorpay."}</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
@@ -335,7 +354,7 @@ export default function Page() {
           <h3 style={{ fontWeight: 700, fontSize: 15, margin: "0 0 14px" }}>Booking Summary</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
             <span style={{ width: 56, height: 40, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
-              <img src={selected.vehicleImg || vehicle.img} alt={selected.vehicleName || vehicle.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+              <img src={selected.vehicleImg || selected.vehicleImgFallback || vehicle.img} alt={selected.vehicleName || vehicle.name} onError={(e) => { const fb = selected.vehicleImgFallback || vehicle.img || "/images/sedan-studio.jpg"; if (e.currentTarget.src.indexOf(fb) === -1) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
             </span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{selected.vehicleName || vehicle.name}</div>

@@ -11,6 +11,7 @@
 import { api, ApiError } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
 import { rid } from "../../data/mockData";
+import { resolveCityId, ensureCitiesLoaded } from "../cities";
 
 // ── Idempotency key ───────────────────────────────────────────────────────────
 // Generate a FRESH key on every createBooking call.
@@ -34,8 +35,6 @@ function isGenuineNetworkFailure(err) {
 }
 
 // ── Trip type / vehicle class maps ────────────────────────────────────────────
-const DEFAULT_CITY_ID = 1;
-
 const TRIP_TYPE_MAP = {
   "one-way":    "ONE_WAY",
   "oneway":     "ONE_WAY",
@@ -70,7 +69,7 @@ function toBookingRequest(p) {
   const paymentMode  = p.paymentMode || "FULL";
 
   const body = {
-    cityId:      p.cityId || DEFAULT_CITY_ID,
+    cityId:      resolveCityId(p),
     vehicleClass,
     tripType,
     pickup:      { address: p.pickup },
@@ -107,6 +106,16 @@ function toBookingRequest(p) {
     body.specialRequests = p.notes;
   }
 
+  // Passenger contact. REQUIRED for a guest booking — the backend rejects a
+  // guest booking with GUEST_CONTACT_REQUIRED if there's no name + phone, since
+  // the driver needs someone to call and the invoice needs a name. Harmlessly
+  // ignored for a signed-in (non-guest) customer, whose details come from their
+  // account. Always sent so login is never required to complete a booking.
+  const contactName = p.passengerName || p.fullName;
+  if (contactName) body.guestName = String(contactName).trim();
+  if (p.mobile)    body.guestPhone = String(p.mobile).trim();
+  if (p.email)     body.guestEmail = String(p.email).trim();
+
   return body;
 }
 
@@ -127,6 +136,7 @@ function mockCreateBooking(payload) {
 export async function createBooking(payload) {
   if (USE_MOCK) return mockCreateBooking(payload);
   try {
+    await ensureCitiesLoaded();
     const data = await api.post("/bookings", toBookingRequest(payload), {
       idempotent:     true,
       idempotencyKey: generateIdempotencyKey(),
@@ -202,11 +212,15 @@ export async function listMyBookings(params = {}) {
   return data;
 }
 
-// Draft tracking — fire and forget, never blocks the user
-// POST /bookings/draft — no auth required (public endpoint in router)
+// Draft tracking — fire and forget, never blocks the user.
+// POST /bookings/draft is behind requireAuth and keys the funnel row on the
+// caller's id (req.user.id), so it MUST be sent authenticated. With guest
+// sessions in place, an anonymous visitor still has a token, so drop-offs are
+// captured too. The backend dedups: repeated calls update ONE pending attempt
+// row (advancing its stage), so calling this at several stages is safe.
 export async function trackDraft(draftData) {
   try {
-    await api.post("/bookings/draft", draftData, { auth: false });
+    await api.post("/bookings/draft", draftData); // authed (guest or logged-in)
   } catch {
     // Intentionally swallowed — funnel tracking must never break the booking flow
   }

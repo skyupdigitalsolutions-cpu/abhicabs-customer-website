@@ -5,7 +5,7 @@ import { navigate } from "vike/client/router";
 import { selectJourney, createJourney } from "../../src/store/slices/journeySlice";
 import { setSelectedCab } from "../../src/store/slices/selectionSlice";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
-import { faresApi } from "../../src/api";
+import { faresApi, bookingsApi } from "../../src/api";
 import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
 import { useToast } from "../../src/hooks/useToast";
@@ -43,17 +43,21 @@ export default function Page() {
   const urlVehicle = pageContext.urlParsed?.search?.vehicle || null; // e.g. "swift-desire" from fleet card
   const dispatch = useDispatch();
   const toast = useToast();
-  const journey = useSelector(selectJourney(journeyId));
-  // FIX: this used to check `!journey` — but selectJourney(id) falls back
-  // to the user's last real search (from localStorage) whenever no id is
-  // given, specifically so pages like Confirmation/Checkout can be
-  // resilient to a missing param. That same fallback was fooling this page:
-  // arriving via a homepage tile (no ?j= at all) would silently pick up a
-  // real, unrelated past search and render it as if it were the current
-  // one. Checking the URL param itself, not the resolved journey, is the
-  // only way to tell "no search was actually done" from "a search was
-  // done and its id happens to match the fallback".
-  const browseMode = !journeyId;
+
+  // A journey created inline (browse mode) is tracked in local state as well as
+  // the URL. Client-side navigation to the SAME page with a new ?j= query does
+  // not reliably refresh pageContext here (and can remount, losing it), which
+  // left the page stuck in browse mode — so selecting a vehicle bounced the
+  // user to /#booking. Keying browse mode off BOTH the URL and this local id
+  // makes the transition happen in place, no matter how routing behaves.
+  const [createdJourneyId, setCreatedJourneyId] = useState(null);
+  const effectiveJourneyId = journeyId || createdJourneyId;
+
+  const journey = useSelector(selectJourney(effectiveJourneyId));
+  // Browse mode = no real trip yet. Check the effective id (URL param OR the
+  // one just created inline), NOT the resolved journey — selectJourney() falls
+  // back to the last search, which would otherwise mask "no search done".
+  const browseMode = !effectiveJourneyId;
 
   // Reset body scroll lock in case a modal from the previous page left it set
   useEffect(() => {
@@ -145,7 +149,19 @@ export default function Page() {
     setLoading(true);
     setServiceAreaError(null);
     faresApi.getFareOptions(journey)
-      .then((options) => { if (!cancelled) setApiVehicles(options); })
+      .then((options) => {
+        if (cancelled) return;
+        setApiVehicles(options);
+        // Funnel: record that this visitor got as far as viewing fares, so an
+        // abandoned booking shows up in the ERP. Fire-and-forget; the backend
+        // dedups this into one attempt row and advances its stage.
+        bookingsApi.trackDraft({
+          stage: "FARES_VIEWED",
+          pickupAddress: journey.pickup,
+          dropAddress: journey.drop,
+          estimatedFare: options?.[0]?.fare,
+        });
+      })
       .catch((err) => {
         if (cancelled) return;
         setApiVehicles(null);
@@ -245,24 +261,32 @@ export default function Page() {
     };
     const action = dispatch(createJourney(journeyObj));
     const newId = action.payload.id;
-    const params = new URLSearchParams();
-    params.set("j", newId);
-    if (urlVehicle) params.set("vehicle", urlVehicle);
-    navigate(`/booking-search?${params.toString()}`);
+    // Switch this page into non-browse mode IN PLACE. We update the URL with
+    // history.replaceState (so it's shareable / survives refresh) rather than
+    // Vike navigate(), which could remount the page and drop the state — the
+    // exact cause of "after adding details it goes back to home".
+    setCreatedJourneyId(newId);
+    try {
+      const qs = new URLSearchParams();
+      qs.set("j", newId);
+      if (urlVehicle) qs.set("vehicle", urlVehicle);
+      window.history.replaceState({}, "", `/booking-search?${qs.toString()}`);
+    } catch { /* non-browser / SSR guard */ }
   }
 
   function selectVehicle(v) {
     if (browseMode) {
-      // No real trip yet — a fare/booking can't be attached to nothing.
-      // For Group/Coach, the fix is right there in the sidebar (Trip Type +
-      // its fields); for a generic browse visit, send them to the real
-      // booking widget instead.
-      if (browseType === "group") {
-        toast("Please choose a trip type and fill in the details in the filter to get a real fare.", "error");
-      } else {
-        toast("Please enter your pickup, drop and date to get a real fare for this vehicle.");
-        navigate("/#booking");
-      }
+      // No real trip yet — a fare/booking can't be attached to nothing. Keep
+      // the user HERE and reveal the trip-details panel, rather than bouncing
+      // them back to the home page (which felt like the flow "resetting").
+      toast(
+        browseType === "group"
+          ? "Choose a trip type and fill in the details on the left to get a real fare."
+          : "Set your pickup, drop and date in the trip details panel to get a real fare.",
+        "error"
+      );
+      setShowFilters(true);
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* SSR guard */ }
       return;
     }
     dispatch(setSelectedCab({
@@ -279,6 +303,7 @@ export default function Page() {
       vehicleSeats: v.seats,
       vehicleAc: v.ac,
       vehicleImg: v.img,
+      vehicleImgFallback: v.imgFallback || v.img,
       // Real backend fields — carried through so checkout can render the
       // actual fare breakdown (driver allowance, night allowance, surge,
       // minimum-fare top-up, rounding) without re-quoting.
@@ -634,7 +659,7 @@ export default function Page() {
                         </div>
                       )}
                       <div className="vehicle-card-image" style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", minHeight: 200, position: "relative" }}>
-                        <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
+                        <img src={v.img || v.imgFallback} alt={v.name} onError={(e) => { const fb = v.imgFallback || "/images/sedan-studio.jpg"; if (e.currentTarget.src.indexOf(fb) === -1) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
                       </div>
                       <div style={{ flex: "2 1 320px", padding: "20px 22px", display: "flex", flexDirection: "column" }}>
                         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -673,7 +698,7 @@ export default function Page() {
                         )}
                         <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap" }}>
                           <button
-                            onClick={() => { dispatch(setSelectedCab({ vehicleId: v.id, fare: v.fare, journeyId: journey.id })); navigate("/cab-details"); }}
+                            onClick={() => { dispatch(setSelectedCab({ vehicleId: v.id, fare: v.fare, journeyId: journey.id, img: v.img, vehicleImg: v.img, vehicleImgFallback: v.imgFallback || v.img })); navigate("/cab-details"); }}
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "2px solid #111", background: "#fff", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
                             View Details

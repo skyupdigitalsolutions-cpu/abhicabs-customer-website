@@ -6,7 +6,8 @@ import { USE_MOCK, MOCK_FALLBACK, RAZORPAY_KEY_ID } from "../config";
 
 // ── Mock ──────────────────────────────────────────────────────────────────────
 function mockOrder(bookingId, purpose) {
-  return { orderId: "order_mock_" + Date.now(), bookingId, purpose, status: "CREATED" };
+  const id = "order_mock_" + Date.now();
+  return { orderId: id, paymentId: id, amount: 0, currency: "INR", bookingId, purpose, status: "CREATED", reused: false };
 }
 async function mockPoll() {
   await new Promise((r) => setTimeout(r, 1200));
@@ -62,10 +63,26 @@ export function openRazorpayCheckout({ order, amount, name, email, contact, desc
 
 // POST /payments/orders — body must match createOrderSchema: { bookingId, purpose }
 // bookingId must be a UUID (the booking.id, not bookingNumber)
+//
+// The backend responds with { payment, reused }, where `payment` carries:
+//   id              → internal payment id  (use for GET /payments/:id polling)
+//   providerOrderId → Razorpay order id    (use for the Checkout `order_id`)
+//   amount          → rupees, priced by the backend (source of truth for the charge)
+// We normalise it to a flat shape the payment page can consume directly.
 export async function createPaymentOrder(bookingId, purpose = "FULL") {
   if (USE_MOCK) return mockOrder(bookingId, purpose);
   try {
-    return await api.post("/payments/orders", { bookingId, purpose }, { idempotent: true });
+    const data = await api.post("/payments/orders", { bookingId, purpose }, { idempotent: true });
+    const payment = data?.payment || data || {};
+    return {
+      orderId:   payment.providerOrderId,      // → Razorpay Checkout order_id
+      paymentId: payment.id,                   // → GET /payments/:id
+      amount:    payment.amount,               // backend-priced amount (rupees)
+      currency:  payment.currency || "INR",
+      status:    payment.status,
+      reused:    data?.reused ?? false,
+      raw:       data,
+    };
   } catch (err) {
     if (MOCK_FALLBACK) return mockOrder(bookingId, purpose);
     throw err;
