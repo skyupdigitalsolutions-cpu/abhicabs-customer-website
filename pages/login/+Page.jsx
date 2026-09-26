@@ -3,12 +3,23 @@ import { useToast } from "../../src/hooks/useToast";
 import Button from "../../src/components/ui/Button";
 import { FIELD_LABEL, FIELD_INPUT } from "../../src/components/ui/classNames";
 import { authApi } from "../../src/api";
-import { isNotRegistered } from "../../src/api/services/auth";
+import { isNotRegistered, normalisePhone } from "../../src/api/services/auth";
 import { requestNotificationPermission } from "../../src/lib/firebase";
 import { isAuthenticated } from "../../src/api/tokens";
 import { navigate } from "vike/client/router";
 
-const OTP_LENGTH = 6;
+// The backend OTP length is configurable (OTP_LENGTH, 4–8 digits). We accept
+// any code in that range rather than hard-coding a box count, so the login
+// never breaks if the server is set to 4 or 6 digits.
+const OTP_MIN = 4;
+const OTP_MAX = 8;
+
+// Mask a 10-digit mobile number for display: "98•••••210".
+function maskPhone(phone) {
+  const p = normalisePhone(phone);
+  if (p.length !== 10) return p;
+  return `${p.slice(0, 2)}•••••${p.slice(-3)}`;
+}
 
 export default function Page() {
   const toast = useToast();
@@ -23,6 +34,7 @@ export default function Page() {
       navigate(returnTo);
     }
   }, []);
+
   const [authMode, setAuthMode] = useState("login"); // "login" | "register"
   const [step, setStep] = useState("form");          // "form" | "otp"
 
@@ -34,59 +46,63 @@ export default function Page() {
   const [submitting, setSubmitting] = useState(false);
 
   // otp fields
-  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
+  const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  const otpRefs = useRef([]);
+  const codeRef = useRef(null);
 
   function resetForm() {
     setStep("form");
-    setOtp(Array(OTP_LENGTH).fill(""));
+    setCode("");
     setOtpError("");
     setFormError("");
   }
+
+  const goHome = () => {
+    const returnTo = typeof sessionStorage !== "undefined"
+      ? sessionStorage.getItem("abhicabs_login_return") || "/my-booking"
+      : "/my-booking";
+    sessionStorage?.removeItem("abhicabs_login_return");
+    window.location.href = returnTo;
+  };
 
   // ── Register ─────────────────────────────────────────────────────────────
   // POST /auth/register { name, email, phone } — logs in immediately
   async function submitRegister() {
     if (!name.trim())                        { setFormError("Enter your name."); return; }
-    if (!/\S+@\S+\.\S+/.test(email.trim())) { setFormError("Enter a valid email."); return; }
-    if (!/^\d{10}$/.test(phone.trim()))      { setFormError("Enter a valid 10-digit mobile number."); return; }
+    if (!/\S+@\S+\.\S+/.test(email.trim()))  { setFormError("Enter a valid email."); return; }
+    if (!/^[6-9]\d{9}$/.test(normalisePhone(phone))) { setFormError("Enter a valid 10-digit mobile number."); return; }
     setFormError("");
     setSubmitting(true);
     try {
-      await authApi.register({ name: name.trim(), email: email.trim(), phone: phone.trim() });
+      await authApi.register({ name: name.trim(), email: email.trim(), phone: normalisePhone(phone) });
       requestNotificationPermission();
       toast("Welcome to ABHI CABS!", "success");
-      setTimeout(() => {
-        const returnTo = typeof sessionStorage !== "undefined"
-          ? sessionStorage.getItem("abhicabs_login_return") || "/my-booking"
-          : "/my-booking";
-        sessionStorage.removeItem("abhicabs_login_return");
-        window.location.href = returnTo;
-      }, 700);
+      setTimeout(goHome, 700);
     } catch (err) {
       setFormError(err.message || "Couldn't create your account. Please try again.");
       setSubmitting(false);
     }
   }
 
-  // ── Login: request OTP ───────────────────────────────────────────────────
-  // POST /auth/otp/request { email }
+  // ── Login: request OTP by MOBILE NUMBER ──────────────────────────────────
+  // POST /auth/otp/request { phone }
   async function submitLogin() {
-    if (!/\S+@\S+\.\S+/.test(email.trim())) { setFormError("Enter a valid email."); return; }
+    if (!/^[6-9]\d{9}$/.test(normalisePhone(phone))) {
+      setFormError("Enter a valid 10-digit mobile number."); return;
+    }
     setFormError("");
     setSubmitting(true);
     try {
-      await authApi.requestOtp(email.trim());
-      setOtp(Array(OTP_LENGTH).fill(""));
+      await authApi.requestOtp(phone);
+      setCode("");
       setOtpError("");
       setStep("otp");
-      setTimeout(() => otpRefs.current[0]?.focus(), 50);
+      setTimeout(() => codeRef.current?.focus(), 50);
     } catch (err) {
       if (isNotRegistered(err)) {
-        setFormError("No account found for this email.");
+        setFormError("No account found for this mobile number.");
       } else {
         setFormError(err.message || "Couldn't send the code. Try again shortly.");
       }
@@ -99,9 +115,9 @@ export default function Page() {
     setResending(true);
     setOtpError("");
     try {
-      await authApi.requestOtp(email.trim());
-      setOtp(Array(OTP_LENGTH).fill(""));
-      otpRefs.current[0]?.focus();
+      await authApi.requestOtp(phone);
+      setCode("");
+      codeRef.current?.focus();
       toast("Code resent");
     } catch (err) {
       setOtpError(err.message || "Couldn't resend. Try again.");
@@ -110,40 +126,24 @@ export default function Page() {
     }
   }
 
-  function handleOtpChange(i, val) {
-    const digit = val.replace(/\D/g, "").slice(-1);
-    const next = [...otp];
-    next[i] = digit;
-    setOtp(next);
+  function handleCodeChange(val) {
+    setCode(val.replace(/\D/g, "").slice(0, OTP_MAX));
     setOtpError("");
-    if (digit && otpRefs.current[i + 1]) otpRefs.current[i + 1].focus();
-  }
-
-  function handleOtpKeyDown(i, e) {
-    if (e.key === "Backspace" && !otp[i] && otpRefs.current[i - 1])
-      otpRefs.current[i - 1].focus();
   }
 
   async function submitVerify() {
-    const code = otp.join("");
-    if (code.length < OTP_LENGTH) { setOtpError(`Enter all ${OTP_LENGTH} digits.`); return; }
+    if (code.length < OTP_MIN) { setOtpError(`Enter the ${OTP_MIN}–${OTP_MAX} digit code we sent you.`); return; }
     setVerifying(true);
     setOtpError("");
     try {
-      await authApi.verifyOtp(email.trim(), code);
+      await authApi.verifyOtp(phone, code);
       requestNotificationPermission();
       toast("Welcome back!", "success");
-      setTimeout(() => {
-        const returnTo = typeof sessionStorage !== "undefined"
-          ? sessionStorage.getItem("abhicabs_login_return") || "/my-booking"
-          : "/my-booking";
-        sessionStorage.removeItem("abhicabs_login_return");
-        window.location.href = returnTo;
-      }, 700);
+      setTimeout(goHome, 700);
     } catch (err) {
       setOtpError(err.message || "That code didn't work. Check it and try again.");
-      setOtp(Array(OTP_LENGTH).fill(""));
-      otpRefs.current[0]?.focus();
+      setCode("");
+      codeRef.current?.focus();
     } finally {
       setVerifying(false);
     }
@@ -162,7 +162,7 @@ export default function Page() {
               <p className="text-center mt-2 text-text-secondary text-[14px]">
                 {authMode === "register"
                   ? "Register to start booking your rides."
-                  : "We'll send a one-time code to your email."}
+                  : "We'll send a one-time code to your mobile number."}
               </p>
 
               {authMode === "register" && (
@@ -178,35 +178,37 @@ export default function Page() {
                 </div>
               )}
 
-              <div className={authMode === "register" ? "mt-4" : "mt-6"}>
-                <label className={FIELD_LABEL}>Email</label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setFormError(""); }}
-                  onKeyDown={(e) => e.key === "Enter" && (authMode === "register" ? null : submitLogin())}
-                  className={`${FIELD_INPUT} mt-1.5`}
-                />
-              </div>
-
               {authMode === "register" && (
                 <div className="mt-4">
-                  <label className={FIELD_LABEL}>Mobile Number <span className="text-error">*</span></label>
-                  <div className="mt-1.5 flex items-center gap-2.5 border border-border rounded-[10px] px-3.5 py-3 bg-[#fbfbfe] focus-within:border-primary focus-within:bg-white">
-                    <span className="text-text-secondary font-semibold">+91</span>
-                    <input
-                      type="tel"
-                      maxLength={10}
-                      placeholder="10-digit mobile number"
-                      value={phone}
-                      onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setFormError(""); }}
-                      onKeyDown={(e) => e.key === "Enter" && submitRegister()}
-                      className="border-none bg-transparent outline-none text-base md:text-[14.5px] w-full"
-                    />
-                  </div>
+                  <label className={FIELD_LABEL}>Email</label>
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setFormError(""); }}
+                    className={`${FIELD_INPUT} mt-1.5`}
+                  />
                 </div>
               )}
+
+              <div className={authMode === "register" ? "mt-4" : "mt-6"}>
+                <label className={FIELD_LABEL}>
+                  Mobile Number {authMode === "register" && <span className="text-error">*</span>}
+                </label>
+                <div className="mt-1.5 flex items-center gap-2.5 border border-border rounded-[10px] px-3.5 py-3 bg-[#fbfbfe] focus-within:border-primary focus-within:bg-white">
+                  <span className="text-text-secondary font-semibold">+91</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="10-digit mobile number"
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setFormError(""); }}
+                    onKeyDown={(e) => e.key === "Enter" && (authMode === "register" ? submitRegister() : submitLogin())}
+                    className="border-none bg-transparent outline-none text-base md:text-[14.5px] w-full"
+                  />
+                </div>
+              </div>
 
               {formError && (
                 <div className="mt-2">
@@ -236,7 +238,7 @@ export default function Page() {
                 {authMode === "register" ? (
                   <>Already have an account?{" "}
                     <button
-                      onClick={() => { setAuthMode("login"); setName(""); setPhone(""); setFormError(""); }}
+                      onClick={() => { setAuthMode("login"); setName(""); setEmail(""); setFormError(""); }}
                       className="text-primary font-bold"
                     >Sign In</button>
                   </>
@@ -262,24 +264,23 @@ export default function Page() {
             <>
               <h2 className="text-[22px] font-bold text-center">Enter Code</h2>
               <p className="text-center mt-2 text-text-secondary text-[14px]">
-                We sent a {OTP_LENGTH}-digit code to{" "}
-                <span className="font-semibold text-text">{email}</span>
+                We sent a code by SMS to{" "}
+                <span className="font-semibold text-text">+91 {maskPhone(phone)}</span>
               </p>
 
-              <div className="flex gap-2 justify-between mt-6">
-                {otp.map((d, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (otpRefs.current[i] = el)}
-                    maxLength={1}
-                    inputMode="numeric"
-                    value={d}
-                    disabled={verifying}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                    className="w-10 h-13 text-center text-xl font-bold border border-border rounded-[10px] outline-none focus:border-primary transition-colors disabled:opacity-50"
-                  />
-                ))}
+              <div className="mt-6">
+                <input
+                  ref={codeRef}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  disabled={verifying}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitVerify()}
+                  placeholder="Enter code"
+                  className="w-full text-center text-2xl font-bold tracking-[0.5em] border border-border rounded-[12px] py-3.5 outline-none focus:border-primary transition-colors disabled:opacity-50"
+                />
               </div>
 
               {otpError && (
@@ -300,7 +301,7 @@ export default function Page() {
                 </button>
                 {" · "}
                 <button onClick={resetForm} className="text-primary font-bold">
-                  Change Email
+                  Change Number
                 </button>
               </div>
             </>

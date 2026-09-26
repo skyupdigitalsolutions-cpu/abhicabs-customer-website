@@ -17,11 +17,19 @@ export default function Page() {
   const journey = useSelector(selectJourney(selected?.journeyId));
   const vehicle = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
 
+  // Browse = a vehicle was opened from the "View Details" button WITHOUT a real
+  // trip (no trip type / pickup / drop chosen yet). selectJourney() falls back
+  // to the last search, so we must NOT trust `journey` here — we key off the
+  // selection instead. In browse we show the vehicle + indicative rates but no
+  // fabricated route or total.
+  const isBrowse = !selected || selected.browse || !selected.journeyId || selected.fare == null;
+  const tripJourney = isBrowse ? null : journey;
+
   return (
     <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 70px" }}>
       <Breadcrumb items={[["Home", "/"], ["Available Cabs", "/booking-search"], ["Cab Details", null]]} />
 
-      {!selected || !vehicle || !journey ? (
+      {!selected || !vehicle ? (
         <StateBlock
           tone="empty"
           icon={<IconPin className="w-6.5 h-6.5" />}
@@ -57,7 +65,9 @@ export default function Page() {
                 </span>
               </div>
 
-              <JourneyMini journey={journey} />
+              {tripJourney
+                ? <JourneyMini journey={tripJourney} />
+                : <BrowsePrompt />}
 
               <div style={{ background: "#F7F7F7", borderRadius: 14, padding: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: "14px 18px", margin: "22px 0 4px" }}>
                 <PricePair label="Local Package" value={fmtINR(vehicle.local?.base8hr80km ?? 0)} />
@@ -82,12 +92,15 @@ export default function Page() {
             </div>
           </div>
 
-          <FareCard fare={selected.fare} />
+          {isBrowse ? <BrowseFareCard /> : <FareCard fare={selected.fare} />}
         </div>
       )}
 
-      {selected && vehicle && journey && (
+      {selected && vehicle && !isBrowse && (
         <MobileStickyBar label={fmtINR(selected.fare)} sub="Total fare" ctaLabel="Continue Booking" href="/checkout" />
+      )}
+      {selected && vehicle && isBrowse && (
+        <MobileStickyBar label="Enter trip details" sub="to see your fare" ctaLabel="Get Fare" href="/#booking" />
       )}
     </main>
   );
@@ -98,6 +111,35 @@ function PricePair({ label, value, accent }) {
     <div>
       <div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>{label}</div>
       <div style={{ fontWeight: 700, fontSize: 15, color: accent ? "#B8860B" : "#111" }}>{value}</div>
+    </div>
+  );
+}
+
+function BrowsePrompt() {
+  return (
+    <div style={{ background: "#FFFBEA", border: "1px solid #FFE9A8", borderRadius: 14, padding: 16, display: "flex", alignItems: "center", gap: 12 }}>
+      <IconPin className="w-4 h-4 text-primary" />
+      <div style={{ fontSize: 13.5, color: "#7a6a2f", lineHeight: 1.5 }}>
+        You're viewing this vehicle without a trip yet. Enter your trip type, pickup, drop and date to see the exact fare for your route.
+      </div>
+    </div>
+  );
+}
+
+function BrowseFareCard() {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22, position: "sticky", top: 120 }}>
+      <h3 style={{ fontSize: 16.5, fontWeight: 700, margin: "0 0 8px" }}>See your fare</h3>
+      <p style={{ fontSize: 13.5, color: "#666", lineHeight: 1.6, margin: "0 0 16px" }}>
+        Enter your trip details — trip type, pickup, drop and date — and we'll show the exact fare for this vehicle on your route.
+      </p>
+      <a
+        href="/#booking"
+        className="hover:!bg-[#FFB300]"
+        style={{ display: "flex", width: "100%", padding: 15, borderRadius: 12, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, textAlign: "center", justifyContent: "center", alignItems: "center" }}
+      >
+        Enter Trip Details
+      </a>
     </div>
   );
 }

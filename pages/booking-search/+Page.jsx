@@ -318,6 +318,40 @@ export default function Page() {
     navigate("/checkout");
   }
 
+  // "View Details" — the vehicle's specs and indicative rates are useful to
+  // browse even before a trip is chosen. In browse mode (no trip type / no
+  // pickup-drop selected yet) we DON'T attach a journey or a fare, so the
+  // details page can't show a fabricated route (the old Bengaluru→Mysuru
+  // default) or a made-up total. It shows the vehicle + rate card and a prompt
+  // to enter trip details. With a real journey, it carries the real fare through.
+  function viewDetails(v) {
+    if (browseMode) {
+      dispatch(setSelectedCab({
+        vehicleId: v.id,
+        browse: true,
+        journeyId: null,
+        fare: null,
+        vehicleName: v.name,
+        vehicleSeats: v.seats,
+        vehicleAc: v.ac,
+        img: v.img,
+        vehicleImg: v.img,
+        vehicleImgFallback: v.imgFallback || v.img,
+      }));
+      navigate("/cab-details");
+      return;
+    }
+    dispatch(setSelectedCab({
+      vehicleId: v.id,
+      fare: v.fare,
+      journeyId: journey.id,
+      img: v.img,
+      vehicleImg: v.img,
+      vehicleImgFallback: v.imgFallback || v.img,
+    }));
+    navigate("/cab-details");
+  }
+
   const filterPillStyle = (active) => ({
     height: 38,
     display: "inline-flex",
@@ -541,7 +575,9 @@ export default function Page() {
                         <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                           <input value={s} onChange={(e) => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = e.target.value; return { ...f, stops: st }; })} placeholder={`Stop ${i + 1}`}
                             style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
-                          <button type="button" onClick={() => setInlineTrip((f) => ({ ...f, stops: (f.stops||[]).filter((_, x) => x !== i) }))}
+                          <button type="button" onClick={() => setInlineMapField(`stop:${i}`)} title="Pick on map"
+                            style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
+                          <button type="button" onClick={() => setInlineTrip((f) => ({ ...f, stops: (f.stops||[]).filter((_, x) => x !== i) }))} title="Remove stop"
                             style={{ flexShrink: 0, width: 38, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#fff", cursor: "pointer" }}>−</button>
                         </div>
                       ))}
@@ -561,8 +597,7 @@ export default function Page() {
 
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
-                    <input type="time" value={inlineTrip.time} onChange={setInline("time")}
-                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    <InlineTimeField value={inlineTrip.time} onChange={setInline("time")} />
                   </div>
 
                   {inlineTrip.tripType === "round-trip" && (
@@ -704,7 +739,7 @@ export default function Page() {
                         )}
                         <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap" }}>
                           <button
-                            onClick={() => { dispatch(setSelectedCab({ vehicleId: v.id, fare: v.fare, journeyId: journey.id, img: v.img, vehicleImg: v.img, vehicleImgFallback: v.imgFallback || v.img })); navigate("/cab-details"); }}
+                            onClick={() => viewDetails(v)}
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "2px solid #111", background: "#fff", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
                             View Details
@@ -736,15 +771,94 @@ export default function Page() {
       {/* Map picker for the inline trip form */}
       <LocationMapPicker
         open={!!inlineMapField}
-        title={inlineMapField === "drop" ? "Select Drop Location" : "Select Pickup Location"}
-        initialAddress={inlineMapField ? inlineTrip[inlineMapField] : ""}
+        title={
+          inlineMapField === "drop" ? "Select Drop Location"
+          : (typeof inlineMapField === "string" && inlineMapField.startsWith("stop:"))
+            ? `Select Stop ${Number(inlineMapField.split(":")[1]) + 1} Location`
+          : "Select Pickup Location"
+        }
+        initialAddress={
+          !inlineMapField ? ""
+          : inlineMapField.startsWith("stop:")
+            ? ((inlineTrip.stops || [])[Number(inlineMapField.split(":")[1])] || "")
+          : (inlineTrip[inlineMapField] || "")
+        }
         onClose={() => setInlineMapField(null)}
         onConfirm={(address) => {
-          setInlineTrip((f) => ({ ...f, [inlineMapField]: address }));
+          setInlineTrip((f) => {
+            if (typeof inlineMapField === "string" && inlineMapField.startsWith("stop:")) {
+              const idx = Number(inlineMapField.split(":")[1]);
+              const st = [...(f.stops || [])];
+              st[idx] = address;
+              return { ...f, stops: st };
+            }
+            return { ...f, [inlineMapField]: address };
+          });
           setInlineMapField(null);
         }}
       />
     </main>
+  );
+}
+
+function fmtTime12(hhmm) {
+  if (!hhmm) return "";
+  const [h, m] = String(hhmm).split(":").map(Number);
+  if (Number.isNaN(h)) return "";
+  const ampm = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m || 0).padStart(2, "0")} ${ampm}`;
+}
+
+// Custom time dropdown — replaces the browser's native <input type="time"> so
+// the inline filter form matches the main booking card's picker (no native
+// spinner). Emits the same "HH:MM" value via an event-shaped onChange so it
+// drops straight into setInline("time").
+function InlineTimeField({ value, onChange, placeholder = "Select time" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const slots = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left", color: value ? "#111" : "#999" }}
+      >
+        <span>{value ? fmtTime12(value) : placeholder}</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <circle cx="12" cy="12" r="9" stroke="#B8860B" strokeWidth="2" />
+          <path d="M12 7v5l3 2" stroke="#B8860B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: 46, left: 0, right: 0, zIndex: 60, maxHeight: 220, overflowY: "auto", background: "#fff", border: "1px solid #E5E5E5", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }}>
+          {slots.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => { onChange({ target: { value: v } }); setOpen(false); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, border: "none", background: v === value ? "#FFF7E0" : "#fff", color: "#111", cursor: "pointer", fontWeight: v === value ? 700 : 400 }}
+            >
+              {fmtTime12(v)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

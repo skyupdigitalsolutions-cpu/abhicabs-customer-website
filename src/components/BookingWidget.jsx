@@ -17,8 +17,45 @@ import LocationMapPicker from "./LocationMapPicker";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
 import { createSupportTicket } from "../api/services/support";
 
-// States this business actually operates in (Karnataka & Hyderabad + neighbours).
-const ALLOWED_STATES = ["Karnataka", "Telangana", "Andhra Pradesh", "Maharashtra"];
+// States this business actually operates in (Karnataka, Telangana, Andhra
+// Pradesh, Maharashtra). ANY location inside these four states is serviceable
+// — Mysore, Mandya, Hubli, etc. are all Karnataka and must never be flagged as
+// out of area.
+//
+// Matching mirrors the backend's service-area allowlist (src/lib/serviceArea.js):
+// the state name arrives as free text from Google (sometimes the whole
+// formatted address, sometimes a misspelling), so we compare with case,
+// spaces and punctuation stripped, and accept common aliases/misspellings and
+// substring hits. A strict === check would wrongly reject a valid Karnataka
+// pickup just because Google spelled the field differently this week.
+const ALLOWED_STATES = [
+  { name: "Karnataka", aliases: ["ka", "karnatak", "karnataka"] },
+  { name: "Telangana", aliases: ["tg", "ts", "telangana", "telengana", "telangna"] },
+  { name: "Andhra Pradesh", aliases: ["ap", "andhra", "andhrapradesh", "andrapradesh", "andhrapradhesh"] },
+  { name: "Maharashtra", aliases: ["mh", "maharashtra", "maharastra", "maharashtr", "maharashta"] },
+];
+
+// Lower-case, strip everything that is not a letter or digit.
+function normaliseState(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Is this free-text state/address inside one of our four serviced states?
+// Returns true when we can't tell (empty/unknown) so a missing state component
+// never blocks a booking — the backend stays the final authority.
+function isAllowedState(value) {
+  const n = normaliseState(value);
+  if (!n) return true; // unknown → don't block here; backend decides
+  for (const s of ALLOWED_STATES) {
+    if (n === normaliseState(s.name)) return true;
+    if (s.aliases.some((a) => n === normaliseState(a))) return true;
+  }
+  // Substring: Google sometimes returns the whole formatted address.
+  for (const s of ALLOWED_STATES) {
+    if (n.includes(normaliseState(s.name))) return true;
+  }
+  return false;
+}
 
 const TABS = [
   { mode: "one-way",    label: "One Way",    icon: <IconArrowRight className="w-3.5 h-3.5" /> },
@@ -260,17 +297,12 @@ const PACKAGE_OPTIONS = [
   { value: "12 hrs / 120 km", label: "12 hrs / 120 km", description: "Extended day" },
 ];
 
-const PASSENGER_OPTIONS = Array.from({ length: 8 }, (_, i) => {
-  const n = String(i + 1);
-  return { value: n, label: `${n} ${i === 0 ? "Passenger" : "Passengers"}` };
-});
 
 function emptyFields() {
   return {
     pickup: "", drop: "", date: today, time: "",
     returnDate: "", returnTime: "",
     package: "8 hrs / 80 km",
-    passengers: "2",
     airport: "BLR",
     airportTerminal: "",
     airportDirection: "drop",
@@ -288,7 +320,9 @@ function isSurgeTime(date, time) {
 
 function extractStateFromPlace(place) {
   const comp = place?.address_components?.find((c) => c.types.includes("administrative_area_level_1"));
-  return comp?.long_name || null;
+  // Fall back to the formatted address so isAllowedState()'s substring match can
+  // still resolve the state when Google omits the admin_area_level_1 component.
+  return comp?.long_name || place?.formatted_address || null;
 }
 
 // Re-binds Places Autocomplete whenever the <input> element changes.
@@ -320,7 +354,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           returnDate: presetJourney.returnDate || "",
           returnTime: presetJourney.returnTime || "",
           package: presetJourney.package || "8 hrs / 80 km",
-          passengers: presetJourney.passengers || "2",
           airport: presetJourney.airport || "BLR",
           airportTerminal: presetJourney.airportTerminal || "",
           airportDirection: presetJourney.airportDirection || "drop",
@@ -546,8 +579,8 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     }
 
     const outOfAreaField =
-      (pickupState && !ALLOWED_STATES.includes(pickupState)) ? "pickup" :
-      (mode !== "local" && dropState && !ALLOWED_STATES.includes(dropState)) ? "drop" :
+      (pickupState && !isAllowedState(pickupState)) ? "pickup" :
+      (mode !== "local" && dropState && !isAllowedState(dropState)) ? "drop" :
       null;
     if (outOfAreaField) {
       setOutOfAreaOpen(true);
@@ -567,7 +600,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       returnDate: fields.returnDate,
       returnTime: fields.returnTime,
       package: mode === "local" ? fields.package : "",
-      passengers: fields.passengers,
       stops: filledStops,
       surge,
       surgeMultiplier: surge ? 1.05 : 1.0,
@@ -648,11 +680,8 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       <DatePicker ariaLabel="Return date" placeholder="Add return" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} />
     </Field>
   );
-  const passengersField = (
-    <Field label="Passengers">
-      <Dropdown ariaLabel="Passengers" icon={<UsersIcon />} value={fields.passengers} onChange={set("passengers")} options={PASSENGER_OPTIONS} />
-    </Field>
-  );
+  // Passenger selection removed — the vehicle's seat capacity already conveys
+  // how many people it carries, so a separate passenger count is redundant.
 
   // One-way & round-trip share a layout; round-trip adds Return Date.
   function renderRouteRow(withReturn) {
@@ -668,7 +697,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           <div className="w-full sm:w-[168px]">{dateField("Pick Up Date", !withReturn)}</div>
           <div className="w-full sm:w-[156px]">{timeField(!withReturn)}</div>
           {withReturn && <div className="w-full sm:w-[168px]">{returnDateField}</div>}
-          <div className="w-full sm:w-[150px]">{passengersField}</div>
         </div>
       );
     }
@@ -692,7 +720,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         <m.div layout="position" className="w-full sm:w-[168px]">{dateField()}</m.div>
         <m.div layout="position" className="w-full sm:w-[156px]">{timeField()}</m.div>
         {withReturn && <m.div layout="position" className="w-full sm:w-[168px]">{returnDateField}</m.div>}
-        <m.div layout="position" className="w-full sm:w-[150px]">{passengersField}</m.div>
       </div>
     );
   }
@@ -780,7 +807,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                         </Field>
                         {dateField("Date")}
                         {timeField()}
-                        {passengersField}
                       </div>
                       <SearchButton className="mt-5" />
                     </m.div>
@@ -877,7 +903,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
                         <m.div layout="position">{dateField("Date")}</m.div>
                         <m.div layout="position">{timeField()}</m.div>
-                        <m.div layout="position">{passengersField}</m.div>
                         <m.div layout="position" className="flex items-end">
                           <SearchButton />
                         </m.div>

@@ -61,7 +61,7 @@ export function JourneyBar({ journey, showModify = true }) {
         <MetaItem label="Trip Type" value={modeLabel} />
         <MetaItem label="Date" value={journey.date || "-"} />
         <MetaItem label="Time" value={journey.time || "-"} />
-        <MetaItem label="Passengers" value={journey.passengers || "-"} />
+        {journey.passengers && <MetaItem label="Passengers" value={journey.passengers} />}
       </div>
       {showModify && <Button href={`/?j=${encodeURIComponent(journey.id)}#booking`} variant="outline" size="sm">Modify Search</Button>}
     </Card>
