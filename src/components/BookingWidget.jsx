@@ -260,6 +260,11 @@ const PACKAGE_OPTIONS = [
   { value: "12 hrs / 120 km", label: "12 hrs / 120 km", description: "Extended day" },
 ];
 
+const PASSENGER_OPTIONS = Array.from({ length: 8 }, (_, i) => {
+  const n = String(i + 1);
+  return { value: n, label: `${n} ${i === 0 ? "Passenger" : "Passengers"}` };
+});
+
 function emptyFields() {
   return {
     pickup: "", drop: "", date: today, time: "",
@@ -643,6 +648,11 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       <DatePicker ariaLabel="Return date" placeholder="Add return" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} />
     </Field>
   );
+  const passengersField = (
+    <Field label="Passengers">
+      <Dropdown ariaLabel="Passengers" icon={<UsersIcon />} value={fields.passengers} onChange={set("passengers")} options={PASSENGER_OPTIONS} />
+    </Field>
+  );
 
   // One-way & round-trip share a layout; round-trip adds Return Date.
   function renderRouteRow(withReturn) {
@@ -658,6 +668,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           <div className="w-full sm:w-[168px]">{dateField("Pick Up Date", !withReturn)}</div>
           <div className="w-full sm:w-[156px]">{timeField(!withReturn)}</div>
           {withReturn && <div className="w-full sm:w-[168px]">{returnDateField}</div>}
+          <div className="w-full sm:w-[150px]">{passengersField}</div>
         </div>
       );
     }
@@ -681,6 +692,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         <m.div layout="position" className="w-full sm:w-[168px]">{dateField()}</m.div>
         <m.div layout="position" className="w-full sm:w-[156px]">{timeField()}</m.div>
         {withReturn && <m.div layout="position" className="w-full sm:w-[168px]">{returnDateField}</m.div>}
+        <m.div layout="position" className="w-full sm:w-[150px]">{passengersField}</m.div>
       </div>
     );
   }
@@ -768,6 +780,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                         </Field>
                         {dateField("Date")}
                         {timeField()}
+                        {passengersField}
                       </div>
                       <SearchButton className="mt-5" />
                     </m.div>
@@ -864,6 +877,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
                         <m.div layout="position">{dateField("Date")}</m.div>
                         <m.div layout="position">{timeField()}</m.div>
+                        <m.div layout="position">{passengersField}</m.div>
                         <m.div layout="position" className="flex items-end">
                           <SearchButton />
                         </m.div>
@@ -1890,6 +1904,9 @@ function CalendarIcon() {
 }
 function PackageIcon() {
   return <svg {...svgProps}><circle cx="12" cy="13" r="7.5" /><path d="M12 9.5V13l2.5 1.5M9.5 2.5h5" /></svg>;
+}
+function UsersIcon() {
+  return <svg {...svgProps}><circle cx="9" cy="8" r="3.2" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><circle cx="17.5" cy="9" r="2.6" /><path d="M15.5 12.3c2.3.5 4 2.5 4 4.9" /></svg>;
 }
 function TerminalIcon() {
   return <svg {...svgProps}><path d="M4 21V8l8-4 8 4v13" /><path d="M9 21v-6h6v6M4 21h16" /></svg>;

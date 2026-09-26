@@ -411,11 +411,11 @@ export default function Page() {
           </div>
           <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>Location Outside Service Area</h3>
           <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
-            ABHI CABS operates across <strong>Karnataka, Telangana, Andhra Pradesh and Maharashtra</strong>.
+            {serviceAreaError}
           </p>
           <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 22px" }}>
-            Your selected location appears to be outside our service states. Please enter a valid
-            pickup address within one of our operating states and try again.
+            We currently operate within a service radius around specific cities, not every address
+            in a state — please enter a pickup closer to one of our serviced cities and try again.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <a
