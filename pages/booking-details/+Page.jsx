@@ -89,7 +89,7 @@ export default function Page() {
           </div>
           <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>Booking {booking.bookingId}</p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "18px 16px", fontSize: 13.5, paddingBottom: 18, borderBottom: "1px dashed #EFEFEF" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "18px 16px", fontSize: 13.5, paddingBottom: 18, borderBottom: "1px dashed #EFEFEF" }}>
             <DetailCell label="Vehicle" value={booking.vehicle || "—"} />
             <DetailCell label="Date & Time" value={`${booking.date} · ${booking.time}`} />
             <DetailCell label="Passengers" value={booking.passengerCount || "—"} />
@@ -107,9 +107,9 @@ export default function Page() {
 
 function DetailCell({ label, value }) {
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <div style={{ color: "#999", fontSize: 11.5, fontWeight: 500, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontWeight: 700 }}>{value}</div>
+      <div style={{ fontWeight: 700, wordBreak: "break-word" }}>{value}</div>
     </div>
   );
 }

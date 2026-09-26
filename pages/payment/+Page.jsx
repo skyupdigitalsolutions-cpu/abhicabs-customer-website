@@ -170,14 +170,31 @@ export default function Page() {
     };
 
     try {
-      // Create booking ONCE — result cached in ref
-      const booking = bookingRef.current || await bookingsApi.createBooking(bookingPayload);
+      // Create booking ONCE — result cached in ref. Its own try/catch so a
+      // failure here (bad address, network hiccup, backend validation) is
+      // labelled as a booking problem — previously it fell into the same
+      // catch as payment failures and just said "Something went wrong" on
+      // the Pay button, which read as a completely unrelated error since
+      // payment was never even reached yet.
+      let booking = bookingRef.current;
+      if (!booking) {
+        try {
+          booking = await bookingsApi.createBooking(bookingPayload);
+        } catch (err) {
+          throw new Error(`Couldn't create your booking — ${err.message || "please check your details and try again."}`);
+        }
+      }
       bookingRef.current = booking;
 
       // Payment step (skip for ZERO or cash)
       if (paymentMode !== "ZERO" && payMethod !== "cash") {
         const purpose = paymentMode === "PARTIAL" ? "ADVANCE" : "FULL";
-        const order   = await paymentsApi.createPaymentOrder(booking.id, purpose);
+        let order;
+        try {
+          order = await paymentsApi.createPaymentOrder(booking.id, purpose);
+        } catch (err) {
+          throw new Error(`Your booking is saved, but the payment couldn't be started — ${err.message || "please try again."}`);
+        }
 
         if (!USE_MOCK) {
           await paymentsApi.openRazorpayCheckout({

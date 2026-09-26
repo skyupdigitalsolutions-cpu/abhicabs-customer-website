@@ -88,7 +88,7 @@ export default function Page() {
               {booking.paymentStatus}
             </span>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "18px 16px", fontSize: 13.5 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "18px 16px", fontSize: 13.5 }}>
             <DetailCell label="Route" value={`${booking.pickup} → ${booking.drop}`} />
             <DetailCell label="Date & Time" value={`${booking.date} · ${booking.time}`} />
             <DetailCell label="Seats · AC" value={booking.vehicleSeats ? `${booking.vehicleSeats} Seater · A/C` : "—"} />
@@ -137,9 +137,9 @@ export default function Page() {
 
 function DetailCell({ label, value }) {
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <div style={{ color: "#999", fontSize: 11.5, fontWeight: 500, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontWeight: 600 }}>{value}</div>
+      <div style={{ fontWeight: 600, wordBreak: "break-word" }}>{value}</div>
     </div>
   );
 }

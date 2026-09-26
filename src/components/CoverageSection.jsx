@@ -64,7 +64,7 @@ function MiniMap({ name }) {
   );
 }
 
-function BigMap({ hovered }) {
+function BigMap({ hovered, onHover, onLeave, onTapToggle }) {
   const md = MAP_DATA;
   return (
     <svg
@@ -98,7 +98,10 @@ function BigMap({ hovered }) {
               strokeLinejoin="round"
               filter="url(#acGlow)"
               opacity={hovered ? (hi ? 1 : 0.5) : 0.85}
-              style={{ transition: "opacity .25s, stroke-width .25s" }}
+              style={{ transition: "opacity .25s, stroke-width .25s", cursor: "pointer", pointerEvents: "auto" }}
+              onMouseEnter={() => onHover?.(n)}
+              onMouseLeave={() => onLeave?.()}
+              onClick={() => onTapToggle?.(n)}
             />
           </m.g>
         );
@@ -231,10 +234,11 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
                       <div
                         onMouseEnter={() => setHovered(name)}
                         onMouseLeave={() => setHovered(null)}
+                        onClick={() => setHovered(prev => (prev === name ? null : name))}
                         style={{
                           background: hovered === name ? "rgba(255,193,7,.06)" : "rgba(255,255,255,.045)",
                           border: `1px solid ${hovered === name ? "rgba(255,193,7,.45)" : "rgba(255,255,255,.09)"}`,
-                          borderRadius: 18, padding: "16px 14px 14px", cursor: "default",
+                          borderRadius: 18, padding: "16px 14px 14px", cursor: "pointer",
                           position: "relative", transition: "transform .2s, border-color .2s, background .2s",
                           transform: hovered === name ? "translateY(-4px)" : "none"
                         }}
@@ -277,7 +281,12 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
                   <div style={{ width: 44, height: 3, background: "#FFC107", margin: "10px 0 0 auto", borderRadius: 2 }} />
                 </m.div>
                 <div style={{ position: "absolute", inset: 0 }}>
-                  <BigMap hovered={hovered} />
+                  <BigMap
+                    hovered={hovered}
+                    onHover={setHovered}
+                    onLeave={() => setHovered(null)}
+                    onTapToggle={(n) => setHovered(prev => (prev === n ? null : n))}
+                  />
                 </div>
               </m.div>
             </div>

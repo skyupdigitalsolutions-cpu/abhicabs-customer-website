@@ -67,7 +67,11 @@ export default function Page() {
   const [loading, setLoading] = useState(!browseMode);
   const [apiVehicles, setApiVehicles] = useState(null);
   const [serviceAreaError, setServiceAreaError] = useState(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(browseMode);
+  // Browsing a specific vehicle (no trip yet) starts with the trip-details
+  // panel already open — previously it stayed hidden until "Select Vehicle"
+  // forced it open with a toast, which felt like a redundant second search
+  // right after the vehicle looked already chosen ("✓ Your Selection").
   // FIX: previously auto-selected Tempo Traveller/Urbania/Coach as an
   // already-applied filter when arriving via the "Group / Coach" tile.
   // Per feedback, the filter should offer only these as choices — not
@@ -373,7 +377,7 @@ export default function Page() {
             {journey.passengers && <span>{journey.passengers} passenger(s)</span>}
           </div>
           <button
-            onClick={() => navigate("/#booking")}
+            onClick={() => navigate(`/?j=${encodeURIComponent(effectiveJourneyId)}#booking`)}
             className="hover:!bg-[#FFB300]"
             style={{ marginLeft: "auto", padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}
           >
@@ -655,7 +659,7 @@ export default function Page() {
                     <div key={cardKey} className="vehicle-card-wrap" style={{ background: "#fff", border: isPinned ? "2px solid #FFC107" : "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap", position: "relative", boxShadow: isPinned ? "0 0 0 4px rgba(255,193,7,.15)" : "none" }}>
                       {isPinned && (
                         <div style={{ position: "absolute", top: 14, left: 14, zIndex: 10, background: "#FFC107", color: "#111", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", padding: "3px 10px", borderRadius: 9999, textTransform: "uppercase" }}>
-                          ✓ Your Selection
+                          {browseMode ? "✓ Pre-selected" : "✓ Your Selection"}
                         </div>
                       )}
                       <div className="vehicle-card-image" style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", minHeight: 200, position: "relative" }}>
@@ -708,7 +712,7 @@ export default function Page() {
                             className="hover:!bg-[#FFB300]"
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
-                            Select Vehicle
+                            {browseMode ? "Get Real Fare" : "Select Vehicle"}
                           </button>
                         </div>
                       </div>

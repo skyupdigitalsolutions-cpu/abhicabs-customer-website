@@ -5,9 +5,11 @@ import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
 import { selectJourney } from "../../src/store/slices/journeySlice";
 import { selectCheckoutDetails, setCheckoutDetails } from "../../src/store/slices/checkoutSlice";
 import { API_BASE_URL } from "../../src/api/config";
-import { isAuthenticated } from "../../src/api/tokens";
+import { isAuthenticated, getStoredUserName } from "../../src/api/tokens";
 import { authApi } from "../../src/api";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
+import LocationMapPicker from "../../src/components/LocationMapPicker";
 import StateBlock from "../../src/components/StateBlock";
 import Button from "../../src/components/ui/Button";
 import { FIELD_INPUT } from "../../src/components/ui/classNames";
@@ -147,6 +149,39 @@ export default function Page() {
   const [email, setEmail] = useState(saved.email || "");
   const [address, setAddress] = useState(saved.address || "");
   const [landmark, setLandmark] = useState(saved.landmark || "");
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const addressInputRef = useRef(null);
+  const addressAutocompleteRef = useRef(null);
+  const [mapsLoaded, setMapsLoaded] = useState(
+    () => typeof window !== "undefined" && !!window.google?.maps?.places
+  );
+  useEffect(() => {
+    if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
+    const iv = setInterval(() => {
+      if (window.google?.maps?.places) { setMapsLoaded(true); clearInterval(iv); }
+    }, 300);
+    return () => clearInterval(iv);
+  }, [mapsLoaded]);
+  // Places Autocomplete on the pickup-address text field — mirrors the
+  // From/To fields on the booking widget so typing here also suggests
+  // real addresses, not just a plain free-text box.
+  useEffect(() => {
+    if (!mapsLoaded || !addressInputRef.current || !window.google?.maps?.places) return;
+    if (addressAutocompleteRef.current) {
+      window.google.maps.event.clearInstanceListeners(addressAutocompleteRef.current);
+    }
+    const ac = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+      componentRestrictions: { country: "in" },
+      fields: ["formatted_address", "name"],
+    });
+    addressAutocompleteRef.current = ac;
+    const listener = ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      const value = place?.formatted_address || place?.name || "";
+      if (value) setAddress(value);
+    });
+    return () => window.google.maps.event.removeListener(listener);
+  }, [mapsLoaded]);
   const [gstNumber, setGstNumber] = useState(saved.gstNumber || "");
   const [companyName, setCompanyName] = useState(saved.companyName || "");
   const [notes, setNotes] = useState(saved.notes || "");
@@ -166,13 +201,24 @@ export default function Page() {
   // Only fills fields the user hasn't already typed — never overwrites edits.
   useEffect(() => {
     if (!isAuthenticated()) return;
+    // Stored name is instant (no request); getMe() below fills in the rest
+    // (and overwrites with the fresher name if the profile has one), same
+    // pattern Header.jsx uses.
+    const storedName = getStoredUserName();
+    if (!fullName && storedName) setFullName(storedName);
     authApi.getMe()
-      .then((user) => {
+      .then((data) => {
+        // /auth/me can come back either as the user object directly or
+        // wrapped as { user: {...} } depending on backend vs mock — Header.jsx
+        // already has to handle both; this effect previously only checked
+        // the flat shape, so real logged-in profiles never actually
+        // auto-filled the checkout form.
+        const user = data?.user || data;
         if (!user) return;
         if (!fullName && (user.name || user.fullName))
           setFullName(user.name || user.fullName || "");
-        if (!mobile && user.phone)
-          setMobile(user.phone.replace(/[^\d]/g, "").slice(-10));
+        if (!mobile && (user.phone || user.mobile))
+          setMobile(String(user.phone || user.mobile).replace(/[^\d]/g, "").slice(-10));
         if (!email && user.email && !user.email.includes("@placeholder.local"))
           setEmail(user.email);
       })
@@ -365,7 +411,26 @@ export default function Page() {
                 {/* Pickup Address — full width */}
                 <div className="sm:col-span-2">
                   <FormField label="Pickup Address">
-                    <input className={FIELD_INPUT} placeholder="House / building, area" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <div className="relative">
+                      <input
+                        ref={addressInputRef}
+                        className={`${FIELD_INPUT} pr-11`}
+                        placeholder="House / building, area"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMapPickerOpen(true)}
+                        aria-label="Pick address on map"
+                        title="Pick on map"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg grid place-items-center text-text-secondary hover:bg-primary/15 hover:text-text transition-colors"
+                      >
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M9 20l-6-3V4l6 3 6-3 6 3v13l-6-3-6 3z" /><path d="M9 7v13M15 4v13" />
+                        </svg>
+                      </button>
+                    </div>
                   </FormField>
                 </div>
 
@@ -563,6 +628,14 @@ export default function Page() {
           </div>
         </div>
       </main>
+
+      <LocationMapPicker
+        open={mapPickerOpen}
+        title="Select Pickup Address"
+        initialAddress={address}
+        onClose={() => setMapPickerOpen(false)}
+        onConfirm={(addr) => { setAddress(addr); setMapPickerOpen(false); }}
+      />
     </>
   );
 }

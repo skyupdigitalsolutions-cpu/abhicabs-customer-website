@@ -180,8 +180,8 @@ export default function HeroSection({ widgetKey, widgetProps }) {
                 variants={featureGrid}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(180px, 1fr))",
-                  gap: "12px 40px",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                  gap: "12px 24px",
                   marginTop: 26,
                   maxWidth: 480,
                 }}

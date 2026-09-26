@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { usePageContext } from "vike-react/usePageContext";
+import { selectJourney } from "../../src/store/slices/journeySlice";
 import CTASection from "../../src/components/CTASection";
 import FAQSection from "../../src/components/FAQSection";
 import ContactFormSection from "../../src/components/ContactFormSection";
@@ -161,7 +163,26 @@ export default function Page() {
   // page's Trip Type filter, which has no real search of its own to send
   // someone to — opens the booking widget straight on that tab instead of
   // leaving the trip-type choice they already made on the ground.
+  //
+  // Arriving with ?j=<journeyId> — "Modify Search" from booking-search or
+  // checkout. Previously this landed on a blank widget (only ?mode was
+  // read), so editing a search meant re-typing pickup/drop/date/stops from
+  // scratch. Now the full journey is loaded from the store and the widget
+  // opens pre-filled with it — editable, not wiped.
+  const journeyIdToEdit = pageContext.urlParsed?.search?.j || null;
+  const journeyToEdit = useSelector(selectJourney(journeyIdToEdit));
   useEffect(() => {
+    if (journeyIdToEdit && journeyToEdit) {
+      setWidgetProps({
+        initialMode: journeyToEdit.tripType || "one-way",
+        presetPickup: journeyToEdit.pickup || "",
+        presetDrop: journeyToEdit.drop || "",
+        presetJourney: journeyToEdit,
+      });
+      setWidgetKey("edit-" + journeyIdToEdit);
+      setTimeout(() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" }), 50);
+      return;
+    }
     const requestedMode = pageContext.urlParsed?.search?.mode;
     if (requestedMode) bookMode(requestedMode);
     // eslint-disable-next-line react-hooks/exhaustive-deps

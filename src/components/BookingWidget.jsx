@@ -299,12 +299,29 @@ function bindAutocomplete(el, slotRef, onPlace) {
   slotRef.current = { el, ac };
 }
 
-export default function BookingWidget({ initialMode = "one-way", presetPickup = "", presetDrop = "" }) {
+export default function BookingWidget({ initialMode = "one-way", presetPickup = "", presetDrop = "", presetJourney = null }) {
   const dispatch = useDispatch();
   const toast = useToast();
   const layoutScope = useId();
-  const [mode, setMode] = useState(initialMode);
-  const [fields, setFields] = useState({ ...emptyFields(), pickup: presetPickup, drop: presetDrop });
+  const [mode, setMode] = useState(presetJourney?.tripType || initialMode);
+  const [fields, setFields] = useState(() => ({
+    ...emptyFields(),
+    ...(presetJourney
+      ? {
+          pickup: presetJourney.pickup || "",
+          drop: presetJourney.drop || "",
+          date: presetJourney.date || today,
+          time: presetJourney.time || "",
+          returnDate: presetJourney.returnDate || "",
+          returnTime: presetJourney.returnTime || "",
+          package: presetJourney.package || "8 hrs / 80 km",
+          passengers: presetJourney.passengers || "2",
+          airport: presetJourney.airport || "BLR",
+          airportTerminal: presetJourney.airportTerminal || "",
+          airportDirection: presetJourney.airportDirection || "drop",
+        }
+      : { pickup: presetPickup, drop: presetDrop }),
+  }));
   const [surge, setSurge] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -384,10 +401,31 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const pickupAutocomplete = GOOGLE_MAPS_API_KEY ? { attachTo: attachPickup } : null;
   const dropAutocomplete   = GOOGLE_MAPS_API_KEY ? { attachTo: attachDrop }   : null;
 
-  const stopIdRef = useRef(0);
-  const [stops, setStops] = useState([]); // [{ id, value }]
+  const initialStops = presetJourney?.stops?.length
+    ? presetJourney.stops.map((v, i) => ({ id: i + 1, value: v }))
+    : [];
+  const stopIdRef = useRef(initialStops.length);
+  const [stops, setStops] = useState(initialStops); // [{ id, value }]
+
+  // Per-stop Places Autocomplete — one slot per stop id, created lazily as
+  // stop inputs mount (mirrors attachPickup/attachDrop above).
+  const stopAutocompleteRefs = useRef({}); // { [stopId]: { el, ac } }
+  const attachStop = useCallback((id) => (el) => {
+    if (!mapsLoaded) return;
+    if (!stopAutocompleteRefs.current[id]) stopAutocompleteRefs.current[id] = { current: null };
+    bindAutocomplete(el, stopAutocompleteRefs.current[id], (place) => {
+      const value = place?.formatted_address || place?.name || "";
+      if (value) updateStop(id, value);
+    });
+  }, [mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stopAutocomplete = (id) => (GOOGLE_MAPS_API_KEY ? { attachTo: attachStop(id) } : null);
 
   const set = (key) => (e) => setFields((f) => ({ ...f, [key]: e.target.value }));
+  function swapPickupDrop() {
+    setFields((f) => ({ ...f, pickup: f.drop, drop: f.pickup }));
+    setPickupState(dropState);
+    setDropState(pickupState);
+  }
 
   useEffect(() => {
     setSurge(isSurgeTime(fields.date, fields.time));
@@ -406,6 +444,31 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   }
   function removeStop(id) {
     setStops((s) => s.filter((st) => st.id !== id));
+    delete stopAutocompleteRefs.current[id];
+  }
+
+  // mapPickerField is "pickup" | "drop" | `stop:<id>` while the picker is open.
+  const openStopIdMatch = typeof mapPickerField === "string" && mapPickerField.startsWith("stop:")
+    ? Number(mapPickerField.slice(5))
+    : null;
+  const openStopIndex = openStopIdMatch != null ? stops.findIndex((s) => s.id === openStopIdMatch) : -1;
+  function mapPickerInitialAddress() {
+    if (openStopIdMatch != null) return stops[openStopIndex]?.value || "";
+    return mapPickerField ? fields[mapPickerField] : "";
+  }
+  function mapPickerTitle() {
+    if (openStopIdMatch != null) return `Select Stop ${openStopIndex + 1} Location`;
+    return mapPickerField === "drop" ? "Select Drop Location" : "Select Pickup Location";
+  }
+  function handleMapPickerConfirm(address, stateName) { // eslint-disable-line no-unused-vars
+    if (openStopIdMatch != null) {
+      updateStop(openStopIdMatch, address);
+    } else {
+      setFieldDirect(mapPickerField, address);
+      if (mapPickerField === "pickup") setPickupState(stateName);
+      if (mapPickerField === "drop") setDropState(stateName);
+    }
+    setMapPickerField(null);
   }
 
   function handleSubmit(e) {
@@ -587,6 +650,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       return (
         <div className="flex flex-wrap gap-3 sm:gap-4 items-start">
           <div className="flex-1 min-w-[210px]">{fromField}</div>
+          <SwapButton onClick={swapPickupDrop} />
           <div className="flex-1 min-w-[210px]">{toField}</div>
           <div className="w-full sm:w-[136px]">
             <Field label="Stops"><AddStopTile onAdd={addStop} /></Field>
@@ -600,7 +664,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     return (
       <div className="relative flex flex-wrap gap-3 sm:gap-4 items-end">
         <div className="w-full sm:w-[230px]">{fromField}</div>
-        <StopFields stops={stops} onChange={updateStop} onRemove={removeStop} />
+        <SwapButton onClick={swapPickupDrop} />
+        <StopFields
+          stops={stops}
+          onChange={updateStop}
+          onRemove={removeStop}
+          onMapClick={(id) => setMapPickerField(`stop:${id}`)}
+          autocompleteFor={stopAutocomplete}
+        />
         {stops.length < 4 && (
           <m.div layout="position" className="w-full sm:w-[136px]">
             <AddStopTile onAdd={addStop} />
@@ -805,15 +876,10 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
             <LocationMapPicker
               open={!!mapPickerField}
-              title={mapPickerField === "drop" ? "Select Drop Location" : "Select Pickup Location"}
-              initialAddress={mapPickerField ? fields[mapPickerField] : ""}
+              title={mapPickerTitle()}
+              initialAddress={mapPickerInitialAddress()}
               onClose={() => setMapPickerField(null)}
-              onConfirm={(address, stateName) => {
-                setFieldDirect(mapPickerField, address);
-                if (mapPickerField === "pickup") setPickupState(stateName);
-                if (mapPickerField === "drop") setDropState(stateName);
-                setMapPickerField(null);
-              }}
+              onConfirm={handleMapPickerConfirm}
             />
 
             {mounted && createPortal(
@@ -989,7 +1055,7 @@ function AddStopTile({ onAdd }) {
   );
 }
 
-function StopFields({ stops, onChange, onRemove }) {
+function StopFields({ stops, onChange, onRemove, onMapClick, autocompleteFor }) {
   return (
     <AnimatePresence mode="popLayout">
       {stops.map((stop, i) => (
@@ -1008,6 +1074,8 @@ function StopFields({ stops, onChange, onRemove }) {
               placeholder="Stop location"
               value={stop.value}
               onChange={(e) => onChange(stop.id, e.target.value)}
+              onMapClick={onMapClick ? () => onMapClick(stop.id) : undefined}
+              autocomplete={autocompleteFor ? autocompleteFor(stop.id) : null}
               trailing={
                 <button type="button" onClick={() => onRemove(stop.id)} aria-label={`Remove stop ${i + 1}`} className="bw-icon-btn">
                   <CloseIcon />
@@ -1018,6 +1086,24 @@ function StopFields({ stops, onChange, onRemove }) {
         </m.div>
       ))}
     </AnimatePresence>
+  );
+}
+
+function SwapButton({ onClick }) {
+  return (
+    <div className="flex flex-col gap-1.5 shrink-0">
+      <span className="bw-label" style={{ opacity: 0 }} aria-hidden>&nbsp;</span>
+      <button
+        type="button"
+        onClick={onClick}
+        title="Swap pickup and drop"
+        aria-label="Swap pickup and drop locations"
+        className="bw-icon-btn"
+        style={{ width: 40, height: 40, borderRadius: 9999, border: "1px solid var(--bw-line)", background: "#fff" }}
+      >
+        <SwapIcon />
+      </button>
+    </div>
   );
 }
 
@@ -1593,7 +1679,13 @@ function TimePicker12hr({ value, onChange, min }) {
   function measure() {
     if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
-    setPos({ top: r.bottom + window.scrollY + 8, left: r.left + window.scrollX, width: r.width });
+    const vw = window.innerWidth;
+    const width = Math.max(r.width, 264);
+    // Clamp so the popover always stays within the viewport horizontally —
+    // unclamped, opening this near the right edge on a narrow phone screen
+    // pushed the panel (and its 6-wide hour grid) off-screen.
+    const left = Math.min(Math.max(8, r.left), vw - width - 8) + window.scrollX;
+    setPos({ top: r.bottom + window.scrollY + 8, left, width });
   }
 
   function togglePicker() {
@@ -1655,7 +1747,7 @@ function TimePicker12hr({ value, onChange, min }) {
             position: "absolute",
             top: pos.top,
             left: pos.left,
-            width: Math.max(pos.width, 264),
+            width: pos.width,
             zIndex: 99999,
             transformOrigin: "top left",
           }}
@@ -1785,6 +1877,13 @@ const svgProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", st
 
 function FlagIcon() {
   return <svg {...svgProps}><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></svg>;
+}
+function SwapIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 7h12l-3.5-3.5" /><path d="M17 17H5l3.5 3.5" />
+    </svg>
+  );
 }
 function CalendarIcon() {
   return <svg {...svgProps}><rect x="3.5" y="5" width="17" height="15" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
