@@ -1,5 +1,6 @@
 import { IconList, IconAlert } from "../../src/components/Icons";
 import React, { useEffect, useState } from "react";
+import { navigate } from "vike/client/router";
 import { useToast } from "../../src/hooks/useToast";
 import { isAuthenticated } from "../../src/api/tokens";
 import { listMyBookings, getInvoice, cancelBooking as cancelBookingApi } from "../../src/api/services/bookings";

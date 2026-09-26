@@ -575,7 +575,9 @@ export default function Page() {
 
                   <button onClick={submitInlineTrip}
                     style={{ height: 46, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 800, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
-                    Search Available Cabs →
+                    {urlVehicle
+                      ? `Confirm Trip Details — Book ${vehicles.find(v => v.id === urlVehicle)?.name || "this Vehicle"} →`
+                      : "Search Available Cabs →"}
                   </button>
                 </div>
               </div>
