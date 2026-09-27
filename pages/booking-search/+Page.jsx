@@ -130,6 +130,13 @@ export default function Page() {
     if (k === "pickup" || k === "drop") setInlinePoints((p) => ({ ...p, [k]: null }));
     setInlineTrip((f) => ({ ...f, [k]: e.target.value }));
   };
+  // Reverse pickup <-> destination for the inline edit form: swap both the
+  // text fields and their captured coordinates so the same-city radius test
+  // keeps measuring the right points.
+  function swapPickupDrop() {
+    setInlineTrip((f) => ({ ...f, pickup: f.drop, drop: f.pickup }));
+    setInlinePoints((p) => ({ pickup: p.drop, drop: p.pickup }));
+  }
   // Only meaningful in Group/Coach browse mode, where there's no real trip
   // type yet — lets the customer indicate one here, which then carries
   // through to a real search (see selectVehicle) instead of being lost.
