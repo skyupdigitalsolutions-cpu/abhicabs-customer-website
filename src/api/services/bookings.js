@@ -250,6 +250,11 @@ export async function trackDraft(draftData) {
  * backend change; until then the abandonment beacon to /contact is what
  * actually reaches staff.
  */
+// EXACTLY the stages the deployed backend's trackDraftSchema enum accepts.
+// Anything else is a hard zod failure that 400s the whole draft — including
+// the trip fields that WOULD have been recorded. There is deliberately no
+// "DETAILS_ENTERED": the checkout page omits `stage` instead, and the funnel
+// service keeps whatever stage the row already had.
 const DRAFT_STAGES = ["STARTED", "PICKUP_SET", "DROP_SET", "FARES_VIEWED", "PAYMENT_CHOSEN"];
 
 function toDraftRequest(d = {}) {
@@ -284,6 +289,12 @@ function toDraftRequest(d = {}) {
   if (coord(d.drop)) body.drop = coord(d.drop);
   const stops = (Array.isArray(d.stops) ? d.stops : []).map(coord).filter(Boolean).slice(0, 5);
   if (stops.length) body.stops = stops;
+
+  // NOTE: contact fields (name/phone/email/landmark/company/GST/notes) are
+  // deliberately NOT sent. booking_attempts has no column for them and
+  // funnel.service ignores them, so they would be silently dropped. Capturing
+  // an abandoned checkout's contact goes through /contact instead — see
+  // sendAbandonmentReport() in pages/checkout.
 
   return body;
 }

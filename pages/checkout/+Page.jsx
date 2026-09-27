@@ -269,7 +269,9 @@ export default function Page() {
     if (!name && !phone) return;
 
     const draft = {
-      stage: "DETAILS_ENTERED",
+      // No `stage` here on purpose: the backend enum has no checkout step, and
+      // an unknown value 400s the whole draft. Omitting it makes the funnel
+      // service keep whatever stage the row already reached (FARES_VIEWED).
       // Contact — exactly as typed, no invented values.
       guestName:  name || undefined,
       guestPhone: phone || undefined,
@@ -316,38 +318,87 @@ export default function Page() {
       if (bookingCompletedRef.current || abandonmentSentRef.current) return;
       const nameOk = fullName.trim().length >= 2;
       const phoneOk = /^\d{10}$/.test(mobile.trim());
-      // Email is NOT required here any more. Requiring it meant a guest who
-      // gave a name and a valid phone — everything needed to call them back —
-      // was never reported at all, because email is an optional field.
+      // Email is NOT required here. Requiring it meant a guest who gave a name
+      // and a valid phone — everything needed to call them back — was never
+      // reported at all, because email is an optional field.
       if (!nameOk || !phoneOk) return;
       abandonmentSentRef.current = true;
+
+      /*
+       * Everything the rider typed goes in `message`.
+       *
+       * This is the ONLY place a half-finished checkout can be stored without
+       * a backend change: POST /bookings/draft writes to booking_attempts,
+       * which has no column for a name, phone, email, address or note, so the
+       * validator strips them and the funnel service never sees them. The
+       * contacts table takes free text (up to 2000 chars), so the full form is
+       * recorded here as one staff-inbox entry instead of being lost.
+       */
+      const line = (label, value) => (value ? `${label}: ${value}\n` : "");
       const message =
-        `Abandoned checkout before confirming.\n` +
-        `Trip: ${journey.tripType || "—"}\n` +
-        `Route: ${journey.pickup}${journey.drop ? ` → ${journey.drop}` : ""}\n` +
-        (journey.package ? `Package: ${journey.package}\n` : "") +
-        `When: ${journey.date || "—"} ${journey.time || ""}\n` +
-        `Vehicle: ${vehicle?.name || "unknown"}\n` +
-        `Estimated fare: ${fmtINR(totalPayable)}`;
+        `Abandoned checkout before confirming.\n\n` +
+        `— CONTACT —\n` +
+        line("Name", fullName.trim()) +
+        line("Mobile", mobile.trim()) +
+        line("Email", email.trim() || "(not given)") +
+        line("Address", address.trim()) +
+        line("Landmark", landmark.trim()) +
+        line("Customer type", customerType) +
+        line("Company", customerType === "corporate" ? companyName.trim() : "") +
+        line("GST", customerType === "corporate" ? gstNumber.trim() : "") +
+        line("Notes", notes.trim()) +
+        `\n— TRIP —\n` +
+        line("Trip type", journey.tripType) +
+        line("Pickup", journey.pickup) +
+        line("Drop", journey.drop) +
+        line("Stops", (journey.stops || []).join(" | ")) +
+        line("Package", journey.package) +
+        line("Date / time", `${journey.date || "—"} ${journey.time || ""}`.trim()) +
+        line("Return", journey.returnDate ? `${journey.returnDate} ${journey.returnTime || ""}`.trim() : "") +
+        `\n— QUOTE —\n` +
+        line("Vehicle", selected.vehicleName || vehicle?.name) +
+        line("Vehicle class", selected.vehicleClass) +
+        line("Estimated total", fmtINR(totalPayable)) +
+        line("Promo", discount?.ok ? discount.code : "");
+
       const payload = JSON.stringify({
         name: fullName.trim(),
         mobile: mobile.trim(),
-        // Sent only when the customer actually gave one.
+        // Sent only when the customer actually gave one — never invented.
         ...(email.trim() ? { email: email.trim() } : {}),
         topic: "Abandoned Booking",
-        message,
+        message: message.slice(0, 2000), // contacts.message caps at 2000
       });
-      try { navigator.sendBeacon(`${API_BASE_URL}/contact`, new Blob([payload], { type: "application/json" })); } catch { /* best-effort */ }
+      try {
+        navigator.sendBeacon(`${API_BASE_URL}/contact`, new Blob([payload], { type: "application/json" }));
+      } catch { /* best-effort */ }
     }
     function onVisibilityChange() { if (document.visibilityState === "hidden") trySendAbandonment(); }
+    /*
+     * Don't wait for the tab to close.
+     *
+     * pagehide/visibilitychange are the only signals a browser gives, and
+     * neither is guaranteed: a killed tab, a crash, or a phone swiping the
+     * app away can skip both, and sendBeacon is explicitly best-effort. Since
+     * this is the one path that captures the rider's contact details at all,
+     * report once the form has been sitting untouched for a while instead —
+     * by then they have either wandered off or are not coming back to it.
+     */
+    const idleTimer = setTimeout(trySendAbandonment, 90_000);
+
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", trySendAbandonment);
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", trySendAbandonment);
+      clearTimeout(idleTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, mobile, email, journey.pickup, journey.drop, totalPayable]);
+  }, [
+    fullName, mobile, email, address, landmark, notes,
+    customerType, companyName, gstNumber,
+    journey, selected, vehicle, totalPayable,
+  ]);
 
   function validate() {
     const e = {};
