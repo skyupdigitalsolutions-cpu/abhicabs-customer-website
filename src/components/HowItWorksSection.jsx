@@ -76,7 +76,7 @@ export default function HowItWorksSection({ steps }) {
           </m.div>
 
           {/* Steps row — grid so connector lines can span full gap */}
-          <div style={{
+          <div className="hiw-grid" style={{
             display: "grid",
             gridTemplateColumns: `repeat(${n}, 1fr)`,
             alignItems: "start",

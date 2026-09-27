@@ -469,15 +469,15 @@ export default function Page() {
           </p>
         </div>
       ) : (
-        <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="summary-bar" style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
+          <div className="summary-bar-route" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <IconPin className="w-4 h-4 text-primary" />
             <span title={journey.pickup} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.pickup)}</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <span title={journey.drop} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.drop)}</span>
           </div>
           <span style={{ width: 1, height: 22, background: "rgba(255,255,255,.2)" }} className="hidden sm:block" />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
+          <div className="summary-bar-meta" style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
             <span>{journey.date}</span>
             <span>{(() => {
               if (!journey.time) return "";
@@ -491,7 +491,7 @@ export default function Page() {
           </div>
           <button
             onClick={() => navigate(`/?j=${encodeURIComponent(effectiveJourneyId)}#booking`)}
-            className="hover:!bg-[#FFB300]"
+            className="summary-bar-btn hover:!bg-[#FFB300]"
             style={{ marginLeft: "auto", padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}
           >
             Modify Search
@@ -582,9 +582,9 @@ export default function Page() {
           </button>
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
+        <div className="booking-search-layout" style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
           {/* FILTERS */}
-          <aside className={showFilters ? "" : "hidden lg:block"} style={{ flex: "1 1 240px", minWidth: "min(100%,240px)", position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
+          <aside className={`booking-search-sidebar ${showFilters ? "" : "hidden lg:block"}`} style={{ flex: "1 1 240px", minWidth: "min(100%,240px)", position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <h3 style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>Filters</h3>
               <button onClick={clearFilters} style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}>Clear all</button>
@@ -594,7 +594,7 @@ export default function Page() {
             {browseMode && (
               <div style={{ marginBottom: 22, paddingBottom: 20, borderBottom: "1px solid #F0F0F0" }}>
                 <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                <div className="filter-pills" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
                   {[
                     { key: "one-way",    label: "One Way"    },
                     { key: "round-trip", label: "Round Trip" },
@@ -709,7 +709,7 @@ export default function Page() {
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Vehicle Type</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="filter-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 <button onClick={() => setTypeFilters([])} style={filterPillStyle(typeFilters.length === 0)}>All</button>
                 {availableTypes.map((t) => (
                   <button key={t} onClick={() => toggleType(t)} style={filterPillStyle(typeFilters.includes(t))}>
@@ -721,7 +721,7 @@ export default function Page() {
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Seats</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="filter-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {availableSeats.map((s) => (
                   <button key={s} onClick={() => toggleSeat(s)} style={filterPillStyle(seatFilters.includes(s))}>
                     {s}
@@ -732,7 +732,7 @@ export default function Page() {
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>AC</div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="filter-pills" style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setAc("all")} style={filterPillStyle(ac === "all")}>All</button>
                 <button onClick={() => setAc("on")} style={filterPillStyle(ac === "on")}>AC</button>
                 <button onClick={() => setAc("off")} style={filterPillStyle(ac === "off")}>Non-AC</button>

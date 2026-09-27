@@ -130,22 +130,55 @@ button { cursor: pointer; }
 }
 
 /* ── Booking search page ──────────────────────────────────────────────────────*/
-@media (max-width: 640px) {
-  .booking-search-layout { flex-direction: column !important; }
+@media (max-width: 1023px) {
+  /* The sidebar is sticky at top:120 on desktop. Stacked above the results
+     on a phone that pinned the whole filter panel to the viewport and ate
+     the screen — it must scroll with the page once it's full width. */
   .booking-search-sidebar {
     position: static !important;
+    top: auto !important;
     width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+}
+@media (max-width: 640px) {
+  .booking-search-layout { flex-direction: column !important; gap: 14px !important; }
+  .booking-search-sidebar {
     border-radius: 16px !important;
+    padding: 16px !important;
   }
   .vehicle-card-wrap { flex-direction: column !important; }
   .vehicle-card-image {
     min-height: 180px !important;
     height: 200px !important;
     position: relative !important;
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
   }
   /* Filter pills wrap */
   .filter-pills { gap: 6px !important; }
-  .filter-pills button { padding: 6px 12px !important; font-size: 12px !important; }
+  .filter-pills button { padding: 6px 12px !important; font-size: 12px !important; height: 34px !important; }
+}
+
+/* ── How it works ─────────────────────────────────────────────────────────────*/
+/* The steps row is a hard repeat(N, 1fr) grid — N columns squeezed onto a
+   phone made each step a few characters wide. Stack them instead, and drop
+   the connector track (it only reads as a line across a horizontal row). */
+@media (max-width: 768px) {
+  .hiw-grid { grid-template-columns: 1fr 1fr !important; gap: 22px 12px !important; }
+  .hiw-grid > div[style*="position: absolute"] { display: none !important; }
+}
+@media (max-width: 460px) {
+  .hiw-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Rate grids inside vehicle modals ─────────────────────────────────────────*/
+@media (max-width: 520px) {
+  .rate-grid-3 { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 340px) {
+  .rate-grid-3 { grid-template-columns: 1fr !important; }
 }
 
 /* ── Summary bar ─────────────────────────────────────────────────────────────*/
@@ -156,9 +189,14 @@ button { cursor: pointer; }
     padding: 12px 14px !important;
     align-items: flex-start !important;
   }
-  .summary-bar-route { font-size: 13px !important; }
+  /* The route text lives in child <span>s carrying their own inline
+     font-size, so the container rule alone never reached it. */
+  .summary-bar-route,
+  .summary-bar-route span { font-size: 13px !important; }
+  .summary-bar-route { flex-wrap: wrap !important; gap: 6px !important; }
+  .summary-bar-route svg { width: 16px !important; height: 16px !important; }
   .summary-bar-meta { flex-wrap: wrap !important; gap: 6px !important; font-size: 11px !important; }
-  .summary-bar-btn { width: 100% !important; text-align: center !important; justify-content: center !important; }
+  .summary-bar-btn { width: 100% !important; text-align: center !important; justify-content: center !important; margin-left: 0 !important; }
 }
 
 /* ── Fleet carousel ───────────────────────────────────────────────────────────*/

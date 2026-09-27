@@ -284,7 +284,7 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
                     <span>🧳 {modal.bags} Bags</span>
                   </div>
 
-                  <div style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 10px", marginBottom: 20 }}>
+                  <div className="rate-grid-3" style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 10px", marginBottom: 20 }}>
                     <Rate label="Local Package" value={fmtINR(modal.local?.base8hr80km ?? 0)} />
                     <Rate label="Outstation" value={`₹${modal.outstation?.perKm ?? 0}/km`} gold />
                     <Rate label="Extra Hour" value="₹150" />
