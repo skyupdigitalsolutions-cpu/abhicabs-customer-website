@@ -139,6 +139,8 @@ export default function Page() {
   // Which trip-type tab the booking widget currently has open. The quick-select
   // service cards read this so they highlight the same thing the widget shows.
   const [activeMode, setActiveMode] = useState("one-way");
+  // Show the fleet the backend actually has switched on, not a bundled list.
+  const { vehicles: fleetVehicles } = useVehicleCatalogue();
 
   // NOTE: this homepage previously had its own embedded Contact form
   // (id="contact") wired to the real POST /api/v1/contact endpoint — the
@@ -209,7 +211,7 @@ export default function Page() {
       <ServiceStripSection onSelect={bookMode} activeMode={activeMode} />
 
       {/* ============================== CHOOSE YOUR RIDE (fleet carousel) ============================== */}
-      <FleetCarouselSection vehicles={VEHICLE_RATES} />
+      <FleetCarouselSection vehicles={fleetVehicles} />
 
       {/* ============================== GROUP TRANSPORTATION ============================== */}
       <GroupTransportBannerSection

@@ -327,6 +327,15 @@ function extractStateFromPlace(place) {
 }
 
 // Re-binds Places Autocomplete whenever the <input> element changes.
+/** {lat,lng} from a Places result, or null. Google returns functions here. */
+function pointFromPlace(place) {
+  const loc = place?.geometry?.location;
+  if (!loc) return null;
+  const lat = typeof loc.lat === "function" ? loc.lat() : loc.lat;
+  const lng = typeof loc.lng === "function" ? loc.lng() : loc.lng;
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
 function bindAutocomplete(el, slotRef, onPlace) {
   if (!el || !window.google?.maps?.places?.Autocomplete) return;
   if (slotRef.current?.el === el) return;
@@ -392,6 +401,11 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   // Same-city pickup/drop → offer an hourly package instead of an
   // intercity fare. `sameCityAsked` makes it a one-time prompt, so choosing
   // "keep as outstation" isn't re-asked on every submit.
+  // Coordinates for the chosen pickup/drop. `geometry` was already being
+  // requested from Places and then thrown away; the same-city test needs real
+  // points because it is a kilometre rule, not a name match.
+  const [pickupPoint, setPickupPoint] = useState(null);
+  const [dropPoint, setDropPoint] = useState(null);
   const [sameCityOpen, setSameCityOpen] = useState(false);
   const [sameCityAsked, setSameCityAsked] = useState(false);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
@@ -454,6 +468,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       const value = place?.formatted_address || place?.name || "";
       if (value) setFieldDirect("pickup", value);
       setPickupState(extractStateFromPlace(place));
+      setPickupPoint(pointFromPlace(place));
     });
   }, [mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -463,6 +478,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       const value = place?.formatted_address || place?.name || "";
       if (value) setFieldDirect("drop", value);
       setDropState(extractStateFromPlace(place));
+      setDropPoint(pointFromPlace(place));
     });
   }, [mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -488,8 +504,15 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   }, [mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopAutocomplete = (id) => (GOOGLE_MAPS_API_KEY ? { attachTo: attachStop(id) } : null);
 
-  const set = (key) => (e) => setFields((f) => ({ ...f, [key]: e.target.value }));
+  const set = (key) => (e) => {
+    // Typing over a chosen place makes its coordinates stale. Drop them, so
+    // the same-city check never measures a point the text no longer matches.
+    if (key === "pickup") setPickupPoint(null);
+    if (key === "drop") setDropPoint(null);
+    setFields((f) => ({ ...f, [key]: e.target.value }));
+  };
   function swapPickupDrop() {
+    setPickupPoint((p) => { setDropPoint(p); return dropPoint; });
     setFields((f) => ({ ...f, pickup: f.drop, drop: f.pickup }));
     setPickupState(dropState);
     setDropState(pickupState);
@@ -528,13 +551,13 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     if (openStopIdMatch != null) return `Select Stop ${openStopIndex + 1} Location`;
     return mapPickerField === "drop" ? "Select Drop Location" : "Select Pickup Location";
   }
-  function handleMapPickerConfirm(address, stateName) { // eslint-disable-line no-unused-vars
+  function handleMapPickerConfirm(address, stateName, point) {
     if (openStopIdMatch != null) {
       updateStop(openStopIdMatch, address);
     } else {
       setFieldDirect(mapPickerField, address);
-      if (mapPickerField === "pickup") setPickupState(stateName);
-      if (mapPickerField === "drop") setDropState(stateName);
+      if (mapPickerField === "pickup") { setPickupState(stateName); setPickupPoint(point || null); }
+      if (mapPickerField === "drop")   { setDropState(stateName);   setDropPoint(point || null); }
     }
     setMapPickerField(null);
   }
@@ -624,7 +647,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     if (
       (mode === "one-way" || mode === "round-trip") &&
       !sameCityAsked &&
-      isSameCityTrip(fields.pickup, fields.drop)
+      isSameCityTrip(pickupPoint, dropPoint)
     ) {
       setSameCityOpen(true);
       return;

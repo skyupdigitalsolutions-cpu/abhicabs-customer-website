@@ -60,6 +60,9 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
   const mapDivRef       = useRef(null);
   const mapRef          = useRef(null);
   const markerRef       = useRef(null);
+  // Last pinned coordinates — handed back on confirm so callers can apply
+  // distance rules (same-city / local radius) instead of guessing from text.
+  const pointRef        = useRef(null);
   const geocoderRef     = useRef(null);
   const autocompleteRef = useRef(null);
   const searchRef       = useRef(null);
@@ -187,6 +190,7 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
 
   // ── Place pin on map ──────────────────────────────────────────────────────
   function placePin(lat, lng, doGeocode = true) {
+    pointRef.current = { lat, lng };
     const marker = markerRef.current;
     const map    = mapRef.current;
     if (!marker || !map) return;
@@ -250,7 +254,7 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
   // ── Confirm ────────────────────────────────────────────────────────────────
   function handleConfirm() {
     if (!address || resolving) return;
-    onConfirm(address, stateName);
+    onConfirm(address, stateName, pointRef.current);
   }
 
   if (!open) return null;

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import useVehicleCatalogue from "../../src/hooks/useVehicleCatalogue";
 import Button from "../../src/components/ui/Button";
 import SectionHead from "../../src/components/ui/SectionHead";
 import { IconSeat, IconLuggage, IconAC, IconCar, IconBus, IconTruck, IconCheck, IconClose, IconStar, IconWrench, IconId, IconGPS, IconInsurance, IconChevronRight } from "../../src/components/Icons";
@@ -22,6 +23,8 @@ const CATEGORY_INFO = {
 };
 
 export default function FleetPage() {
+  // The live, admin-managed fleet — see useVehicleCatalogue.
+  const { vehicles: fleet } = useVehicleCatalogue();
   const ctx = usePageContext();
   const [activeTab, setActiveTab] = useState("all");
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -29,8 +32,8 @@ export default function FleetPage() {
 
 
   const filtered = activeTab === "all"
-    ? VEHICLE_RATES
-    : VEHICLE_RATES.filter((v) => v.category === activeTab);
+    ? fleet
+    : fleet.filter((v) => v.category === activeTab);
 
   function openModal(v) {
     setSelectedVehicle(v);

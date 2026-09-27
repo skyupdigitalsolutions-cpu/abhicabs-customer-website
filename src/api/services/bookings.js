@@ -54,7 +54,10 @@ function toBookingRequest(p) {
   // /fares/options via selectedCab.vehicleClass). Deriving it again from the
   // catalogue category risks booking a different class than was priced —
   // which the customer would see as a changed fare at the last step.
-  const vehicleClass = p.vehicleClass || toBackendVehicleClass(p.vehicleCategory, p.vehicleSeats);
+  // The class the fare was QUOTED under — a per-car catalogue key such as
+  // swift-dzire or benz-33, carried through from /fares/options. Falling back
+  // to a size band here would book a retired placeholder class.
+  const vehicleClass = p.vehicleClass || toBackendVehicleClass(p.vehicleId) || undefined;
   const pickupAt     = p.date && p.time
     ? new Date(`${p.date}T${p.time}:00`).toISOString()
     : new Date().toISOString();

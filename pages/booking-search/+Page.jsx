@@ -4,7 +4,8 @@ import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
 import { selectJourney, createJourney } from "../../src/store/slices/journeySlice";
 import { setSelectedCab } from "../../src/store/slices/selectionSlice";
-import { VEHICLE_RATES, fmtINR, shortAddress, toBackendVehicleClass } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, shortAddress, toBackendVehicleClass, localVehicleForKey } from "../../src/data/mockData";
+import { getVehicleCatalogue } from "../../src/api/services/vehicles";
 import { faresApi, bookingsApi } from "../../src/api";
 import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
@@ -116,7 +117,15 @@ export default function Page() {
     tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km", stops: [],
   });
   const [inlineMapField, setInlineMapField] = useState(null);
-  const setInline = (k) => (e) => setInlineTrip((f) => ({ ...f, [k]: e.target.value }));
+  // Coordinates for the inline pickup/drop, used by the same-city radius test.
+  const [inlinePoints, setInlinePoints] = useState({ pickup: null, drop: null });
+  const setInline = (k) => (e) => {
+    // Typing over a chosen place makes its coordinates stale — drop them so
+    // the same-city radius test never measures a point the text no longer
+    // corresponds to.
+    if (k === "pickup" || k === "drop") setInlinePoints((p) => ({ ...p, [k]: null }));
+    setInlineTrip((f) => ({ ...f, [k]: e.target.value }));
+  };
   // Only meaningful in Group/Coach browse mode, where there's no real trip
   // type yet — lets the customer indicate one here, which then carries
   // through to a real search (see selectVehicle) instead of being lost.
@@ -148,12 +157,22 @@ export default function Page() {
       if (!el || !mapsLoaded || storedRef.current) return;
       storedRef.current = new window.google.maps.places.Autocomplete(el, {
         componentRestrictions: { country: "in" },
-        fields: ["formatted_address", "name"],
+        // `geometry` is needed for the same-city (local radius) test — that
+        // is a kilometre rule, so it cannot run off the address text.
+        fields: ["formatted_address", "name", "geometry"],
       });
       storedRef.current.addListener("place_changed", () => {
         const p = storedRef.current.getPlace();
         const addr = p?.formatted_address || p?.name || el.value;
+        const loc = p?.geometry?.location;
+        const pt = loc
+          ? {
+              lat: typeof loc.lat === "function" ? loc.lat() : loc.lat,
+              lng: typeof loc.lng === "function" ? loc.lng() : loc.lng,
+            }
+          : null;
         setInlineTrip((f) => ({ ...f, [field]: addr }));
+        setInlinePoints((pts) => ({ ...pts, [field]: pt }));
       });
     };
   }
@@ -171,6 +190,45 @@ export default function Page() {
   // True while the direct-vehicle fast path is pricing the trip and heading
   // straight to checkout, so the vehicle list never flashes on screen.
   const [autoPricing, setAutoPricing] = useState(false);
+
+  // The live fleet from GET /vehicles (public, no auth) — the admin-managed
+  // catalogue. Used for browse mode, so the vehicles shown before a trip is
+  // priced are the same ones the backend will actually quote, not a bundled
+  // list that can drift from it.
+  const [catalogue, setCatalogue] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getVehicleCatalogue()
+      .then((rows) => {
+        if (cancelled || !Array.isArray(rows) || !rows.length) return;
+        setCatalogue(
+          rows
+            .filter((r) => r && r.isActive !== false)
+            .map((r) => {
+              const local = localVehicleForKey(r.key);
+              return {
+                id: r.key,
+                vehicleClass: r.key,
+                name: r.name,
+                seats: r.seats,
+                bags: r.luggage || local?.bags,
+                ac: local?.ac ?? true,
+                img: r.heroUrl || local?.img,
+                imgFallback: local?.img,
+                gallery: (r.images || []).map((i) => i.url).filter(Boolean),
+                tagline: r.blurb || local?.tagline,
+                features: local?.features,
+                category: local?.category,
+                local: local?.local,
+                outstation: local?.outstation,
+                rating: r.rating ?? null,
+              };
+            })
+        );
+      })
+      .catch(() => { /* keep the bundled fallback */ });
+    return () => { cancelled = true; };
+  }, []);
   const [sameCityAsked, setSameCityAsked] = useState(false);
 
   // Real surge, straight from the backend's quote — every option in
@@ -245,15 +303,26 @@ export default function Page() {
   const isLocal = !browseMode && journey?.tripType === "local";
   const isRound = !browseMode && journey?.tripType === "round-trip";
 
+  /**
+   * Indicative rate-card number for BROWSE mode only (no trip entered yet).
+   * Never used once a real quote exists — /fares/options is the only thing
+   * that prices a booking.
+   *
+   * Returns null when there is no bundled rate data: vehicles that come from
+   * the backend catalogue but aren't in the local list (fortuner, mercedes-e)
+   * have no `local`/`outstation` block, and reading through it used to throw.
+   */
   function calcFare(v) {
     let base;
     if (isLocal) {
-      base = v.local.base8hr80km;
+      base = v.local?.base8hr80km;
     } else {
+      const perKm = v.outstation?.perKm;
+      if (perKm == null) return null;
       const km = 200;
-      const totalKm = isRound ? km * 1.9 : km;
-      base = Math.round(v.outstation.perKm * totalKm);
+      base = Math.round(perKm * (isRound ? km * 1.9 : km));
     }
+    if (base == null) return null;
     return Math.round(base * surgeMultiplier);
   }
 
@@ -272,70 +341,49 @@ export default function Page() {
   // re-badge it with the chosen vehicle's own identity (name, photo, seats,
   // bags, features) while keeping the backend's real fare, breakdown,
   // surge and vehicleClass untouched — those are what get booked.
-  const chosenVehicle = useMemo(
-    () => (urlVehicle ? VEHICLE_RATES.find((v) => v.id === urlVehicle) || null : null),
-    [urlVehicle]
-  );
+  // ?vehicle= may carry a backend catalogue key (swift-dzire) or a bundled
+  // local id (swift-desire) depending on which screen linked here, so resolve
+  // against the live catalogue first and fall back to the bundled list.
+  const chosenVehicle = useMemo(() => {
+    if (!urlVehicle) return null;
+    const key = toBackendVehicleClass(urlVehicle) || urlVehicle;
+    return (
+      (catalogue || []).find((v) => v.id === key) ||
+      VEHICLE_RATES.find((v) => v.id === urlVehicle) ||
+      localVehicleForKey(key) ||
+      null
+    );
+  }, [urlVehicle, catalogue]);
 
   // Real quotes are on screen.
   const pricedMode = !browseMode && Boolean(apiVehicles?.length);
 
-  // The backend prices per CLASS (hatchback/sedan/suv/tempo), not per
-  // vehicle, so /fares/options returns at most four rows. Rendering those
-  // rows directly collapsed the whole 13-vehicle catalogue onto four cards
-  // wearing each class's FIRST catalogue match — which is why picking a
-  // "33 Seater Bharat Benz" (class tempo) showed "12 Seater Tempo Traveler",
-  // and an Innova Crysta (class sedan) showed "Swift Desire".
+  // WHAT EXISTS IS WHATEVER THE BACKEND SAYS EXISTS.
   //
-  // Instead: keep the real catalogue as the list, and attach each vehicle's
-  // CLASS PRICE to it. Vehicles whose class the backend didn't quote are
-  // dropped — we can't sell what wasn't priced.
-  const pricedByClass = useMemo(() => {
-    const m = new Map();
-    (apiVehicles || []).forEach((o) => {
-      const k = String(o.vehicleClass || "").toLowerCase();
-      if (k && !m.has(k)) m.set(k, o);
-    });
-    return m;
-  }, [apiVehicles]);
-
+  // vehicle_catalog.key == the vehicleClass on fare_configs, one row per real
+  // car (swift-dzire, innova-crysta, tempo-17, benz-33 …) — the generic
+  // 'sedan'/'suv' rows were retired as first-seed placeholders. And
+  // quote.service.quoteAllClasses only prices classes with an ACTIVE
+  // catalogue row, so /fares/options already returns exactly the fleet the
+  // admin has switched on. Render that list directly; the bundled
+  // VEHICLE_RATES is a cosmetic fallback for browse mode only, never a
+  // second opinion on what is bookable.
   const allSource = useMemo(() => {
-    const catalogue = VEHICLE_RATES.filter((v) => Number(v.seats) <= 33);
-    if (!pricedMode) return catalogue;
-    return catalogue
-      .filter((v) => pricedByClass.has(toBackendVehicleClass(v)))
-      .map((v) => {
-        const opt = pricedByClass.get(toBackendVehicleClass(v));
-        return {
-          // Price, class and breakdown: exactly as the backend quoted them.
-          ...opt,
-          // Identity: the real catalogue vehicle the customer is looking at.
-          id: v.id,
-          vehicleId: v.id,
-          name: v.name,
-          img: v.img,
-          imgFallback: v.img,
-          gallery: v.gallery,
-          seats: v.seats,
-          bags: v.bags,
-          ac: v.ac,
-          features: v.features,
-          tagline: v.tagline,
-          category: v.category,
-          paxGroup: v.paxGroup,
-          local: v.local,
-          outstation: v.outstation,
-        };
-      });
-  }, [pricedMode, pricedByClass]);
+    if (pricedMode) return apiVehicles;
+    if (catalogue?.length) return catalogue;
+    return VEHICLE_RATES.filter((v) => Number(v.seats) <= 33);
+  }, [pricedMode, apiVehicles, catalogue]);
 
-  // With the catalogue as the list, the chosen vehicle is simply its own row.
-  const pricedChosen = useMemo(
-    () => (chosenVehicle && pricedMode
-      ? allSource.find((v) => v.id === chosenVehicle.id) || null
-      : null),
-    [chosenVehicle, pricedMode, allSource]
-  );
+  // The chosen vehicle is the priced row whose class matches its backend key.
+  const chosenKey = chosenVehicle ? toBackendVehicleClass(chosenVehicle) : null;
+  const pricedChosen = useMemo(() => {
+    if (!chosenKey || !pricedMode) return null;
+    return (
+      allSource.find((v) => String(v.vehicleClass || "").toLowerCase() === chosenKey) ||
+      allSource.find((v) => String(v.id || "").toLowerCase() === chosenKey) ||
+      null
+    );
+  }, [chosenKey, pricedMode, allSource]);
 
   const chosenUnavailable = Boolean(chosenVehicle && pricedMode && !pricedChosen);
 
@@ -376,8 +424,18 @@ export default function Page() {
       id: v.id || v.vehicleId,
       fare: v.fare != null ? v.fare : calcFare(v),
     }));
-    if (sort === "lowhigh") list = [...list].sort((a, b) => a.fare - b.fare);
-    if (sort === "highlow") list = [...list].sort((a, b) => b.fare - a.fare);
+    // Unpriced vehicles (no bundled rate card, no quote yet) sort last in
+    // both directions rather than NaN-ing the comparator.
+    const fareOf = (x) => (x.fare == null ? null : Number(x.fare));
+    const byFare = (dir) => (a, b) => {
+      const fa = fareOf(a), fb = fareOf(b);
+      if (fa == null && fb == null) return 0;
+      if (fa == null) return 1;
+      if (fb == null) return -1;
+      return dir * (fa - fb);
+    };
+    if (sort === "lowhigh") list = [...list].sort(byFare(1));
+    if (sort === "highlow") list = [...list].sort(byFare(-1));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, pricedChosen, typeFilters, seatFilters, ac, sort]);
@@ -406,6 +464,7 @@ export default function Page() {
     setAutoPricing(false);
     setSameCityAsked(false);
     setInlineTrip((f) => ({ ...f, pickup: "", drop: "", stops: [] }));
+    setInlinePoints({ pickup: null, drop: null });
     setShowFilters(true);
     // Drop ?j= from the URL so a refresh doesn't restore the cleared trip.
     try {
@@ -453,7 +512,7 @@ export default function Page() {
     if (
       (inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") &&
       !sameCityAsked &&
-      isSameCityTrip(inlineTrip.pickup, inlineTrip.drop)
+      isSameCityTrip(inlinePoints.pickup, inlinePoints.drop)
     ) {
       setSameCityOpen(true);
       return;
@@ -504,7 +563,7 @@ export default function Page() {
     // service-area / couldn't-price screen) renders as before.
     if (chosenVehicle) {
       setAutoPricing(true);
-      const wantClass = toBackendVehicleClass(chosenVehicle);
+      const wantClass = chosenKey || toBackendVehicleClass(chosenVehicle);
       faresApi.getFareOptions({ ...journeyObj, id: newId })
         .then((options) => {
           const opt = (options || []).find(
@@ -859,12 +918,31 @@ export default function Page() {
                         />
                         {inlineTrip.pickup && (
                           <button type="button" title="Clear pickup" aria-label="Clear pickup"
-                            onClick={() => setInlineTrip((f) => ({ ...f, pickup: "" }))}
+                            onClick={() => { setInlineTrip((f) => ({ ...f, pickup: "" })); setInlinePoints((p) => ({ ...p, pickup: null })); }}
                             style={clearFieldBtnStyle}>✕</button>
                         )}
                         <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
                           style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
+                    </div>
+                  )}
+
+                  {(inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && (
+                    <div style={{ display: "flex", justifyContent: "center", margin: "-6px 0" }}>
+                      <button
+                        type="button"
+                        onClick={swapPickupDrop}
+                        title="Reverse pickup and destination"
+                        aria-label="Reverse pickup and destination"
+                        style={{
+                          width: 34, height: 34, borderRadius: "50%", border: "1px solid #E5E5E5",
+                          background: "#fff", cursor: "pointer", display: "flex", alignItems: "center",
+                          justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,.08)",
+                          color: "#B8860B", fontSize: 15, lineHeight: 1, padding: 0,
+                        }}
+                      >
+                        ⇅
+                      </button>
                     </div>
                   )}
 
@@ -881,7 +959,7 @@ export default function Page() {
                         />
                         {inlineTrip.drop && (
                           <button type="button" title="Clear destination" aria-label="Clear destination"
-                            onClick={() => setInlineTrip((f) => ({ ...f, drop: "" }))}
+                            onClick={() => { setInlineTrip((f) => ({ ...f, drop: "" })); setInlinePoints((p) => ({ ...p, drop: null })); }}
                             style={clearFieldBtnStyle}>✕</button>
                         )}
                         <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
@@ -1132,9 +1210,25 @@ export default function Page() {
                           </div>
                         ) : (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
-                            <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Local (8/12 hr · 80 km)</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.local?.base8hr80km ?? 0)}</div></div>
-                            <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Outstation per km</div><div style={{ fontWeight: 700, fontSize: 15, color: "#B8860B" }}>₹{v.outstation?.perKm ?? 0}/km</div></div>
-                            <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Extra KM</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>₹{v.local?.extraKm ?? 0}/km</div></div>
+                            {v.outstation?.perKm != null || v.local?.base8hr80km != null ? (
+                              <>
+                                {v.local?.base8hr80km != null && (
+                                  <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Local (8/12 hr · 80 km)</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.local.base8hr80km)}</div></div>
+                                )}
+                                {v.outstation?.perKm != null && (
+                                  <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Outstation per km</div><div style={{ fontWeight: 700, fontSize: 15, color: "#B8860B" }}>₹{v.outstation.perKm}/km</div></div>
+                                )}
+                                {v.local?.extraKm != null && (
+                                  <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Extra KM</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>₹{v.local.extraKm}/km</div></div>
+                                )}
+                              </>
+                            ) : (
+                              // No bundled rate card for this vehicle. Showing ₹0 would
+                              // read as a real price, so say what actually gets a number.
+                              <div style={{ fontSize: 12.5, color: "#888" }}>
+                                Enter your trip details above for a live fare.
+                              </div>
+                            )}
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 10, marginTop: "auto", flexWrap: "wrap" }}>
@@ -1237,7 +1331,7 @@ export default function Page() {
           : (inlineTrip[inlineMapField] || "")
         }
         onClose={() => setInlineMapField(null)}
-        onConfirm={(address) => {
+        onConfirm={(address, _stateName, point) => {
           setInlineTrip((f) => {
             if (typeof inlineMapField === "string" && inlineMapField.startsWith("stop:")) {
               const idx = Number(inlineMapField.split(":")[1]);
@@ -1247,6 +1341,9 @@ export default function Page() {
             }
             return { ...f, [inlineMapField]: address };
           });
+          if (inlineMapField === "pickup" || inlineMapField === "drop") {
+            setInlinePoints((pts) => ({ ...pts, [inlineMapField]: point || null }));
+          }
           setInlineMapField(null);
         }}
       />

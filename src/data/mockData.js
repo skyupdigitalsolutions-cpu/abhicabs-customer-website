@@ -183,22 +183,51 @@ export const VEHICLE_CLASS_MAP = {
   bus:       "tempo",
 };
 
+// The backend's vehicleClass IS a per-car catalogue key — swift-dzire,
+// ertiga, innova-crysta, tempo-17, benz-33 … — NOT a generic size band.
+// vehicleModels.json states the rule outright: "EACH KEY UNDER `classes` MUST
+// EQUAL a vehicle_catalog.key, which must equal the vehicleClass on
+// fare_configs", and the retire_sedan_suv migration deactivated the generic
+// 'sedan'/'suv' rows as "placeholders from the first seed, from before the
+// fleet was modelled car by car".
+//
+// So this map only bridges the LOCAL catalogue's ids (used for bundled photos
+// and feature bullets) to those backend keys. It is not a pricing decision —
+// the backend prices each car in its own right.
+export const LOCAL_ID_TO_BACKEND_KEY = {
+  "swift-desire": "swift-dzire",
+  "ertiga":       "ertiga",
+  "innova":       "innova",
+  "crysta":       "innova-crysta",
+  "hycross":      "innova-hycross",
+  "tempo-12":     "tempo-12",
+  "force-13":     "urbania-13",
+  "force-16":     "urbania-16",
+  "tempo-17":     "tempo-17",
+  "urbania-20":   "urbania-maharaja",
+  "benz-22":      "benz-22",
+  "benz-28":      "benz-28",
+  "benz-33":      "benz-33",
+};
+
+const BACKEND_KEY_TO_LOCAL_ID = Object.fromEntries(
+  Object.entries(LOCAL_ID_TO_BACKEND_KEY).map(([local, key]) => [key, local])
+);
+
+/** Backend vehicleClass for a local catalogue vehicle (or an id/key string). */
 export function toBackendVehicleClass(vehicleOrCategory, seatsArg) {
   const isObj = vehicleOrCategory && typeof vehicleOrCategory === "object";
-  const category = String((isObj ? vehicleOrCategory.category : vehicleOrCategory) || "").toLowerCase();
-  const seats = Number(isObj ? vehicleOrCategory.seats : seatsArg);
+  const id = String((isObj ? vehicleOrCategory.id : vehicleOrCategory) || "").toLowerCase();
+  // Already a backend key, or a local id we can translate.
+  if (BACKEND_KEY_TO_LOCAL_ID[id]) return id;
+  if (LOCAL_ID_TO_BACKEND_KEY[id]) return LOCAL_ID_TO_BACKEND_KEY[id];
+  return id || null;
+}
 
-  // Seat count is what actually determines which rate card applies, so it
-  // wins whenever we know it. Mapping by marketing tier alone mis-priced
-  // real vehicles: "premium" (Innova Crysta, 8 seats) fell to the SEDAN
-  // rate, and "luxury" (20 Seater Urbania, 20 seats) fell to the SUV rate —
-  // a 20-seater quoted at SUV prices.
-  if (Number.isFinite(seats) && seats > 0) {
-    if (seats > 8) return "tempo";
-    if (seats > 4) return "suv";
-    return VEHICLE_CLASS_MAP[category] === "hatchback" ? "hatchback" : "sedan";
-  }
-  return VEHICLE_CLASS_MAP[category] || "sedan";
+/** The bundled catalogue entry for a backend key, for photos/features only. */
+export function localVehicleForKey(key) {
+  const localId = BACKEND_KEY_TO_LOCAL_ID[String(key || "").toLowerCase()];
+  return localId ? VEHICLE_RATES.find((v) => v.id === localId) || null : null;
 }
 
 export function parseRentalPackage(pkg) {

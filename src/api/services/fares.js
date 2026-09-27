@@ -10,7 +10,7 @@
 // photo/name from the catalogue (see vehicles.js) in place of it.
 import { api, ApiError } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
-import { VEHICLE_RATES, computeFare, parseRentalPackage, toBackendVehicleClass } from "../../data/mockData";
+import { VEHICLE_RATES, computeFare, parseRentalPackage, toBackendVehicleClass, localVehicleForKey } from "../../data/mockData";
 import { getVehicleCatalogueMap } from "./vehicles";
 import { resolveCityId, ensureCitiesLoaded } from "../cities";
 
@@ -77,9 +77,9 @@ function toFareRequest(journey, vehicleCategory, vehicleSeats) {
     body.drop = { address: String(journey.drop).trim() };
   }
 
-  if (vehicleCategory) {
-    body.vehicleClass = toRealVehicleClass(vehicleCategory, vehicleSeats);
-  }
+  // Per-car catalogue key, not a size band.
+  const cls = toRealVehicleClass(vehicleCategory, vehicleSeats);
+  if (cls) body.vehicleClass = cls;
 
   if (tripType === "ROUND_TRIP") {
     body.returnAt = toIsoDateTime(
@@ -151,9 +151,15 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
   // Dzire card, and match `?vehicle=swift-desire` too, so BOTH cards lit up
   // as "✓ Your Selection". `classMatched` below flags that case so the UI
   // can tell a real catalogue vehicle from a borrowed stand-in.
-  const exactMatch = VEHICLE_RATES.find((v) => toRealVehicleClass(v) === classKey);
+  // The backend row IS the vehicle — vehicle_catalog.key equals the
+  // vehicleClass on fare_configs, one row per real car. The bundled list is
+  // consulted only for cosmetics it doesn't carry (feature bullets, gallery,
+  // tagline), matched through the explicit key map rather than guessed.
+  const exactMatch = localVehicleForKey(classKey);
   const mockMatch = exactMatch || VEHICLE_RATES[0];
-  const classMatched = Boolean(exactMatch);
+  // A class the backend priced is real and bookable whether or not the
+  // bundled list happens to know it, so never hide it on that basis.
+  const classMatched = Boolean(exactMatch || realVehicle);
 
   const total = Number(opt.total ?? opt.fare ?? 0);
 
@@ -175,9 +181,9 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
     // false the name/photo are a borrowed stand-in and must never be
     // treated as the customer's specifically-chosen vehicle.
     classMatched,
-    name:           realVehicle?.name || mockMatch.name,
-    seats:          realVehicle?.seats ?? mockMatch.seats,
-    bags:           mockMatch.bags,
+    name:           realVehicle?.name || exactMatch?.name || mockMatch.name,
+    seats:          realVehicle?.seats ?? exactMatch?.seats ?? mockMatch.seats,
+    bags:           realVehicle?.luggage || mockMatch.bags,
     ac:             mockMatch.ac,
     img:            realVehicle?.heroUrl || mockMatch.img,
     // A guaranteed-local image for this class, used if the real heroUrl (a
@@ -243,16 +249,12 @@ export async function getFareOptions(journey) {
     });
     const merged = deduped.map((opt) => mergeOptionWithCatalogue(opt, catalogueMap, data?.surge));
 
-    // Drop classes the catalogue has no vehicle for. The backend prices every
-    // class in its fare_configs (including `hatchback`, which VEHICLE_RATES
-    // has no entry for), and mergeOptionWithCatalogue has to borrow some
-    // vehicle's photo/id to render one — which produced a phantom "Hatchback"
-    // card wearing Swift Dzire's picture, id and "✓ Your Selection" badge.
-    // There is no vehicle to actually fulfil such a booking, so don't offer
-    // it. Guard: if NOTHING matches the catalogue, keep the list as-is rather
-    // than showing the customer zero options.
-    const stocked = merged.filter((o) => o.classMatched !== false);
-    return stocked.length ? stocked : merged;
+    // quote.service.quoteAllClasses already lists ONLY classes with an active
+    // vehicle_catalog row (that is how retire_sedan_suv took the generic
+    // placeholders off every fare screen). So whatever comes back is exactly
+    // the fleet the admin has switched on — return it as-is and let the
+    // backend remain the single source of truth for what exists.
+    return merged;
   } catch (err) {
     if (MOCK_FALLBACK && isGenuineNetworkFailure(err)) return mockOptions(journey);
     throw err;
@@ -263,10 +265,11 @@ export async function estimateFare(journey, vehicleId) {
   if (USE_MOCK) return mockEstimate(journey, vehicleId);
   try {
     await ensureCitiesLoaded();
-    const vehicle = VEHICLE_RATES.find((v) => v.id === vehicleId);
+    // vehicleId may already be a backend catalogue key; toBackendVehicleClass
+    // passes those straight through and translates bundled local ids.
     const data = await api.post(
       "/fares/estimate",
-      toFareRequest(journey, vehicle?.category, vehicle?.seats)
+      toFareRequest(journey, vehicleId)
     );
     // /fares/estimate nests the priced result under `quote` (see
     // quote.service.js#getQuote) rather than flattening it like /fares/options

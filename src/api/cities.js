@@ -30,6 +30,10 @@ const FALLBACK_CITIES = [
     state: "Karnataka",
     centre: { lat: 12.9716, lng: 77.5946 },
     radiusKm: 60,
+    // City LIMITS, not service reach — the backend's cities.local_radius_km.
+    // 25 km covers the BBMP built-up area without swallowing the ring of
+    // satellite towns (Hoskote, Hosur, Ramanagara…) that a 60 km radius does.
+    localRadiusKm: 25,
     aliases: ["bengaluru", "bangalore", "bengalooru", "blr", "karnataka"],
   },
 ];
@@ -52,6 +56,7 @@ function fromBackend(row) {
     state,
     centre: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
     radiusKm: Number(row.radiusKm ?? row.radius_km ?? 60),
+    localRadiusKm: Number(row.localRadiusKm ?? row.local_radius_km ?? 25),
     aliases,
   };
 }
@@ -120,18 +125,53 @@ export function cityFromAddress(address) {
 }
 
 /**
- * True when pickup and drop are inside the SAME serviced city — i.e. this is
- * really a local/hourly hire, not an outstation run. An intercity per-km fare
- * applied to a trip that never leaves the city overcharges the customer (and
- * the backend may reject or silently re-price it), so the UI offers to switch
- * to an hourly package instead. Conservative by design: if either address
- * doesn't clearly name a serviced city, this returns false and nothing
- * changes.
+ * True when BOTH points sit inside the same city's LOCAL radius — i.e. this
+ * really is an in-city hire, not an outstation run.
+ *
+ * Distance, not name matching. Matching on the address text alone called
+ * Bengaluru -> Hosur a "same city" trip: Hosur's formatted address can carry
+ * the Bengaluru alias, it is 36 km out, and it is in a different STATE. The
+ * backend hit the identical problem and split the two numbers apart —
+ * cities.radius_km answers "will we send a car here?" (generous, 60 km) while
+ * cities.local_radius_km answers "is this still the same city?" (tight, 25 km).
+ * This uses the tight one, exactly as quote.service does.
+ *
+ * Coordinates are REQUIRED. Without them there is no honest way to apply a
+ * kilometre rule, so the answer is false and the trip stays as the customer
+ * chose it — never a guess from the address string.
+ *
+ * @param pickupPoint {lat,lng}
+ * @param dropPoint   {lat,lng}
  */
-export function isSameCityTrip(pickup, drop) {
-  const a = cityFromAddress(pickup);
-  const b = cityFromAddress(drop);
-  return Boolean(a && b && a.id === b.id);
+export function isSameCityTrip(pickupPoint, dropPoint) {
+  const a = asPoint(pickupPoint);
+  const b = asPoint(dropPoint);
+  if (!a || !b) return false;
+
+  for (const c of getServicedCities()) {
+    if (!c.centre) continue;
+    const limit = Number(c.localRadiusKm ?? 25);
+    if (haversineKm(a, c.centre) <= limit && haversineKm(b, c.centre) <= limit) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** The serviced city a point falls inside (by local radius), else null. */
+export function cityForPoint(point) {
+  const p = asPoint(point);
+  if (!p) return null;
+  for (const c of getServicedCities()) {
+    if (c.centre && haversineKm(p, c.centre) <= Number(c.localRadiusKm ?? 25)) return c;
+  }
+  return null;
+}
+
+function asPoint(p) {
+  const lat = Number(p?.lat);
+  const lng = Number(p?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 
 function toRad(d) { return (d * Math.PI) / 180; }
