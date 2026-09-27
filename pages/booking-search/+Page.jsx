@@ -59,7 +59,11 @@ export default function Page() {
   // user to /#booking. Keying browse mode off BOTH the URL and this local id
   // makes the transition happen in place, no matter how routing behaves.
   const [createdJourneyId, setCreatedJourneyId] = useState(null);
-  const effectiveJourneyId = journeyId || createdJourneyId;
+  // "Clear Locations" must beat the ?j= that pageContext still reports —
+  // history.replaceState updates the address bar but NOT pageContext, so
+  // without this override the cleared trip would immediately come back.
+  const [locationsCleared, setLocationsCleared] = useState(false);
+  const effectiveJourneyId = locationsCleared ? null : (journeyId || createdJourneyId);
 
   const journey = useSelector(selectJourney(effectiveJourneyId));
   // Browse mode = no real trip yet. Check the effective id (URL param OR the
@@ -306,6 +310,20 @@ export default function Page() {
     };
   }, [chosenVehicle, browseMode, apiVehicles]);
 
+  // Real quotes are on screen (priced mode). In this mode a card's `id` is
+  // NOT trustworthy as identity: mergeOptionWithCatalogue borrows a catalogue
+  // vehicle's id for the class, and the class's display NAME comes from the
+  // backend's own /vehicles row — so a class whose backend row is named
+  // something else entirely (e.g. "Tempo Traveller" sitting on the sedan key)
+  // would still carry Swift Dzire's id and wrongly light up as the selection.
+  // Identity is therefore matched on CLASS only once we're priced.
+  const pricedMode = !browseMode && Boolean(apiVehicles?.length);
+
+  // The customer asked for a specific vehicle but the backend priced no
+  // option for its class. Say so plainly instead of pinning some other
+  // vehicle as though it were their choice.
+  const chosenUnavailable = Boolean(chosenVehicle && pricedMode && !pricedChosen);
+
   const allSource = (apiVehicles && apiVehicles.length ? apiVehicles : VEHICLE_RATES)
     .filter((v) => Number(v.seats) <= 33); // show vehicles up to 33 seaters only
   // Arriving via "Group / Coach" scopes the whole page to actual
@@ -369,6 +387,31 @@ export default function Page() {
   }
   function clearFilters() {
     setTypeFilters([]); setSeatFilters([]); setAc("all"); setSort("recommended");
+  }
+
+  // Wipe the pickup/drop (and the priced trip built from them) and drop the
+  // page back into browse mode with the trip form open, so the customer can
+  // enter fresh locations in place. Keeps the chosen vehicle (?vehicle=) —
+  // only the locations are cleared.
+  function clearLocations() {
+    setLocationsCleared(true);
+    setCreatedJourneyId(null);
+    setApiVehicles(null);
+    setServiceAreaError(null);
+    setFareError(null);
+    setAutoPricing(false);
+    setSameCityAsked(false);
+    setInlineTrip((f) => ({ ...f, pickup: "", drop: "", stops: [] }));
+    setShowFilters(true);
+    // Drop ?j= from the URL so a refresh doesn't restore the cleared trip.
+    try {
+      const qs = new URLSearchParams();
+      if (urlVehicle) qs.set("vehicle", urlVehicle);
+      if (browseType) qs.set("type", browseType);
+      const q = qs.toString();
+      window.history.replaceState({}, "", `/booking-search${q ? `?${q}` : ""}`);
+    } catch { /* SSR guard */ }
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* SSR guard */ }
   }
 
   // Submit the inline trip form — creates a journey and stays on this page,
@@ -440,6 +483,7 @@ export default function Page() {
     // history.replaceState (so it's shareable / survives refresh) rather than
     // Vike navigate(), which could remount the page and drop the state — the
     // exact cause of "after adding details it goes back to home".
+    setLocationsCleared(false);
     setCreatedJourneyId(newId);
     try {
       const qs = new URLSearchParams();
@@ -596,6 +640,11 @@ export default function Page() {
     background: active ? "#111" : "#fff", color: active ? "#FFC107" : "#666", fontWeight: 600, fontSize: 12.5, cursor: "pointer",
   });
 
+  const clearFieldBtnStyle = {
+    flexShrink: 0, width: 36, height: 42, borderRadius: 9, border: "1px solid #E5E5E5",
+    background: "#fff", color: "#999", cursor: "pointer", fontSize: 13, lineHeight: 1,
+  };
+
   const groupFieldStyle = {
     padding: "9px 11px", borderRadius: 9, border: "1px solid #E5E5E5", background: "#fff",
     fontSize: 13, fontWeight: 500, color: "#111", outline: "none", width: "100%",
@@ -652,6 +701,16 @@ export default function Page() {
             style={{ marginLeft: "auto", padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}
           >
             Modify Search
+          </button>
+          {/* Drop the locations entirely and re-open the trip form here, so a
+              wrong pickup/drop can be cleared without going back to the
+              homepage widget and re-entering everything. */}
+          <button
+            onClick={clearLocations}
+            className="summary-bar-btn"
+            style={{ padding: "10px 16px", borderRadius: 9999, background: "transparent", color: "rgba(255,255,255,.75)", fontWeight: 600, fontSize: 13, border: "1px solid rgba(255,255,255,.28)", cursor: "pointer" }}
+          >
+            Clear Locations
           </button>
         </div>
       )}
@@ -789,6 +848,11 @@ export default function Page() {
                           placeholder="Pickup location"
                           style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
                         />
+                        {inlineTrip.pickup && (
+                          <button type="button" title="Clear pickup" aria-label="Clear pickup"
+                            onClick={() => setInlineTrip((f) => ({ ...f, pickup: "" }))}
+                            style={clearFieldBtnStyle}>✕</button>
+                        )}
                         <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
                           style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
@@ -806,6 +870,11 @@ export default function Page() {
                           placeholder="Destination"
                           style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
                         />
+                        {inlineTrip.drop && (
+                          <button type="button" title="Clear destination" aria-label="Clear destination"
+                            onClick={() => setInlineTrip((f) => ({ ...f, drop: "" }))}
+                            style={clearFieldBtnStyle}>✕</button>
+                        )}
                         <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
                           style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
@@ -970,6 +1039,20 @@ export default function Page() {
               </p>
             )}
 
+            {chosenUnavailable && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#FFF7ED", border: "1.5px solid #FBBF77", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 700, fontSize: 13.5, margin: 0, color: "#92400E" }}>
+                    {chosenVehicle?.name} isn’t available for this trip
+                  </p>
+                  <p style={{ fontSize: 12.5, color: "#B45309", margin: "2px 0 0" }}>
+                    Here are the vehicles we can offer instead.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {vehicles.length === 0 ? (
               <div style={{ background: "#fff", border: "1px dashed #E5E5E5", borderRadius: 20, padding: 48, textAlign: "center" }}>
                 <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>No vehicles match these filters</div>
@@ -988,10 +1071,10 @@ export default function Page() {
                         : null;
                       const isA = chosenClass
                         ? String(a.vehicleClass || "").toLowerCase() === chosenClass
-                        : urlVehicle && a.id === urlVehicle;
+                        : (!pricedMode && urlVehicle && a.id === urlVehicle);
                       const isB = chosenClass
                         ? String(b.vehicleClass || "").toLowerCase() === chosenClass
-                        : urlVehicle && b.id === urlVehicle;
+                        : (!pricedMode && urlVehicle && b.id === urlVehicle);
                       if (isA && !isB) return -1;
                       if (isB && !isA) return 1;
                       return 0;
@@ -1005,7 +1088,7 @@ export default function Page() {
                   const isPinned = pricedChosen
                     ? String(v.vehicleClass || "").toLowerCase() ===
                       String(pricedChosen.vehicleClass || "").toLowerCase()
-                    : Boolean(urlVehicle && v.id === urlVehicle);
+                    : (!pricedMode && Boolean(urlVehicle && v.id === urlVehicle));
                   // Key on the priced class so two options can't collide.
                   const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (
