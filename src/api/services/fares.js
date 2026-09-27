@@ -231,7 +231,18 @@ export async function getFareOptions(journey) {
       seen.add(opt.vehicleClass);
       return true;
     });
-    return deduped.map((opt) => mergeOptionWithCatalogue(opt, catalogueMap, data?.surge));
+    const merged = deduped.map((opt) => mergeOptionWithCatalogue(opt, catalogueMap, data?.surge));
+
+    // Drop classes the catalogue has no vehicle for. The backend prices every
+    // class in its fare_configs (including `hatchback`, which VEHICLE_RATES
+    // has no entry for), and mergeOptionWithCatalogue has to borrow some
+    // vehicle's photo/id to render one — which produced a phantom "Hatchback"
+    // card wearing Swift Dzire's picture, id and "✓ Your Selection" badge.
+    // There is no vehicle to actually fulfil such a booking, so don't offer
+    // it. Guard: if NOTHING matches the catalogue, keep the list as-is rather
+    // than showing the customer zero options.
+    const stocked = merged.filter((o) => o.classMatched !== false);
+    return stocked.length ? stocked : merged;
   } catch (err) {
     if (MOCK_FALLBACK && isGenuineNetworkFailure(err)) return mockOptions(journey);
     throw err;
