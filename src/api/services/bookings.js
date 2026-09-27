@@ -112,6 +112,14 @@ function toBookingRequest(p) {
   if (p.mobile)    body.guestPhone = String(p.mobile).trim();
   if (p.email)     body.guestEmail = String(p.email).trim();
 
+  // Promo code. createBookingSchema accepts `promoCode` and booking.service
+  // re-validates it against the fare it prices itself — so without this the
+  // discount the rider was shown at checkout was NEVER applied to what they
+  // were actually charged, and no redemption was recorded against the code
+  // (no usedCount, no audit trail, single-use limits unenforceable).
+  const promo = p.promoCode || p.discountCode;
+  if (promo) body.promoCode = String(promo).trim().toUpperCase();
+
   return body;
 }
 
@@ -216,8 +224,66 @@ export async function listMyBookings(params = {}) {
 // row (advancing its stage), so calling this at several stages is safe.
 export async function trackDraft(draftData) {
   try {
-    await api.post("/bookings/draft", draftData); // authed (guest or logged-in)
+    await api.post("/bookings/draft", toDraftRequest(draftData)); // authed (guest or logged-in)
   } catch {
     // Intentionally swallowed — funnel tracking must never break the booking flow
   }
+}
+
+/**
+ * Coerce a loose draft into EXACTLY what POST /bookings/draft accepts.
+ *
+ * The backend validates this body with zod (trackDraftSchema) and REJECTS the
+ * whole request on any mismatch — it doesn't just ignore bad fields. Three
+ * things must be right or every draft 400s and the funnel records nothing:
+ *
+ *   • `stage` must be one of STARTED | PICKUP_SET | DROP_SET | FARES_VIEWED |
+ *     PAYMENT_CHOSEN. Anything else is a hard validation failure.
+ *   • `tripType` must be the UPPERCASE enum (ONE_WAY / ROUND_TRIP / AIRPORT /
+ *     HOURLY), not the UI's lowercase "one-way".
+ *   • `stops` must be [{lat,lng}] objects, never address strings.
+ *
+ * Everything else the schema doesn't declare is silently stripped by zod, so
+ * sending it is harmless but pointless. NOTE: that includes guest contact
+ * (name/phone/email) — the funnel row has no column for it and
+ * funnel.service.track() ignores it. Capturing partial guest contact needs a
+ * backend change; until then the abandonment beacon to /contact is what
+ * actually reaches staff.
+ */
+const DRAFT_STAGES = ["STARTED", "PICKUP_SET", "DROP_SET", "FARES_VIEWED", "PAYMENT_CHOSEN"];
+
+function toDraftRequest(d = {}) {
+  const body = {};
+  if (DRAFT_STAGES.includes(d.stage)) body.stage = d.stage;
+
+  const tt = TRIP_TYPE_MAP[String(d.tripType || "").toLowerCase()];
+  if (tt) body.tripType = tt;
+
+  if (d.vehicleClass) body.vehicleClass = String(d.vehicleClass).slice(0, 24);
+  if (d.pickupAddress) body.pickupAddress = String(d.pickupAddress).slice(0, 500);
+  if (d.dropAddress) body.dropAddress = String(d.dropAddress).slice(0, 500);
+
+  // The schema wants one ISO datetime, not separate date/time fields.
+  if (d.pickupAt) {
+    body.pickupAt = d.pickupAt;
+  } else if (d.pickupDate) {
+    const dt = new Date(`${d.pickupDate}T${d.pickupTime || "00:00"}:00`);
+    if (!Number.isNaN(dt.getTime())) body.pickupAt = dt.toISOString();
+  }
+
+  if (Number.isFinite(Number(d.estimatedFare))) {
+    body.estimatedFare = Math.max(0, Number(d.estimatedFare));
+  }
+
+  // Coordinates only — address strings are rejected by the schema.
+  const coord = (p) =>
+    p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))
+      ? { lat: Number(p.lat), lng: Number(p.lng) }
+      : null;
+  if (coord(d.pickup)) body.pickup = coord(d.pickup);
+  if (coord(d.drop)) body.drop = coord(d.drop);
+  const stops = (Array.isArray(d.stops) ? d.stops : []).map(coord).filter(Boolean).slice(0, 5);
+  if (stops.length) body.stops = stops;
+
+  return body;
 }

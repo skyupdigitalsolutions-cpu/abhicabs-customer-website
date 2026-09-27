@@ -194,11 +194,13 @@ export default function Page() {
       balanceDue:    payLaterAmount,
       surgeFee, cgst, sgst, driverBhata,
       surge:         selected.surge,
-      // Local-only metadata (see the comment above `discountCode`'s
-      // declaration): createBooking() below does NOT forward this to the
-      // backend, since /bookings has no field for it. Kept here only so the
-      // confirmation page can display which code was used if it wants to.
+      // The code IS forwarded to the backend now (as `promoCode` — see
+      // toBookingRequest). createBookingSchema accepts it and booking.service
+      // re-validates it against the fare it prices itself, so the discount is
+      // actually applied and the redemption recorded. The amount/description
+      // stay local, for the confirmation screen only.
       discountCode, discountAmount, discountDescription,
+      promoCode: discountCode || undefined,
       paymentMethod: payMethod,
       paymentMode,
       paymentStatus:

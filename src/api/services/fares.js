@@ -62,10 +62,20 @@ function toFareRequest(journey, vehicleCategory, vehicleSeats) {
     cityId: resolveCityId(journey),
     tripType,
     pickup: { address: journey.pickup || "Bengaluru" },
-    drop:   { address: journey.drop   || "Mysuru" },
     pickupAt: toIsoDateTime(journey.date, journey.time),
     waitingMinutes: 0,
   };
+
+  // Drop is OPTIONAL in the backend schema (allClassesSchema/estimateSchema)
+  // and the quote service defaults it to the pickup for HOURLY, skipping the
+  // distance leg entirely. The old `drop: { address: journey.drop || "Mysuru" }`
+  // invented a destination: a local/hourly Bengaluru rental was quoted with a
+  // Bengaluru→Mysuru leg, and a one-way with an empty drop silently priced a
+  // ~150 km intercity trip the customer never asked for. Send it only when
+  // there really is one.
+  if (tripType !== "HOURLY" && journey.drop && String(journey.drop).trim()) {
+    body.drop = { address: String(journey.drop).trim() };
+  }
 
   if (vehicleCategory) {
     body.vehicleClass = toRealVehicleClass(vehicleCategory, vehicleSeats);
