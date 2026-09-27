@@ -202,3 +202,16 @@ export function fmtINR(n) {
 export function rid(prefix) {
   return prefix + Math.random().toString(36).slice(2, 8).toUpperCase();
 }
+
+// Full Google-autocomplete addresses are long and make a route line
+// ("123, Some Long Building Name, Some Long Road, Near Some Landmark,
+// Some Area, Bengaluru, Karnataka 560001, India → ...") wrap and look
+// cluttered wherever it's shown inline (summary bars, sidebars, invoices).
+// Short it down to just the first bit — full address stays available
+// on hover via the title attribute wherever this is used.
+export function shortAddress(addr, max = 24) {
+  if (!addr) return addr || "";
+  const first = String(addr).split(",")[0].trim();
+  const base = first.length > 2 ? first : String(addr).trim();
+  return base.length > max ? base.slice(0, max).trim() + "…" : base;
+}

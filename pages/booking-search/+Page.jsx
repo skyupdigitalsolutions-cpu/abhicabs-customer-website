@@ -4,7 +4,7 @@ import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
 import { selectJourney, createJourney } from "../../src/store/slices/journeySlice";
 import { setSelectedCab } from "../../src/store/slices/selectionSlice";
-import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, shortAddress } from "../../src/data/mockData";
 import { faresApi, bookingsApi } from "../../src/api";
 import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
@@ -18,6 +18,13 @@ import LocationMapPicker from "../../src/components/LocationMapPicker";
 // how these are actually grouped for browsing — e.g. "Force Urbania" and
 // "20 Seater Urbania Premium" both carry category:"tempo"/"luxury" but are
 // genuinely a distinct type from a plain Tempo Traveller.
+// Local calendar date (not UTC — toISOString() is a day behind in India
+// between 00:00 and 05:30 IST). See BookingWidget.jsx's toISODate for the
+// original fix this mirrors.
+function toLocalISODate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function getVehicleType(v) {
   const n = v.name.toLowerCase();
   if (n.includes("urbania")) return "Urbania";
@@ -67,6 +74,13 @@ export default function Page() {
   const [loading, setLoading] = useState(!browseMode);
   const [apiVehicles, setApiVehicles] = useState(null);
   const [serviceAreaError, setServiceAreaError] = useState(null);
+  // Any OTHER reason the backend couldn't price this trip (no rate card for
+  // the city, validation, backend down). Previously an unrecognised failure
+  // left both errors null and the page quietly fell back to VEHICLE_RATES
+  // sample prices — which still rendered "Select Vehicle" and let the whole
+  // booking go through unpriced. A trip the backend won't quote is a trip we
+  // cannot take, so this now blocks selection the same way.
+  const [fareError, setFareError] = useState(null);
   const [showFilters, setShowFilters] = useState(browseMode);
   // Browsing a specific vehicle (no trip yet) starts with the trip-details
   // panel already open — previously it stayed hidden until "Select Vehicle"
@@ -86,9 +100,13 @@ export default function Page() {
 
   // Inline trip form (browse mode) — lets the user set trip type + details
   // right here without redirecting to the home booking widget.
-  const today = new Date().toISOString().split("T")[0];
+  // FIX: toISOString() returns the UTC date, which is "yesterday" in India
+  // between 00:00 and 05:30 IST — that silently pre-filled/pre-selected the
+  // wrong (past) date and let it slip through as the min selectable date.
+  // BookingWidget.jsx already had this exact fix; porting it here too.
+  const today = toLocalISODate(new Date());
   const [inlineTrip, setInlineTrip] = useState({
-    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", stops: [],
+    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", stops: [],
   });
   const [inlineMapField, setInlineMapField] = useState(null);
   const setInline = (k) => (e) => setInlineTrip((f) => ({ ...f, [k]: e.target.value }));
@@ -98,7 +116,6 @@ export default function Page() {
   // Inline trip-detail fields for the Group/Coach filter — filled in right
   // here instead of redirecting to the homepage widget, so the customer
   // never loses their place. Same field set BookingWidget itself collects.
-  const todayStr = new Date().toISOString().slice(0, 10);
   // Via stops — same feature as the main booking widget, and same
   // restriction: only meaningful for one-way/round-trip (a Local package or
   // an Airport transfer doesn't have intermediate stops the way a
@@ -152,9 +169,17 @@ export default function Page() {
     let cancelled = false;
     setLoading(true);
     setServiceAreaError(null);
+    setFareError(null);
     faresApi.getFareOptions(journey)
       .then((options) => {
         if (cancelled) return;
+        // An empty options list means the backend had nothing bookable for
+        // this route/city — treat it as un-priceable, not as "show samples".
+        if (!options || options.length === 0) {
+          setApiVehicles(null);
+          setFareError("We couldn't price this trip. It may be outside the area we currently serve.");
+          return;
+        }
         setApiVehicles(options);
         // Funnel: record that this visitor got as far as viewing fares, so an
         // abandoned booking shows up in the ERP. Fire-and-forget; the backend
@@ -169,9 +194,24 @@ export default function Page() {
       .catch((err) => {
         if (cancelled) return;
         setApiVehicles(null);
-        // Surface service-area errors with a clear actionable message
-        if (err?.code === "OUTSIDE_SERVICE_AREA" || (err?.message || "").includes("service area")) {
-          setServiceAreaError(err.message || "Pickup is outside the Bengaluru service area.");
+        // Surface service-area errors with a clear actionable message.
+        // Broadened: the backend signals this under several codes/wordings,
+        // and matching only "OUTSIDE_SERVICE_AREA" meant the others fell
+        // through to the silent sample-price path below.
+        const code = String(err?.code || "").toUpperCase();
+        const msg  = String(err?.message || "").toLowerCase();
+        const isServiceArea =
+          code === "OUTSIDE_SERVICE_AREA" ||
+          code === "CITY_NOT_SERVICED" ||
+          code === "NO_SERVICE_AREA" ||
+          msg.includes("service area") ||
+          msg.includes("not serviced") ||
+          msg.includes("outside our service");
+        if (isServiceArea) {
+          setServiceAreaError(err.message || "Pickup is outside the area we currently serve.");
+        } else {
+          // Anything else the backend refused to price — still not bookable.
+          setFareError(err?.message || "We couldn't get a fare for this trip right now.");
         }
       })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -253,6 +293,25 @@ export default function Page() {
     if (!inlineTrip.date) { toast("Please select a date", "error"); return; }
     if (!inlineTrip.time) { toast("Please select a time", "error"); return; }
     if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnDate) { toast("Please select a return date", "error"); return; }
+    if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnTime) { toast("Please select a return time", "error"); return; }
+    if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate && inlineTrip.returnDate < inlineTrip.date) {
+      toast("Return date cannot be before the pickup date", "error"); return;
+    }
+    // PAST DATE/TIME CHECK — same 30-minute rule as the main booking widget
+    // (BookingWidget.jsx), so a past/too-soon time is blocked here too instead
+    // of only on the homepage form. Must be fixed before moving on.
+    const pickupDt = new Date(inlineTrip.date + "T" + inlineTrip.time);
+    if (pickupDt < new Date(Date.now() + 30 * 60 * 1000)) {
+      toast("Pickup time must be at least 30 minutes from now — please update it", "error");
+      return;
+    }
+    if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate && inlineTrip.returnTime) {
+      const returnDt = new Date(inlineTrip.returnDate + "T" + inlineTrip.returnTime);
+      if (returnDt <= pickupDt) {
+        toast("Return date & time must be after the pickup time", "error");
+        return;
+      }
+    }
 
     const journeyObj = {
       tripType: inlineTrip.tripType,
@@ -261,6 +320,7 @@ export default function Page() {
       date: inlineTrip.date,
       time: inlineTrip.time,
       returnDate: inlineTrip.returnDate,
+      returnTime: inlineTrip.returnTime,
       stops: (inlineTrip.stops || []).filter((s) => s.trim()),
     };
     const action = dispatch(createJourney(journeyObj));
@@ -291,6 +351,25 @@ export default function Page() {
       );
       setShowFilters(true);
       try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* SSR guard */ }
+      return;
+    }
+    // HARD STOP — the backend refused to price this trip (outside service
+    // area, no rate card, etc.). The fare on this card is then only a
+    // rate-sheet sample, never a real quote, so it must not become a booking.
+    // This is a belt-and-braces guard: the list is already hidden in these
+    // states, but nothing else in the flow re-checks serviceability before
+    // /checkout → /payment.
+    if (serviceAreaError || fareError) {
+      toast(
+        serviceAreaError || "We couldn't price this trip — please request a custom booking.",
+        "error"
+      );
+      return;
+    }
+    // A vehicle without a real backend quote (no vehicleClass = it came from
+    // the local rate sheet, not /fares/options) can't be booked either.
+    if (!v.vehicleClass) {
+      toast("This trip hasn't been priced yet — please search again or request a custom booking.", "error");
       return;
     }
     dispatch(setSelectedCab({
@@ -393,9 +472,9 @@ export default function Page() {
         <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <IconPin className="w-4 h-4 text-primary" />
-            <span style={{ fontWeight: 700, fontSize: 22 }}>{journey.pickup}</span>
+            <span title={journey.pickup} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.pickup)}</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <span style={{ fontWeight: 700, fontSize: 22 }}>{journey.drop}</span>
+            <span title={journey.drop} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.drop)}</span>
           </div>
           <span style={{ width: 1, height: 22, background: "rgba(255,255,255,.2)" }} className="hidden sm:block" />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
@@ -435,7 +514,7 @@ export default function Page() {
 
       {loading ? (
         <StateBlock icon={<Spinner />} title="Finding available cabs…" description="Matching vehicles to your journey." />
-      ) : serviceAreaError ? (
+      ) : (serviceAreaError || fareError) ? (
         <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
           <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -443,13 +522,16 @@ export default function Page() {
               <circle cx="12" cy="10" r="2" fill="#F59E0B"/>
             </svg>
           </div>
-          <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>Location Outside Service Area</h3>
+          <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>
+            {serviceAreaError ? "Location Outside Service Area" : "We couldn't price this trip"}
+          </h3>
           <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
-            {serviceAreaError}
+            {serviceAreaError || fareError}
           </p>
           <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 22px" }}>
-            We currently operate within a service radius around specific cities, not every address
-            in a state — please enter a pickup closer to one of our serviced cities and try again.
+            {serviceAreaError
+              ? "We currently operate within a service radius around specific cities, not every address in a state — please enter a pickup closer to one of our serviced cities and try again."
+              : "This trip can't be booked online until we can quote it. Change the pickup or drop and try again, or send us a request and our team will confirm availability and price for you."}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <a
@@ -605,6 +687,13 @@ export default function Page() {
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Return Date</label>
                       <input type="date" min={inlineTrip.date || today} value={inlineTrip.returnDate} onChange={setInline("returnDate")}
                         style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    </div>
+                  )}
+
+                  {inlineTrip.tripType === "round-trip" && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Return Time</label>
+                      <InlineTimeField value={inlineTrip.returnTime} onChange={setInline("returnTime")} placeholder="Select return time" />
                     </div>
                   )}
 

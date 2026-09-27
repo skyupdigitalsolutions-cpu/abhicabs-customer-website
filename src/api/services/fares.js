@@ -8,11 +8,21 @@
 // these two calls. Nothing here computes or overrides a fare; this file only
 // reshapes the backend's answer for the UI and attaches the real vehicle
 // photo/name from the catalogue (see vehicles.js) in place of it.
-import { api } from "../client";
+import { api, ApiError } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
 import { VEHICLE_RATES, computeFare } from "../../data/mockData";
 import { getVehicleCatalogueMap } from "./vehicles";
 import { resolveCityId, ensureCitiesLoaded } from "../cities";
+
+// Only a genuinely unreachable backend may fall back to mock prices. A
+// business rejection (OUTSIDE_SERVICE_AREA, CITY_NOT_SERVICED, no rate card,
+// validation) MUST bubble up — previously `if (MOCK_FALLBACK) return
+// mockOptions()` swallowed those too, so an out-of-service pickup came back
+// looking like a normal priced list and the booking sailed through.
+// Same rule bookings.js already applies.
+function isGenuineNetworkFailure(err) {
+  return err instanceof ApiError && (err.status === 0 || err.code === "NETWORK_ERROR");
+}
 
 // Backend vehicleClass enum values (from fareConfig rows seeded in DB)
 // Backend fare_configs only has: hatchback, sedan, suv, tempo
@@ -218,7 +228,7 @@ export async function getFareOptions(journey) {
     });
     return deduped.map((opt) => mergeOptionWithCatalogue(opt, catalogueMap, data?.surge));
   } catch (err) {
-    if (MOCK_FALLBACK) return mockOptions(journey);
+    if (MOCK_FALLBACK && isGenuineNetworkFailure(err)) return mockOptions(journey);
     throw err;
   }
 }
@@ -255,7 +265,7 @@ export async function estimateFare(journey, vehicleId) {
       switchedToLocal: data?.switchedToLocal || null,
     };
   } catch (err) {
-    if (MOCK_FALLBACK) return mockEstimate(journey, vehicleId);
+    if (MOCK_FALLBACK && isGenuineNetworkFailure(err)) return mockEstimate(journey, vehicleId);
     throw err;
   }
 }

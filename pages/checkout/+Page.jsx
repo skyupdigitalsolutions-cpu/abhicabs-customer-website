@@ -561,6 +561,14 @@ export default function Page() {
                   {journey.tripType === "round-trip" && journey.returnDate && (
                     <SummaryRow label="Return Date" value={journey.returnDate} />
                   )}
+                  {journey.tripType === "round-trip" && journey.returnTime && (
+                    <SummaryRow label="Return Time" value={(() => {
+                      const [hh, mm] = journey.returnTime.split(":").map(Number);
+                      const ap = hh < 12 ? "AM" : "PM";
+                      const h = hh % 12 || 12;
+                      return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
+                    })()} />
+                  )}
                   {journey.tripType === "local" && journey.package && (
                     <SummaryRow label="Package" value={journey.package} />
                   )}

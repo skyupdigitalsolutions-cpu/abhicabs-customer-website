@@ -1,6 +1,6 @@
 import React from "react";
 import { usePageContext } from "vike-react/usePageContext";
-import { fmtINR, VEHICLE_RATES } from "../../src/data/mockData";
+import { fmtINR, VEHICLE_RATES, shortAddress } from "../../src/data/mockData";
 import { useToast } from "../../src/hooks/useToast";
 import useBookingLookup from "../../src/hooks/useBookingLookup";
 import StateBlock from "../../src/components/StateBlock";
@@ -89,7 +89,11 @@ export default function Page() {
             </span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "18px 16px", fontSize: 13.5 }}>
-            <DetailCell label="Route" value={`${booking.pickup} → ${booking.drop}`} />
+            <DetailCell
+              label="Route"
+              value={`${shortAddress(booking.pickup)} → ${shortAddress(booking.drop)}`}
+              title={`${booking.pickup} → ${booking.drop}`}
+            />
             <DetailCell label="Date & Time" value={`${booking.date} · ${booking.time}`} />
             <DetailCell label="Seats · AC" value={booking.vehicleSeats ? `${booking.vehicleSeats} Seater · A/C` : "—"} />
             <DetailCell label="Passengers" value={booking.passengerCount || "—"} />
@@ -135,9 +139,9 @@ export default function Page() {
   );
 }
 
-function DetailCell({ label, value }) {
+function DetailCell({ label, value, title }) {
   return (
-    <div style={{ minWidth: 0 }}>
+    <div style={{ minWidth: 0 }} title={title}>
       <div style={{ color: "#999", fontSize: 11.5, fontWeight: 500, marginBottom: 2 }}>{label}</div>
       <div style={{ fontWeight: 600, wordBreak: "break-word" }}>{value}</div>
     </div>

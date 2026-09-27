@@ -16,6 +16,28 @@ import { IconPin, IconClose } from "../../src/components/Icons";
 
 const PARTIAL_ADVANCE_PERCENT = 25;
 
+// Backend validation errors come back as { fields: { <fieldName>: "message" } }
+// (see ApiError.fields in src/api/client.js). Each of these fields is actually
+// entered on a different page, so a validation failure sends the user
+// straight to the right one instead of leaving them stuck on Payment.
+const FIELD_TO_DESTINATION = {
+  guestName:       { path: "/checkout", label: "Your name" },
+  guestPhone:      { path: "/checkout", label: "Mobile number" },
+  guestEmail:      { path: "/checkout", label: "Email" },
+  companyName:     { path: "/checkout", label: "Company name" },
+  gstNumber:       { path: "/checkout", label: "GST number" },
+  address:         { path: "/checkout", label: "Address" },
+  landmark:        { path: "/checkout", label: "Landmark" },
+  pickup:          { path: "/booking-search", label: "Pickup location" },
+  drop:            { path: "/booking-search", label: "Drop location" },
+  stops:           { path: "/booking-search", label: "Stop location" },
+  pickupAt:        { path: "/booking-search", label: "Pickup date/time" },
+  returnAt:        { path: "/booking-search", label: "Return date/time" },
+  cityId:          { path: "/booking-search", label: "Pickup location" },
+  rentalPackageId: { path: "/booking-search", label: "Local package" },
+  rentalHours:     { path: "/booking-search", label: "Local package" },
+};
+
 export default function Page() {
   const dispatch  = useDispatch();
   const toast     = useToast();
@@ -181,6 +203,44 @@ export default function Page() {
         try {
           booking = await bookingsApi.createBooking(bookingPayload);
         } catch (err) {
+          // Field-level validation error from the backend (err.fields, e.g.
+          // { guestPhone: "invalid" }) — instead of stranding the user on
+          // this page with a generic message, send them straight back to
+          // wherever that field actually lives. Nothing is lost doing this:
+          // checkout details and the journey are both already persisted
+          // (redux + localStorage), not cleared until a booking succeeds.
+          const badField = err?.fields && Object.keys(err.fields)[0];
+          const dest = badField ? FIELD_TO_DESTINATION[badField] : null;
+          // Serviceability rejection at booking time — the trip can't be
+          // taken at all, so don't leave them on Payment staring at a
+          // generic error. Send them back to change the route.
+          const code = String(err?.code || "").toUpperCase();
+          const msg  = String(err?.message || "").toLowerCase();
+          if (
+            code === "OUTSIDE_SERVICE_AREA" || code === "CITY_NOT_SERVICED" ||
+            code === "NO_SERVICE_AREA" || msg.includes("service area") ||
+            msg.includes("not serviced") || msg.includes("outside our service")
+          ) {
+            setProcessing(false);
+            bookingFiredRef.current = false;
+            toast(
+              err.message || "This pickup is outside the area we currently serve — please change it or request a custom booking.",
+              "error"
+            );
+            navigate("/booking-search");
+            return;
+          }
+          if (dest) {
+            const fieldMsg = err.fields[badField];
+            setProcessing(false);
+            bookingFiredRef.current = false; // let them retry once the field is fixed
+            toast(
+              `${dest.label}: ${fieldMsg || "please check and update this before continuing"}`,
+              "error"
+            );
+            navigate(dest.path);
+            return;
+          }
           throw new Error(`Couldn't create your booking — ${err.message || "please check your details and try again."}`);
         }
       }

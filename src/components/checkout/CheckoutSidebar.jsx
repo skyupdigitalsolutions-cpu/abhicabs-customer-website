@@ -2,6 +2,7 @@ import Button from "../ui/Button";
 import { FareBreakupSection } from "./FareBreakupSection";
 import { PaymentOptionsCard } from "./PaymentOptionsCard";
 import { CouponOffersSection } from "./CouponOffersSection";
+import { shortAddress } from "../../data/mockData";
 
 /**
  * Complete right-column restructure matching the reference exactly:
@@ -52,7 +53,11 @@ export function CheckoutSidebar({
 
       <div className="bg-white border border-border rounded-2xl p-5">
         <h3 className="text-[15px] font-bold mb-3.5">Journey</h3>
-        <Row label="Route" value={`${journey.pickup} → ${journey.drop}`} />
+        <Row
+          label="Route"
+          value={`${shortAddress(journey.pickup)} → ${shortAddress(journey.drop)}`}
+          title={`${journey.pickup} → ${journey.drop}`}
+        />
         <Row label="Date & Time" value={journey.dateLabel} />
         <Row label="Vehicle" value={journey.vehicleName} />
         <Row label="Seats" value={journey.seats} />
@@ -85,9 +90,9 @@ export function CheckoutSidebar({
   );
 }
 
-function Row({ label, value }) {
+function Row({ label, value, title }) {
   return (
-    <div className="flex justify-between text-[13.5px] py-1.5">
+    <div className="flex justify-between text-[13.5px] py-1.5" title={title}>
       <span className="text-text-secondary">{label}</span>
       <span className="font-medium text-text">{value}</span>
     </div>
