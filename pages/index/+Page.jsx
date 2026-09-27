@@ -20,6 +20,7 @@ import ServiceStripSection from "../../src/components/ServiceStripSection";
 import FleetCarouselSection from "../../src/components/FleetCarouselSection";
 import HeroSection from "../../src/components/HeroSection";
 import { ROUTES, VEHICLE_RATES } from "../../src/data/mockData";
+import useVehicleCatalogue from "../../src/hooks/useVehicleCatalogue";
 import { IconClock, IconShield, IconTag, IconCar } from "../../src/components/Icons";
 
 // NOTE: SERVICES (One Way / Round Trip / Local Rentals / Airport Transfers
