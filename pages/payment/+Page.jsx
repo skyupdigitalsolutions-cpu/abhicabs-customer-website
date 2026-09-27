@@ -62,8 +62,21 @@ export default function Page() {
     bookingsApi.trackDraft({
       stage: "PAYMENT_CHOSEN",
       vehicleClass: selected.vehicleClass || undefined,
+      vehicleName: selected.vehicleName || vehicle?.name || undefined,
+      // Trip exactly as the customer selected it.
+      tripType:      journey.tripType,
       pickupAddress: journey.pickup,
-      dropAddress: journey.drop,
+      dropAddress:   journey.drop || undefined,
+      stops:         (journey.stops || []).length ? journey.stops : undefined,
+      pickupDate:    journey.date,
+      pickupTime:    journey.time,
+      returnDate:    journey.returnDate || undefined,
+      returnTime:    journey.returnTime || undefined,
+      rentalPackage: journey.package || undefined,
+      // Contact as entered at checkout — never a fabricated value.
+      guestName:  details.fullName || undefined,
+      guestPhone: details.mobile || undefined,
+      guestEmail: details.email || undefined,
       estimatedFare: selected.fare,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

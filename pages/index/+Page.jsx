@@ -136,6 +136,9 @@ export default function Page() {
   const pageContext = usePageContext();
   const [widgetKey, setWidgetKey] = useState("default");
   const [widgetProps, setWidgetProps] = useState({ initialMode: "one-way", presetPickup: "", presetDrop: "" });
+  // Which trip-type tab the booking widget currently has open. The quick-select
+  // service cards read this so they highlight the same thing the widget shows.
+  const [activeMode, setActiveMode] = useState("one-way");
 
   // NOTE: this homepage previously had its own embedded Contact form
   // (id="contact") wired to the real POST /api/v1/contact endpoint — the
@@ -154,6 +157,7 @@ export default function Page() {
       setTimeout(() => document.getElementById("contact-form")?.scrollIntoView({ behavior: "smooth" }), 50);
       return;
     }
+    setActiveMode(mode);
     setWidgetProps({ initialMode: mode, presetPickup: "", presetDrop: "" });
     setWidgetKey(mode + "-" + Date.now());
     setTimeout(() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -173,6 +177,7 @@ export default function Page() {
   const journeyToEdit = useSelector(selectJourney(journeyIdToEdit));
   useEffect(() => {
     if (journeyIdToEdit && journeyToEdit) {
+      setActiveMode(journeyToEdit.tripType || "one-way");
       setWidgetProps({
         initialMode: journeyToEdit.tripType || "one-way",
         presetPickup: journeyToEdit.pickup || "",
@@ -189,6 +194,7 @@ export default function Page() {
   }, []);
 
   function bookRoute(route) {
+    setActiveMode("one-way");
     setWidgetProps({ initialMode: "one-way", presetPickup: route.from, presetDrop: route.to });
     setWidgetKey("route-" + Date.now());
     setTimeout(() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -197,10 +203,10 @@ export default function Page() {
   return (
     <div className="pb-20 md:pb-0">
       {/* ============================== HERO + BOOKING ENGINE ============================== */}
-      <HeroSection widgetKey={widgetKey} widgetProps={widgetProps} />
+      <HeroSection widgetKey={widgetKey} widgetProps={widgetProps} onModeChange={setActiveMode} />
 
       {/* ============================== SERVICE STRIP ============================== */}
-      <ServiceStripSection onSelect={bookMode} />
+      <ServiceStripSection onSelect={bookMode} activeMode={activeMode} />
 
       {/* ============================== CHOOSE YOUR RIDE (fleet carousel) ============================== */}
       <FleetCarouselSection

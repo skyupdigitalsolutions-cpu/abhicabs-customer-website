@@ -15,6 +15,7 @@ import { useToast } from "../hooks/useToast";
 import { IconArrowRight, IconSwap, IconClock, IconPlane, IconPin, IconZap } from "./Icons";
 import LocationMapPicker from "./LocationMapPicker";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
+import { isSameCityTrip, ensureCitiesLoaded } from "../api/cities";
 import { createSupportTicket } from "../api/services/support";
 
 // States this business actually operates in (Karnataka, Telangana, Andhra
@@ -338,11 +339,27 @@ function bindAutocomplete(el, slotRef, onPlace) {
   slotRef.current = { el, ac };
 }
 
-export default function BookingWidget({ initialMode = "one-way", presetPickup = "", presetDrop = "", presetJourney = null }) {
+export default function BookingWidget({ initialMode = "one-way", presetPickup = "", presetDrop = "", presetJourney = null, onModeChange }) {
   const dispatch = useDispatch();
   const toast = useToast();
   const layoutScope = useId();
   const [mode, setMode] = useState(presetJourney?.tripType || initialMode);
+
+  // The trip-type tabs used to own `mode` privately, so the quick-select
+  // service cards below the widget had no idea which tab was open and kept
+  // showing "One Way" highlighted regardless. Report every change (and the
+  // starting mode) upward so the two stay in sync.
+  const selectMode = React.useCallback((m) => {
+    setMode(m);
+    onModeChange?.(m);
+  }, [onModeChange]);
+  useEffect(() => {
+    onModeChange?.(presetJourney?.tripType || initialMode);
+    // Warm the serviced-city list so same-city detection uses the live
+    // list rather than the bundled fallback. Never throws.
+    ensureCitiesLoaded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [fields, setFields] = useState(() => ({
     ...emptyFields(),
     ...(presetJourney
@@ -372,13 +389,26 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const [pickupState, setPickupState] = useState(null);
   const [dropState, setDropState] = useState(null);
   const [outOfAreaOpen, setOutOfAreaOpen] = useState(false);
+  // Same-city pickup/drop → offer an hourly package instead of an
+  // intercity fare. `sameCityAsked` makes it a one-time prompt, so choosing
+  // "keep as outstation" isn't re-asked on every submit.
+  const [sameCityOpen, setSameCityOpen] = useState(false);
+  const [sameCityAsked, setSameCityAsked] = useState(false);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestName, setRequestName] = useState("");
   const [requestPhone, setRequestPhone] = useState("");
+  // The contact endpoint requires an email, and this form used to satisfy
+  // that by inventing `phone_<number>@placeholder.local` — which reached the
+  // admin inbox looking like a real address. Ask for it instead.
+  const [requestEmail, setRequestEmail] = useState("");
 
   async function submitOutOfAreaRequest() {
     if (!requestName.trim() || !/^\d{10}$/.test(requestPhone.trim())) {
       toast("Please enter your name and a valid 10-digit mobile number", "error");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(requestEmail.trim())) {
+      toast("Please enter a valid email address so we can send you the quote", "error");
       return;
     }
     setRequestSubmitting(true);
@@ -386,7 +416,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       await createSupportTicket({
         name: requestName.trim(),
         phone: requestPhone.trim(),
-        email: `phone_${requestPhone.trim()}@placeholder.local`,
+        email: requestEmail.trim(),
         topic: "Out-of-Area Booking Request",
         message:
           `Route: ${fields.pickup || "—"} → ${fields.drop || "—"}\n` +
@@ -587,26 +617,48 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       return;
     }
 
+    // Same-city pickup and drop = an hourly hire, not an outstation run.
+    // Charging intercity per-km for a trip that never leaves the city
+    // overcharges the customer, so confirm a local package first. Shown
+    // once — "keep as outstation" proceeds unchanged.
+    if (
+      (mode === "one-way" || mode === "round-trip") &&
+      !sameCityAsked &&
+      isSameCityTrip(fields.pickup, fields.drop)
+    ) {
+      setSameCityOpen(true);
+      return;
+    }
+
+    submitJourney();
+  }
+
+  // Builds and dispatches the journey. Split out of handleSubmit so the
+  // same-city prompt can call it afterwards, optionally switching the trip
+  // to a local package.
+  function submitJourney(localPackage = null) {
+    const filledStops = stops.map((s) => s.value).filter((v) => v.trim());
     const airportLabel =
       (AIRPORTS.find((a) => a.code === fields.airport)?.name || fields.airport) +
       (fields.airportTerminal ? " — " + fields.airportTerminal : "");
+    const effMode = localPackage ? "local" : mode;
 
     const journey = {
-      tripType: mode,
-      pickup: mode === "airport" && fields.airportDirection === "pickup" ? airportLabel : fields.pickup,
+      tripType: effMode,
+      pickup: effMode === "airport" && fields.airportDirection === "pickup" ? airportLabel : fields.pickup,
       // A Local (hourly) package has no destination — the drop input is
       // hidden for that mode, but any address typed before switching modes
       // stayed in state and rode along into the journey, showing a bogus
       // "A → B" route on checkout/payment for what is a single-city hire.
-      drop: mode === "local"
+      drop: effMode === "local"
         ? ""
-        : (mode === "airport" && fields.airportDirection === "drop" ? airportLabel : fields.drop),
+        : (effMode === "airport" && fields.airportDirection === "drop" ? airportLabel : fields.drop),
       date: fields.date,
       time: fields.time,
-      returnDate: fields.returnDate,
-      returnTime: fields.returnTime,
-      package: mode === "local" ? fields.package : "",
-      stops: mode === "local" || mode === "airport" ? [] : filledStops,
+      returnDate: effMode === "local" ? "" : fields.returnDate,
+      returnTime: effMode === "local" ? "" : fields.returnTime,
+      package: effMode === "local" ? (localPackage || fields.package) : "",
+      stops: effMode === "local" || effMode === "airport" ? [] : filledStops,
       surge,
       surgeMultiplier: surge ? 1.05 : 1.0,
     };
@@ -739,14 +791,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           <style>{BW_CSS}</style>
           <div className="bw-root relative z-20">
             {/* Tabs */}
-            <div className="flex gap-1 p-[6px] overflow-x-auto bg-[#0E0E0E]" role="tablist" aria-label="Trip type">
+            <div className="bw-tabs flex gap-1 p-[6px] overflow-x-auto bg-[#0E0E0E]" role="tablist" aria-label="Trip type">
               {TABS.map((t) => (
                 <GradientPill
                   key={t.mode}
                   tone="dark"
                   active={mode === t.mode}
                   layoutId="bw-tab-pill"
-                  onClick={() => setMode(t.mode)}
+                  onClick={() => selectMode(t.mode)}
                   role="tab"
                   aria-selected={mode === t.mode}
                 >
@@ -929,6 +981,83 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
             {mounted && createPortal(
               <AnimatePresence>
+                {sameCityOpen && (
+                  <m.div
+                    key="bw-samecity-backdrop"
+                    className="bw-portal fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                    style={{ background: "rgba(14,14,14,.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={() => setSameCityOpen(false)}
+                  >
+                    <m.div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="bw-samecity-title"
+                      className="bw-pop w-full max-w-[440px]"
+                      style={{ padding: 26, borderRadius: 22 }}
+                      initial={{ opacity: 0, scale: 0.95, y: 16 }}
+                      animate={{ opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 420, damping: 32 } }}
+                      exit={{ opacity: 0, scale: 0.97, y: 8, transition: { duration: 0.15 } }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="bw-surge-icon" style={{ width: 44, height: 44, marginBottom: 14 }}>
+                        <IconClock className="w-5 h-5" />
+                      </span>
+                      <h3 id="bw-samecity-title" style={{ fontWeight: 700, fontSize: 18, margin: "0 0 6px", color: "#141414" }}>
+                        Both stops are in the same city
+                      </h3>
+                      <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "#77736A", margin: "0 0 18px" }}>
+                        For travel within one city an hourly package is cheaper than an
+                        outstation fare. Pick a package to continue.
+                      </p>
+                      <div className="flex flex-col gap-2.5">
+                        {PACKAGE_OPTIONS.map((p) => (
+                          <m.button
+                            key={p.value}
+                            type="button"
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => {
+                              setSameCityAsked(true);
+                              setSameCityOpen(false);
+                              setFields((f) => ({ ...f, package: p.value }));
+                              submitJourney(p.value);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", justifyContent: "space-between",
+                              width: "100%", padding: "13px 16px", borderRadius: 13,
+                              border: "1.5px solid #E5E5E5", background: "#fff", cursor: "pointer", textAlign: "left",
+                            }}
+                          >
+                            <span>
+                              <span style={{ display: "block", fontWeight: 700, fontSize: 14.5, color: "#141414" }}>{p.label}</span>
+                              <span style={{ display: "block", fontSize: 12, color: "#8A857C" }}>{p.description}</span>
+                            </span>
+                            <span aria-hidden style={{ color: "#B8860B", fontWeight: 800 }}>→</span>
+                          </m.button>
+                        ))}
+                      </div>
+                      <m.button
+                        type="button"
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => {
+                          setSameCityAsked(true);
+                          setSameCityOpen(false);
+                          submitJourney();
+                        }}
+                        style={{
+                          width: "100%", marginTop: 16, padding: "12px 0", borderRadius: 12,
+                          border: "none", background: "transparent", color: "#77736A",
+                          fontWeight: 600, fontSize: 13, cursor: "pointer", textDecoration: "underline",
+                        }}
+                      >
+                        No, keep it as an outstation trip
+                      </m.button>
+                    </m.div>
+                  </m.div>
+                )}
                 {outOfAreaOpen && (
                   <m.div
                     key="ooa-backdrop"
@@ -967,6 +1096,9 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                         </Field>
                         <Field label="Mobile Number">
                           <Input type="tel" inputMode="numeric" placeholder="10-digit mobile number" value={requestPhone} onChange={(e) => setRequestPhone(e.target.value.replace(/\D/g, ""))} maxLength={10} />
+                        </Field>
+                        <Field label="Email">
+                          <Input type="email" inputMode="email" placeholder="you@example.com" value={requestEmail} onChange={(e) => setRequestEmail(e.target.value)} />
                         </Field>
                       </div>
                       <div className="flex gap-3 mt-6">

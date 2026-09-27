@@ -181,6 +181,38 @@ button { cursor: pointer; }
   .rate-grid-3 { grid-template-columns: 1fr !important; }
 }
 
+/* ── Booking widget trip-type tabs ───────────────────────────────────────────*/
+/* The four tabs (One Way / Round Trip / Local / Airport) sat in a horizontally
+   scrolling flex row, so on a phone the 4th was clipped at the edge with no
+   visual hint it existed — people simply never found Airport. Lay them out as
+   an equal 4-column grid that always fits the viewport instead of scrolling.
+   These override Tailwind's utility classes on the pills, hence !important. */
+@media (max-width: 640px) {
+  .bw-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    overflow-x: visible !important;
+  }
+  .bw-tabs > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 8px 6px !important;
+    font-size: 12px !important;
+    gap: 5px !important;
+  }
+}
+/* Narrow phones: drop the icons so the longest label ("Round Trip") still
+   fits its column without truncating. */
+@media (max-width: 430px) {
+  .bw-tabs > button {
+    font-size: 11.5px !important;
+    padding: 8px 3px !important;
+    letter-spacing: -0.01em !important;
+  }
+  .bw-tabs > button svg { display: none !important; }
+}
+
 /* ── Summary bar ─────────────────────────────────────────────────────────────*/
 @media (max-width: 640px) {
   .summary-bar {

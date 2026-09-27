@@ -6,7 +6,7 @@ import { selectJourney } from "../../src/store/slices/journeySlice";
 import { selectCheckoutDetails, setCheckoutDetails } from "../../src/store/slices/checkoutSlice";
 import { API_BASE_URL } from "../../src/api/config";
 import { isAuthenticated, getStoredUserName } from "../../src/api/tokens";
-import { authApi } from "../../src/api";
+import { authApi, bookingsApi } from "../../src/api";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
 import { buildFareLines } from "../../src/lib/fareLines";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
@@ -252,20 +252,91 @@ export default function Page() {
   const surgeFee = Math.round(Number(selected.surgeFee || selected.surgeAmount || 0));
   const driverBhata = Math.round(Number(selected.driverBhata || selected.driverAllowance || 0));
 
+  // ── Progressive save ──────────────────────────────────────────────────────
+  // Previously nothing left this page until "Continue to Payment", and the
+  // only fallback was a contact beacon that required name AND phone AND a
+  // valid email — so a guest who typed their name and number and then left
+  // was never recorded at all. Now every change (debounced) pushes what the
+  // customer has actually entered so far, along with the trip they selected,
+  // so the admin sees real partial data instead of nothing.
+  const draftTimerRef = useRef(null);
+  const lastDraftRef = useRef("");
+  useEffect(() => {
+    if (bookingCompletedRef.current) return;
+    // Nothing worth recording until there's at least one contact detail.
+    const name = fullName.trim();
+    const phone = mobile.trim();
+    if (!name && !phone) return;
+
+    const draft = {
+      stage: "DETAILS_ENTERED",
+      // Contact — exactly as typed, no invented values.
+      guestName:  name || undefined,
+      guestPhone: phone || undefined,
+      guestEmail: email.trim() || undefined,
+      address:    address.trim() || undefined,
+      landmark:   landmark.trim() || undefined,
+      notes:      notes.trim() || undefined,
+      customerType,
+      companyName: customerType === "corporate" ? (companyName.trim() || undefined) : undefined,
+      gstNumber:   customerType === "corporate" ? (gstNumber.trim()   || undefined) : undefined,
+      // Trip exactly as the customer selected it.
+      tripType:      journey.tripType,
+      pickupAddress: journey.pickup,
+      dropAddress:   journey.drop || undefined,
+      stops:         (journey.stops || []).length ? journey.stops : undefined,
+      pickupDate:    journey.date,
+      pickupTime:    journey.time,
+      returnDate:    journey.returnDate || undefined,
+      returnTime:    journey.returnTime || undefined,
+      rentalPackage: journey.package || undefined,
+      vehicleClass:  selected.vehicleClass || undefined,
+      vehicleName:   selected.vehicleName || vehicle?.name || undefined,
+      estimatedFare: totalPayable,
+    };
+
+    // Skip if nothing actually changed since the last push.
+    const fingerprint = JSON.stringify(draft);
+    if (fingerprint === lastDraftRef.current) return;
+
+    clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      lastDraftRef.current = fingerprint;
+      bookingsApi.trackDraft(draft); // fire-and-forget, never blocks the form
+    }, 800);
+    return () => clearTimeout(draftTimerRef.current);
+  }, [
+    fullName, mobile, email, address, landmark, notes,
+    customerType, companyName, gstNumber,
+    journey, selected, vehicle, totalPayable,
+  ]);
+
   useEffect(() => {
     function trySendAbandonment() {
       if (bookingCompletedRef.current || abandonmentSentRef.current) return;
       const nameOk = fullName.trim().length >= 2;
       const phoneOk = /^\d{10}$/.test(mobile.trim());
-      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-      if (!nameOk || !phoneOk || !emailOk) return;
+      // Email is NOT required here any more. Requiring it meant a guest who
+      // gave a name and a valid phone — everything needed to call them back —
+      // was never reported at all, because email is an optional field.
+      if (!nameOk || !phoneOk) return;
       abandonmentSentRef.current = true;
       const message =
         `Abandoned checkout before confirming.\n` +
-        `Route: ${journey.pickup} → ${journey.drop}\n` +
+        `Trip: ${journey.tripType || "—"}\n` +
+        `Route: ${journey.pickup}${journey.drop ? ` → ${journey.drop}` : ""}\n` +
+        (journey.package ? `Package: ${journey.package}\n` : "") +
+        `When: ${journey.date || "—"} ${journey.time || ""}\n` +
         `Vehicle: ${vehicle?.name || "unknown"}\n` +
         `Estimated fare: ${fmtINR(totalPayable)}`;
-      const payload = JSON.stringify({ name: fullName.trim(), mobile: mobile.trim(), email: email.trim(), topic: "Abandoned Booking", message });
+      const payload = JSON.stringify({
+        name: fullName.trim(),
+        mobile: mobile.trim(),
+        // Sent only when the customer actually gave one.
+        ...(email.trim() ? { email: email.trim() } : {}),
+        topic: "Abandoned Booking",
+        message,
+      });
       try { navigator.sendBeacon(`${API_BASE_URL}/contact`, new Blob([payload], { type: "application/json" })); } catch { /* best-effort */ }
     }
     function onVisibilityChange() { if (document.visibilityState === "hidden") trySendAbandonment(); }
@@ -292,15 +363,15 @@ export default function Page() {
     if (!validate()) { toast("Please fix the highlighted fields", "error"); return; }
 
     // Guest user — silently register so the backend can associate the booking
-    // with a real account. Uses phone as the unique key; generates a
-    // placeholder email if the user didn't provide one.
+    // with a real account. Phone is the unique key. NO placeholder email is
+    // invented: a fabricated `guest.<phone>@placeholder.local` reached the
+    // admin looking like a real address, so any mail sent to it bounced and
+    // the record was worse than simply having no email at all.
     if (!isAuthenticated()) {
       try {
-        const guestEmail = email.trim() ||
-          `guest.${mobile.trim()}@placeholder.local`;
         await authApi.register({
           name: fullName.trim(),
-          email: guestEmail,
+          email: email.trim() || undefined,
           phone: mobile.trim(),
         });
         // Silently succeed — no toast needed, guest just continues to payment

@@ -48,7 +48,7 @@ const checkIcon = {
 
 const FEATURES = ["Verified Drivers", "Transparent Pricing", "Comfortable Vehicles", "24×7 Support"];
 
-export default function HeroSection({ widgetKey, widgetProps }) {
+export default function HeroSection({ widgetKey, widgetProps, onModeChange }) {
   const heroRef = useRef(null);
   const prefersReducedMotion = useReducedMotion();
 
@@ -239,7 +239,7 @@ export default function HeroSection({ widgetKey, widgetProps }) {
                 overflow: "hidden",
               }}
             >
-              <BookingWidget key={widgetKey} {...widgetProps} />
+              <BookingWidget key={widgetKey} {...widgetProps} onModeChange={onModeChange} />
             </m.div>
           </div>
         </section>

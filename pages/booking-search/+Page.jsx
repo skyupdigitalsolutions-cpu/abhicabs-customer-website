@@ -10,6 +10,7 @@ import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
 import { useToast } from "../../src/hooks/useToast";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
+import { isSameCityTrip, ensureCitiesLoaded } from "../../src/api/cities";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
 
 
@@ -69,6 +70,8 @@ export default function Page() {
   // Reset body scroll lock in case a modal from the previous page left it set
   useEffect(() => {
     document.body.style.overflow = "";
+    // Live serviced-city list for same-city detection. Never throws.
+    ensureCitiesLoaded();
   }, []);
 
   const [loading, setLoading] = useState(!browseMode);
@@ -159,6 +162,9 @@ export default function Page() {
   // all the customer needs to continue — the rest of the catalogue is opt-in
   // via "See other vehicles", not the default answer to "I picked this one".
   const [showOtherVehicles, setShowOtherVehicles] = useState(false);
+  // Same-city pickup/drop → offer an hourly package. One-time prompt.
+  const [sameCityOpen, setSameCityOpen] = useState(false);
+  const [sameCityAsked, setSameCityAsked] = useState(false);
 
   // Real surge, straight from the backend's quote — every option in
   // apiVehicles carries the same surge info (one demand-pricing decision per
@@ -190,8 +196,15 @@ export default function Page() {
         // dedups this into one attempt row and advances its stage.
         bookingsApi.trackDraft({
           stage: "FARES_VIEWED",
+          tripType:      journey.tripType,
           pickupAddress: journey.pickup,
-          dropAddress: journey.drop,
+          dropAddress:   journey.drop || undefined,
+          stops:         (journey.stops || []).length ? journey.stops : undefined,
+          pickupDate:    journey.date,
+          pickupTime:    journey.time,
+          returnDate:    journey.returnDate || undefined,
+          returnTime:    journey.returnTime || undefined,
+          rentalPackage: journey.package || undefined,
           estimatedFare: options?.[0]?.fare,
         });
       })
@@ -385,18 +398,36 @@ export default function Page() {
       }
     }
 
+    // Same-city pickup and drop = an hourly hire. Switch to a local package
+    // rather than quoting an intercity fare for a trip inside one city.
+    if (
+      (inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") &&
+      !sameCityAsked &&
+      isSameCityTrip(inlineTrip.pickup, inlineTrip.drop)
+    ) {
+      setSameCityOpen(true);
+      return;
+    }
+
+    submitInlineJourney();
+  }
+
+  // Split out so the same-city prompt can finish the submit, optionally
+  // switching the trip to a local package.
+  function submitInlineJourney(localPackage = null) {
+    const effType = localPackage ? "local" : inlineTrip.tripType;
     const journeyObj = {
-      tripType: inlineTrip.tripType,
+      tripType: effType,
       pickup: inlineTrip.pickup,
       // Local = no destination (see BookingWidget) — don't carry a drop
       // typed before the trip type was switched.
-      drop: inlineTrip.tripType === "local" ? "" : inlineTrip.drop,
+      drop: effType === "local" ? "" : inlineTrip.drop,
       date: inlineTrip.date,
       time: inlineTrip.time,
-      returnDate: inlineTrip.returnDate,
-      returnTime: inlineTrip.returnTime,
-      package: inlineTrip.tripType === "local" ? inlineTrip.package : "",
-      stops: inlineTrip.tripType === "local" || inlineTrip.tripType === "airport"
+      returnDate: effType === "local" ? "" : inlineTrip.returnDate,
+      returnTime: effType === "local" ? "" : inlineTrip.returnTime,
+      package: effType === "local" ? (localPackage || inlineTrip.package) : "",
+      stops: effType === "local" || effType === "airport"
         ? []
         : (inlineTrip.stops || []).filter((s) => s.trim()),
     };
@@ -996,6 +1027,59 @@ export default function Page() {
           </div>
         </div>
         </>
+      )}
+
+      {/* Same-city → confirm an hourly package instead of an intercity fare */}
+      {sameCityOpen && (
+        <div
+          onClick={() => setSameCityOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(14,14,14,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 22, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 24px 64px rgba(0,0,0,.28)" }}
+          >
+            <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 6px" }}>Both stops are in the same city</h3>
+            <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "#77736A", margin: "0 0 18px" }}>
+              For travel within one city an hourly package is cheaper than an outstation
+              fare. Pick a package to continue.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { value: "4 hrs / 40 km",   description: "Half day" },
+                { value: "8 hrs / 80 km",   description: "Full day" },
+                { value: "12 hrs / 120 km", description: "Extended day" },
+              ].map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => {
+                    setSameCityAsked(true);
+                    setSameCityOpen(false);
+                    setInlineTrip((f) => ({ ...f, tripType: "local", package: p.value }));
+                    submitInlineJourney(p.value);
+                  }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "13px 16px", borderRadius: 13, border: "1.5px solid #E5E5E5", background: "#fff", cursor: "pointer", textAlign: "left" }}
+                >
+                  <span>
+                    <span style={{ display: "block", fontWeight: 700, fontSize: 14.5 }}>{p.value}</span>
+                    <span style={{ display: "block", fontSize: 12, color: "#8A857C" }}>{p.description}</span>
+                  </span>
+                  <span aria-hidden style={{ color: "#B8860B", fontWeight: 800 }}>→</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setSameCityAsked(true); setSameCityOpen(false); submitInlineJourney(); }}
+              style={{ width: "100%", marginTop: 14, padding: "12px 0", borderRadius: 12, border: "none", background: "transparent", color: "#77736A", fontWeight: 600, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+            >
+              No, keep it as an outstation trip
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Map picker for the inline trip form */}

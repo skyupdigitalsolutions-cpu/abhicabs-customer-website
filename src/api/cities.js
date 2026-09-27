@@ -106,6 +106,34 @@ export function getDefaultCityId() {
 // Back-compat export. Prefer getDefaultCityId() so it reflects the live list.
 export const DEFAULT_CITY_ID = FALLBACK_CITIES[0]?.id ?? 1;
 
+/**
+ * Which serviced city an address string belongs to, by name/alias match.
+ * Returns null when the address doesn't name any serviced city.
+ */
+export function cityFromAddress(address) {
+  const text = String(address || "").toLowerCase();
+  if (!text.trim()) return null;
+  for (const c of getServicedCities()) {
+    if (c.aliases.some((a) => a && text.includes(a))) return c;
+  }
+  return null;
+}
+
+/**
+ * True when pickup and drop are inside the SAME serviced city — i.e. this is
+ * really a local/hourly hire, not an outstation run. An intercity per-km fare
+ * applied to a trip that never leaves the city overcharges the customer (and
+ * the backend may reject or silently re-price it), so the UI offers to switch
+ * to an hourly package instead. Conservative by design: if either address
+ * doesn't clearly name a serviced city, this returns false and nothing
+ * changes.
+ */
+export function isSameCityTrip(pickup, drop) {
+  const a = cityFromAddress(pickup);
+  const b = cityFromAddress(drop);
+  return Boolean(a && b && a.id === b.id);
+}
+
 function toRad(d) { return (d * Math.PI) / 180; }
 
 function haversineKm(a, b) {

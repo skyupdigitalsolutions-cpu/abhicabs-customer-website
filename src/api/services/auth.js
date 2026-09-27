@@ -41,9 +41,16 @@ export async function register({ name, email, phone }) {
     return { user: { name, email, phone: mobile }, mock: true };
   }
 
+  // Only send an email when the customer actually gave one. A fabricated
+  // placeholder address lands in the CRM as if it were real contact detail,
+  // and anything mailed to it bounces silently.
+  const body = { name, phone: mobile };
+  const cleanEmail = String(email || "").trim();
+  if (cleanEmail) body.email = cleanEmail;
+
   const data = await api.post(
     "/auth/register",
-    { name, email, phone: mobile },
+    body,
     { auth: false }
   );
   if (data.accessToken) {
