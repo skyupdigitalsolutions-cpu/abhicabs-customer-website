@@ -8,7 +8,7 @@ import { API_BASE_URL } from "../../src/api/config";
 import { isAuthenticated, getStoredUserName } from "../../src/api/tokens";
 import { authApi, bookingsApi } from "../../src/api";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
-import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, localVehicleForKey } from "../../src/data/mockData";
 import { buildFareLines } from "../../src/lib/fareLines";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
@@ -140,7 +140,29 @@ export default function Page() {
   const toast = useToast();
   const selected = useSelector(selectSelectedCab);
   const journey = useSelector(selectJourney(selected?.journeyId));
-  const vehicle = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
+  // The selection stores whatever id linked here: a LOCAL catalogue id
+  // (swift-desire) from the bundled list, or a BACKEND catalogue key
+  // (swift-dzire) when the live catalogue priced the trip. Resolve either —
+  // matching only the local id meant a backend-keyed selection found no
+  // vehicle and dropped the whole page into "Nothing to check out yet".
+  // Final fallback: the selection already carries name/img/seats/ac, so
+  // synthesize the display-only object the banner reads from it, so a real,
+  // priced selection is never lost just because the local rate sheet has no
+  // matching row (e.g. a backend-only car). `vehicle` is used ONLY for these
+  // display fallbacks — the fare comes from `selected` via buildFareLines.
+  const vehicle =
+    VEHICLE_RATES.find((v) => v.id === selected?.vehicleId) ||
+    localVehicleForKey(selected?.vehicleId) ||
+    (selected && (selected.vehicleName || selected.vehicleImg)
+      ? {
+          id: selected.vehicleId,
+          name: selected.vehicleName || "Selected vehicle",
+          img: selected.vehicleImg || selected.vehicleImgFallback || "",
+          imgFallback: selected.vehicleImgFallback || selected.vehicleImg || "",
+          seats: selected.vehicleSeats,
+          ac: selected.vehicleAc,
+        }
+      : null);
   const saved = useSelector(selectCheckoutDetails);
 
   const isGuest = !isAuthenticated();

@@ -7,7 +7,7 @@ import { createBooking } from "../../src/store/slices/bookingSlice";
 import { selectCheckoutDetails, clearCheckoutDetails } from "../../src/store/slices/checkoutSlice";
 import { bookingsApi, paymentsApi } from "../../src/api";
 import { USE_MOCK } from "../../src/api/config";
-import { VEHICLE_RATES, fmtINR, rid, shortAddress } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, rid, shortAddress, localVehicleForKey } from "../../src/data/mockData";
 import { buildFareLines, splitPayment } from "../../src/lib/fareLines";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import StateBlock from "../../src/components/StateBlock";
@@ -45,7 +45,24 @@ export default function Page() {
   const toast     = useToast();
   const selected  = useSelector(selectSelectedCab);
   const journey   = useSelector(selectJourney(selected?.journeyId));
-  const vehicle   = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
+  // Resolve the stored id whether it's a LOCAL catalogue id (swift-desire) or
+  // a BACKEND catalogue key (swift-dzire) — matching only the local id sent a
+  // backend-keyed selection to the "No cab selected" state right before
+  // payment. Final fallback is synthesized from the selection (which already
+  // carries name/img/seats/ac) so a real, priced booking is never lost.
+  const vehicle   =
+    VEHICLE_RATES.find((v) => v.id === selected?.vehicleId) ||
+    localVehicleForKey(selected?.vehicleId) ||
+    (selected && (selected.vehicleName || selected.vehicleImg)
+      ? {
+          id: selected.vehicleId,
+          name: selected.vehicleName || "Selected vehicle",
+          img: selected.vehicleImg || selected.vehicleImgFallback || "",
+          imgFallback: selected.vehicleImgFallback || selected.vehicleImg || "",
+          seats: selected.vehicleSeats,
+          ac: selected.vehicleAc,
+        }
+      : null);
   const details   = useSelector(selectCheckoutDetails);
 
   const [payMethod,    setPayMethod]    = useState("upi");

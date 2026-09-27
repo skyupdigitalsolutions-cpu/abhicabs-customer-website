@@ -2,7 +2,7 @@ import React from "react";
 import { useSelector } from "react-redux";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
 import { selectJourney } from "../../src/store/slices/journeySlice";
-import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, localVehicleForKey } from "../../src/data/mockData";
 import StateBlock from "../../src/components/StateBlock";
 import MobileStickyBar from "../../src/components/MobileStickyBar";
 import Button from "../../src/components/ui/Button";
@@ -15,7 +15,23 @@ import { IconPin } from "../../src/components/Icons";
 export default function Page() {
   const selected = useSelector(selectSelectedCab);
   const journey = useSelector(selectJourney(selected?.journeyId));
-  const vehicle = VEHICLE_RATES.find((v) => v.id === selected?.vehicleId);
+  // Resolve the stored id whether it's a LOCAL catalogue id (swift-desire) or
+  // a BACKEND catalogue key (swift-dzire); matching only the local id sent a
+  // backend-keyed selection to the "No cab selected" empty state. Falls back
+  // to a display-only object built from the selection so details still render.
+  const vehicle =
+    VEHICLE_RATES.find((v) => v.id === selected?.vehicleId) ||
+    localVehicleForKey(selected?.vehicleId) ||
+    (selected && (selected.vehicleName || selected.vehicleImg)
+      ? {
+          id: selected.vehicleId,
+          name: selected.vehicleName || "Selected vehicle",
+          img: selected.vehicleImg || selected.vehicleImgFallback || "",
+          imgFallback: selected.vehicleImgFallback || selected.vehicleImg || "",
+          seats: selected.vehicleSeats,
+          ac: selected.vehicleAc,
+        }
+      : null);
 
   // Browse = a vehicle was opened from the "View Details" button WITHOUT a real
   // trip (no trip type / pickup / drop chosen yet). selectJourney() falls back
