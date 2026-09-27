@@ -135,8 +135,15 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
 
   // Local mock entry for the same class, used only for cosmetic fallbacks
   // (features/gallery/tagline) that the real catalogue doesn't model yet.
-  const mockMatch = VEHICLE_RATES.find((v) => toRealVehicleClass(v.category) === classKey)
-    || VEHICLE_RATES[0];
+  // NOTE: there is no `hatchback` entry in VEHICLE_RATES, so that class
+  // finds nothing and falls through to VEHICLE_RATES[0] — Swift Dzire. That
+  // borrowed id/photo made the hatchback option render as a second Swift
+  // Dzire card, and match `?vehicle=swift-desire` too, so BOTH cards lit up
+  // as "✓ Your Selection". `classMatched` below flags that case so the UI
+  // can tell a real catalogue vehicle from a borrowed stand-in.
+  const exactMatch = VEHICLE_RATES.find((v) => toRealVehicleClass(v.category) === classKey);
+  const mockMatch = exactMatch || VEHICLE_RATES[0];
+  const classMatched = Boolean(exactMatch);
 
   const total = Number(opt.total ?? opt.fare ?? 0);
 
@@ -154,6 +161,10 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
     // gallery). The real class lives separately in `vehicleClass` below —
     // that's what any backend call (fare re-quote, booking creation) must use.
     vehicleId:      mockMatch.id,
+    // True only when this class genuinely exists in the catalogue. When
+    // false the name/photo are a borrowed stand-in and must never be
+    // treated as the customer's specifically-chosen vehicle.
+    classMatched,
     name:           realVehicle?.name || mockMatch.name,
     seats:          realVehicle?.seats ?? mockMatch.seats,
     bags:           mockMatch.bags,

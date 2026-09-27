@@ -260,9 +260,14 @@ export default function Page() {
   const pricedChosen = useMemo(() => {
     if (!chosenVehicle || browseMode || !apiVehicles?.length) return null;
     const wantClass = toBackendVehicleClass(chosenVehicle.category);
-    const opt = apiVehicles.find(
-      (o) => String(o.vehicleClass || "").toLowerCase() === wantClass
-    );
+    // Match on CLASS and require a genuine catalogue match, so a borrowed
+    // stand-in (e.g. the hatchback option wearing Swift Dzire's id) can
+    // never be mistaken for the vehicle the customer actually picked.
+    const opt =
+      apiVehicles.find(
+        (o) => String(o.vehicleClass || "").toLowerCase() === wantClass && o.classMatched !== false
+      ) ||
+      apiVehicles.find((o) => String(o.vehicleClass || "").toLowerCase() === wantClass);
     if (!opt) return null;
     return {
       ...opt,
@@ -313,6 +318,13 @@ export default function Page() {
       const wantClass = String(pricedChosen.vehicleClass || "").toLowerCase();
       list = list.filter(
         (v) => String(v.vehicleClass || "").toLowerCase() !== wantClass
+      );
+      // Drop any other option that is only a borrowed stand-in wearing the
+      // chosen vehicle's catalogue id/photo (the "Hatchback" card that was
+      // really a second Swift Dzire). It's a duplicate of what's already
+      // shown, under a class the catalogue doesn't actually stock.
+      list = list.filter(
+        (v) => !(v.classMatched === false && v.vehicleId === pricedChosen.vehicleId)
       );
       list = [pricedChosen, ...list];
     }
@@ -883,18 +895,32 @@ export default function Page() {
                 {(pricedChosen && !showOtherVehicles
                   ? [pricedChosen]
                   : [...vehicles].sort((a, b) => {
-                      // Pin the URL-selected vehicle to the top
-                      if (urlVehicle) {
-                        if (a.id === urlVehicle) return -1;
-                        if (b.id === urlVehicle) return 1;
-                      }
+                      // Pin the chosen vehicle to the top — by class when a
+                      // real quote exists, else by catalogue id.
+                      const chosenClass = pricedChosen
+                        ? String(pricedChosen.vehicleClass || "").toLowerCase()
+                        : null;
+                      const isA = chosenClass
+                        ? String(a.vehicleClass || "").toLowerCase() === chosenClass
+                        : urlVehicle && a.id === urlVehicle;
+                      const isB = chosenClass
+                        ? String(b.vehicleClass || "").toLowerCase() === chosenClass
+                        : urlVehicle && b.id === urlVehicle;
+                      if (isA && !isB) return -1;
+                      if (isB && !isA) return 1;
                       return 0;
                     })
                 ).map((v, idx) => {
                   const type = getVehicleType(v);
-                  const isPinned = urlVehicle && v.id === urlVehicle;
-                  // Use vehicleClass+idx as key to guarantee uniqueness even if
-                  // two catalogue entries share the same id after merging
+                  // Pin by CLASS once a real quote is in play — the backend
+                  // prices per class, and two classes can share one catalogue
+                  // id (see classMatched in fares.js), which previously lit up
+                  // two cards as "Your Selection" for a single choice.
+                  const isPinned = pricedChosen
+                    ? String(v.vehicleClass || "").toLowerCase() ===
+                      String(pricedChosen.vehicleClass || "").toLowerCase()
+                    : Boolean(urlVehicle && v.id === urlVehicle);
+                  // Key on the priced class so two options can't collide.
                   const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (
                     <div key={cardKey} className="vehicle-card-wrap" style={{ background: "#fff", border: isPinned ? "2px solid #FFC107" : "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap", position: "relative", boxShadow: isPinned ? "0 0 0 4px rgba(255,193,7,.15)" : "none" }}>
