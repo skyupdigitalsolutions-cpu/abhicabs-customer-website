@@ -51,8 +51,18 @@ export default function GroupFleetSection({ vehicles, id = "group-fleet" }) {
   }, [modal]);
 
   function handleBook() {
+    // Carry the chosen vehicle into the results page in browse mode so the user
+    // can fill trip details and get a REAL fare — instead of bouncing back to
+    // the home booking section (which, since we're already on the home page,
+    // looked like "redirecting to the first page" and lost the selection).
+    const id = modal?.id || null;                                   // e.g. "tempo-12"
+    const seats = String(modal?.seats || "").replace(/[^0-9]/g, ""); // e.g. "12"
     closeModal();
-    navigate("/#booking");
+    const qs = new URLSearchParams();
+    qs.set("type", "group");
+    if (id) qs.set("vehicle", id);        // pins this exact vehicle first
+    else if (seats) qs.set("seater", seats); // fallback: pre-filter by capacity
+    navigate(`/booking-search?${qs.toString()}`);
   }
 
   return (
