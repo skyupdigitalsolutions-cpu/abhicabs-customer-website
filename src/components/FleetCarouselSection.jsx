@@ -21,7 +21,7 @@ const cardReveal = {
   show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE_OUT } },
 };
 
-export default function FleetCarouselSection({ vehicles, onViewAll }) {
+export default function FleetCarouselSection({ vehicles }) {
   const scrollRef = useRef(null);
   const [modal, setModal] = useState(null);   // vehicle object or null
   const [activeImg, setActiveImg] = useState(0);
@@ -171,8 +171,8 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
             ))}
           </m.div>
 
-          {/* Progress + View All */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginTop: 10 }}>
+          {/* Scroll progress */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 10 }}>
             <div
               aria-hidden
               className="relative h-[4px] w-[140px] overflow-hidden rounded-full bg-[#ECE9E2] transition-opacity duration-300"
@@ -183,24 +183,6 @@ export default function FleetCarouselSection({ vehicles, onViewAll }) {
                 style={{ scaleX: progress, background: GOLD }}
               />
             </div>
-
-            <m.button
-              onClick={onViewAll}
-              initial="rest"
-              animate="rest"
-              whileHover="hover"
-              className="hover:!text-[#B8860B]"
-              style={{ background: "none", border: "none", color: "#111", fontWeight: 600, fontSize: 14, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              View All Vehicles
-              <m.svg
-                variants={{ rest: { x: 0 }, hover: { x: 4 } }}
-                transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                width="16" height="16" viewBox="0 0 24 24" fill="none"
-              >
-                <path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-              </m.svg>
-            </m.button>
           </div>
         </section>
 

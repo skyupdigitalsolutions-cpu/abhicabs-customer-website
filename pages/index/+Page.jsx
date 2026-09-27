@@ -209,10 +209,7 @@ export default function Page() {
       <ServiceStripSection onSelect={bookMode} activeMode={activeMode} />
 
       {/* ============================== CHOOSE YOUR RIDE (fleet carousel) ============================== */}
-      <FleetCarouselSection
-        vehicles={VEHICLE_RATES}
-        onViewAll={() => bookMode("one-way")}
-      />
+      <FleetCarouselSection vehicles={VEHICLE_RATES} />
 
       {/* ============================== GROUP TRANSPORTATION ============================== */}
       <GroupTransportBannerSection

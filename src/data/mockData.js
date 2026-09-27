@@ -142,48 +142,9 @@ export const VEHICLE_RATES = [
     features: ["Executive Seats", "Luggage Bay", "Dual A/C", "GPS Tracking", "14 Luggage Bags"],
     local:      { base8hr80km: 10000, extraKm: 58 },
     outstation: { perKm: 58, driverBhata: 1200 }
-  },
-  {
-    id: "leyland-40", name: "40 Seater Ashok Leyland Executive A/C", seats: 40, bags: 16, ac: true,
-    category: "bus", paxGroup: "large",
-    img: "/images/40seater.jpg",
-    gallery: ["/images/40seater.jpg", "/images/33seater.jpg", "/images/interior-seats.jpg"],
-    tagline: "High-capacity executive coach",
-    features: ["High-back Seats", "Luggage Bay", "Dual A/C", "GPS Tracking", "16 Luggage Bags"],
-    local:      { base8hr80km: 11000, extraKm: 65 },
-    outstation: { perKm: 65, driverBhata: 1200 }
-  },
-  {
-    id: "leyland-45", name: "45 Seater Ashok Leyland Luxury A/C", seats: 45, bags: 18, ac: true,
-    category: "bus", paxGroup: "large",
-    img: "/images/45seater.jpg",
-    gallery: ["/images/45seater.jpg", "/images/40seater.jpg", "/images/interior-seats.jpg"],
-    tagline: "Luxury fleet bus for large delegations",
-    features: ["Luxury Seats", "PA System", "Dual A/C", "GPS Tracking", "18 Luggage Bags"],
-    local:      { base8hr80km: 12000, extraKm: 70 },
-    outstation: { perKm: 70, driverBhata: 1200 }
-  },
-  {
-    id: "leyland-49-exec", name: "49 Seater Ashok Leyland Executive A/C", seats: 49, bags: 20, ac: true,
-    category: "bus", paxGroup: "large",
-    img: "/images/49seater.jpg",
-    gallery: ["/images/49seater.jpg", "/images/45seater.jpg", "/images/interior-seats.jpg"],
-    tagline: "Max-capacity executive A/C coach",
-    local:      { base8hr80km: 12000, extraKm: 63 },
-    outstation: { perKm: 63, driverBhata: 1200 },
-    features: ["49 Seats", "Luggage Bay", "Dual A/C", "GPS Tracking", "20 Luggage Bags"]
-  },
-  {
-    id: "leyland-49-nonac", name: "49 Seater Ashok Leyland Non A/C", seats: 49, bags: 20, ac: false,
-    category: "bus", paxGroup: "large",
-    img: "/images/49seaternon-ac.jpg",
-    gallery: ["/images/49seaternon-ac.jpg", "/images/49seater.jpg", "/images/interior-seats.jpg"],
-    tagline: "Budget non-A/C option for large groups",
-    features: ["49 Seats", "Large Luggage Bay", "Non A/C", "GPS Tracking", "20 Luggage Bags"],
-    local:      { base8hr80km: 10000, extraKm: 53 },
-    outstation: { perKm: 53, driverBhata: 1200 }
   }
 ];
+
 
 export const DRIVERS = ["Ramesh Kumar","Suresh Naik","Anitha Rao","Mohammed Imran","Deepak Shetty","Lakshmi Prasad"];
 

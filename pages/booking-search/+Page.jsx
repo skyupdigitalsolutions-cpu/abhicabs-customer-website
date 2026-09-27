@@ -164,6 +164,9 @@ export default function Page() {
   const [showOtherVehicles, setShowOtherVehicles] = useState(false);
   // Same-city pickup/drop → offer an hourly package. One-time prompt.
   const [sameCityOpen, setSameCityOpen] = useState(false);
+  // True while the direct-vehicle fast path is pricing the trip and heading
+  // straight to checkout, so the vehicle list never flashes on screen.
+  const [autoPricing, setAutoPricing] = useState(false);
   const [sameCityAsked, setSameCityAsked] = useState(false);
 
   // Real surge, straight from the backend's quote — every option in
@@ -444,6 +447,41 @@ export default function Page() {
       if (urlVehicle) qs.set("vehicle", urlVehicle);
       window.history.replaceState({}, "", `/booking-search?${qs.toString()}`);
     } catch { /* non-browser / SSR guard */ }
+
+    // ── Direct-vehicle fast path ──────────────────────────────────────────
+    // The customer already picked this exact vehicle before entering trip
+    // details, so re-showing a vehicle list is a pointless extra step — they
+    // would just tap the same car again. Price it here and go straight to
+    // checkout. If pricing fails we fall through and the normal list (or the
+    // service-area / couldn't-price screen) renders as before.
+    if (chosenVehicle) {
+      setAutoPricing(true);
+      const wantClass = toBackendVehicleClass(chosenVehicle.category);
+      faresApi.getFareOptions({ ...journeyObj, id: newId })
+        .then((options) => {
+          const opt = (options || []).find(
+            (o) => String(o.vehicleClass || "").toLowerCase() === wantClass
+          );
+          if (!opt) { setAutoPricing(false); return; } // fall back to the list
+          const ctx = {
+            surge: Boolean(opt.surge),
+            surgeMultiplier: opt.surgeMultiplier || 1,
+            surgePct: opt.surgePct || 0,
+          };
+          // Keep the customer's chosen vehicle identity on the priced option
+          // (the backend prices per class, not per vehicle).
+          selectAndGoToCheckout({
+            ...opt,
+            id: chosenVehicle.id,
+            name: chosenVehicle.name,
+            img: chosenVehicle.img,
+            imgFallback: chosenVehicle.img,
+            seats: chosenVehicle.seats,
+            ac: chosenVehicle.ac,
+          }, newId, ctx);
+        })
+        .catch(() => setAutoPricing(false)); // the main effect surfaces the error
+    }
   }
 
   function selectVehicle(v) {
@@ -480,16 +518,27 @@ export default function Page() {
       toast("This trip hasn't been priced yet — please search again or request a custom booking.", "error");
       return;
     }
+    selectAndGoToCheckout(v, journey.id, { surge, surgeMultiplier, surgePct });
+  }
+
+  // Puts a priced vehicle into the store and moves to checkout. Shared by the
+  // card's "Continue Booking" button and by the direct-vehicle fast path in
+  // submitInlineJourney, so both produce an identical selection payload.
+  function selectAndGoToCheckout(v, journeyId, ctx) {
+    const mult = ctx?.surgeMultiplier || 1;
     dispatch(setSelectedCab({
       vehicleId: v.id,
       fare: v.fare,
-      baseFare: Math.round(v.fare / surgeMultiplier),
-      surge,
-      surgeMultiplier,
-      surgePct: v.surgePct ?? surgePct,
-      surgeFee: surge ? Math.round(v.fare - v.fare / surgeMultiplier) : 0,
-      driverBhata: v.driverAllowance || v.outstation?.driverBhata || 0,
-      journeyId: journey.id,
+      baseFare: Math.round(v.fare / mult),
+      surge: Boolean(ctx?.surge),
+      surgeMultiplier: mult,
+      surgePct: v.surgePct ?? ctx?.surgePct ?? 0,
+      surgeFee: ctx?.surge ? Math.round(v.fare - v.fare / mult) : 0,
+      // Only the backend-quoted allowance. The old `|| v.outstation.driverBhata`
+      // fallback pulled a number off the local rate card that was never part
+      // of the quoted total (see the payment-summary fix).
+      driverBhata: Number(v.driverAllowance || 0),
+      journeyId,
       vehicleName: v.name,
       vehicleSeats: v.seats,
       vehicleAc: v.ac,
@@ -620,7 +669,13 @@ export default function Page() {
         </div>
       )}
 
-      {loading ? (
+      {autoPricing ? (
+        <StateBlock
+          icon={<Spinner />}
+          title={`Pricing your ${chosenVehicle?.name || "vehicle"}…`}
+          description="Taking you straight to checkout."
+        />
+      ) : loading ? (
         <StateBlock icon={<Spinner />} title="Finding available cabs…" description="Matching vehicles to your journey." />
       ) : (serviceAreaError || fareError) ? (
         <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>

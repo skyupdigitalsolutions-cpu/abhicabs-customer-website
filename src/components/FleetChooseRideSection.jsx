@@ -23,7 +23,6 @@ const ICONS = { all: IconCar, sedan: IconCar, suv: IconCar, luxury: IconStar, te
 //   matched against a tab's id (default "category"); "all" tab id always
 //   shows every vehicle regardless of this field.
 // - onStartBooking: href for the "Start Your Booking" CTA under the grid.
-// - onViewAll: () => void — called when "View All Vehicles" is pressed.
 // - eyebrow / title / description: optional copy overrides.
 // - id: anchor id for the section (default "fleet").
 // - className: optional extra classes on the outer <section>.
@@ -32,7 +31,6 @@ export default function FleetChooseRideSection({
   tabs,
   categoryField = "category",
   onStartBooking = "#booking",
-  onViewAll,
   eyebrow = "Our Fleet",
   title = "Choose Your Ride",
   description = "From everyday city travel to large group journeys, choose the vehicle that fits your trip.",
@@ -88,12 +86,6 @@ export default function FleetChooseRideSection({
             >
               Start Your Booking <IconArrowRight className="w-4 h-4" />
             </a>
-          </div>
-
-          <div className="text-right mt-4">
-            <button onClick={onViewAll} className="text-primary font-semibold text-[14px] inline-flex items-center gap-1.5">
-              View All Vehicles <IconArrowRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>
