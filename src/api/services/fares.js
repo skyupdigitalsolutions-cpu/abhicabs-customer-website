@@ -10,7 +10,7 @@
 // photo/name from the catalogue (see vehicles.js) in place of it.
 import { api, ApiError } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
-import { VEHICLE_RATES, computeFare } from "../../data/mockData";
+import { VEHICLE_RATES, computeFare, parseRentalPackage, toBackendVehicleClass } from "../../data/mockData";
 import { getVehicleCatalogueMap } from "./vehicles";
 import { resolveCityId, ensureCitiesLoaded } from "../cities";
 
@@ -24,20 +24,11 @@ function isGenuineNetworkFailure(err) {
   return err instanceof ApiError && (err.status === 0 || err.code === "NETWORK_ERROR");
 }
 
-// Backend vehicleClass enum values (from fareConfig rows seeded in DB)
-// Backend fare_configs only has: hatchback, sedan, suv, tempo
-const VEHICLE_CLASS_MAP = {
-  hatchback: "hatchback",
-  sedan:     "sedan",
-  suv:       "suv",
-  tempo:     "tempo",
-  luxury:    "suv",
-  premium:   "sedan",
-  bus:       "tempo",
-};
-function toRealVehicleClass(category) {
-  return VEHICLE_CLASS_MAP[(category || "").toLowerCase()] || "sedan";
-}
+// vehicleClass mapping lives in src/data/mockData.js so the fares service,
+// the bookings service and the UI all resolve a vehicle to the SAME class —
+// they each kept a private copy before, which is how a directly-chosen
+// vehicle could be priced under one class and booked under another.
+const toRealVehicleClass = toBackendVehicleClass;
 
 // Backend tripType enum: ONE_WAY | ROUND_TRIP | AIRPORT | HOURLY
 const TRIP_TYPE_MAP = {
@@ -89,8 +80,11 @@ function toFareRequest(journey, vehicleCategory) {
 
 
   if (tripType === "HOURLY") {
-    // Send rentalHours as fallback — backend requires one of rentalPackageId or rentalHours
-    body.rentalHours = journey.rentalHours || 8;
+    // Honour the package the customer actually picked ("4 hrs / 40 km" etc).
+    // This used to hardcode 8, so a 4h or 12h selection was priced as 8h.
+    const pkg = parseRentalPackage(journey.package);
+    body.rentalHours = journey.rentalHours || pkg?.hours || 8;
+    if (pkg?.km) body.rentalKm = pkg.km;
     if (journey.rentalPackageId) body.rentalPackageId = journey.rentalPackageId;
   }
 

@@ -594,13 +594,19 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     const journey = {
       tripType: mode,
       pickup: mode === "airport" && fields.airportDirection === "pickup" ? airportLabel : fields.pickup,
-      drop: mode === "airport" && fields.airportDirection === "drop" ? airportLabel : fields.drop,
+      // A Local (hourly) package has no destination — the drop input is
+      // hidden for that mode, but any address typed before switching modes
+      // stayed in state and rode along into the journey, showing a bogus
+      // "A → B" route on checkout/payment for what is a single-city hire.
+      drop: mode === "local"
+        ? ""
+        : (mode === "airport" && fields.airportDirection === "drop" ? airportLabel : fields.drop),
       date: fields.date,
       time: fields.time,
       returnDate: fields.returnDate,
       returnTime: fields.returnTime,
       package: mode === "local" ? fields.package : "",
-      stops: filledStops,
+      stops: mode === "local" || mode === "airport" ? [] : filledStops,
       surge,
       surgeMultiplier: surge ? 1.05 : 1.0,
     };

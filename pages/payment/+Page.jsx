@@ -7,7 +7,8 @@ import { createBooking } from "../../src/store/slices/bookingSlice";
 import { selectCheckoutDetails, clearCheckoutDetails } from "../../src/store/slices/checkoutSlice";
 import { bookingsApi, paymentsApi } from "../../src/api";
 import { USE_MOCK } from "../../src/api/config";
-import { VEHICLE_RATES, fmtINR, rid } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, rid, shortAddress } from "../../src/data/mockData";
+import { buildFareLines, splitPayment } from "../../src/lib/fareLines";
 import StateBlock from "../../src/components/StateBlock";
 import Modal from "../../src/components/Modal";
 import Button from "../../src/components/ui/Button";
@@ -104,36 +105,28 @@ export default function Page() {
     );
   }
 
-  const baseFare     = selected.baseFare || selected.fare;
-  const surgeFee     = selected.surgeFee || 0;
-  const driverBhata  = selected.driverBhata || vehicle?.outstation?.driverBhata || 0;
-  // The real, backend-quoted total for this trip (already includes surge,
-  // driver allowance, night allowance, minimum-fare top-up where they apply).
-  const quotedTotal  = selected.fare;
+  // Every rupee shown on this page — and on the invoice — comes from this one
+  // call, so the summary, the invoice and the amount actually charged can
+  // never disagree. See src/lib/fareLines.js for why this was centralised.
   const isCorporate  = details.customerType === "corporate";
-  const hasRealBreakdown = Array.isArray(selected.breakdown) && selected.breakdown.length > 0;
-  const cgst         = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
-  const sgst         = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
-  // Checked live at Checkout against POST /discounts/check (real, unchanged
-  // backend endpoint). IMPORTANT LIMITATION: that endpoint only validates a
-  // code — booking creation has no discountCode field, so nothing server-side
-  // records this redemption or decrements the code's use count. The amount
-  // below is what the rider is actually charged (both here and at Razorpay,
-  // since this page already controls the checkout-widget amount directly),
-  // but there is currently no backend record tying "this code was used" to
-  // "this booking" — enforcing that (single-use limits, usedCount, audit)
-  // needs a small backend change this pass intentionally left untouched.
   const discountCode        = details.discountCode || null;
-  const discountAmount      = discountCode ? Number(details.discountAmount || 0) : 0;
   const discountDescription = details.discountDescription || null;
-  const subTotal     = quotedTotal + cgst + sgst;
-  const totalPayable = Math.max(0, subTotal - discountAmount);
+  const fare = buildFareLines(selected, {
+    isCorporate,
+    discountAmount: discountCode ? details.discountAmount : 0,
+    discountCode,
+  });
+  const {
+    lines: fareLines, tripTotal, cgst, sgst, discount: discountAmount, totalPayable,
+  } = fare;
+  // Kept for the booking payload / invoice header, which record them
+  // separately from the displayed lines.
+  const baseFare    = tripTotal;
+  const surgeFee    = Math.round(Number(selected.surgeFee || selected.surgeAmount || 0));
+  const driverBhata = Math.round(Number(selected.driverBhata || selected.driverAllowance || 0));
 
-  const payNowAmount =
-    paymentMode === "ZERO"    ? 0 :
-    paymentMode === "PARTIAL" ? Math.round((totalPayable * PARTIAL_ADVANCE_PERCENT) / 100) :
-    totalPayable;
-  const payLaterAmount = totalPayable - payNowAmount;
+  const { payNow: payNowAmount, payLater: payLaterAmount } =
+    splitPayment(totalPayable, paymentMode, PARTIAL_ADVANCE_PERCENT);
 
   const confirmButtonLabel =
     paymentMode === "ZERO"    ? "Confirm Booking" :
@@ -157,8 +150,18 @@ export default function Page() {
       tripType:      journey.tripType,
       returnDate:    journey.returnDate,
       returnTime:    journey.returnTime,
+      // The chosen local package ("8 hrs / 80 km"). This was never forwarded,
+      // so toBookingRequest() had nothing to derive rentalHours from and fell
+      // back to a hardcoded 8 — the source of "That rental package is not
+      // available" landing only at the payment step.
+      package:       journey.package,
+      rentalPackageId: journey.rentalPackageId,
+      rentalHours:   journey.rentalHours,
       vehicleId:     vehicle.id,
       vehicleCategory: vehicle.category,
+      // The class the fare was quoted under — booked as-is so the price
+      // can't shift between the quote and the booking.
+      vehicleClass:  selected.vehicleClass || undefined,
       vehicle:       vehicle.name,
       vehicleImg:    vehicle.img,
       vehicleImgFallback: vehicle.imgFallback || vehicle.img,
@@ -225,6 +228,25 @@ export default function Page() {
             bookingFiredRef.current = false;
             toast(
               err.message || "This pickup is outside the area we currently serve — please change it or request a custom booking.",
+              "error"
+            );
+            navigate("/booking-search");
+            return;
+          }
+          // Trip-detail rejections (rental package, unavailable vehicle,
+          // unpriceable route). Nothing on THIS page can fix them, so route
+          // back to where the trip is actually edited instead of leaving a
+          // red toast over a dead Payment screen.
+          if (
+            code.includes("RENTAL_PACKAGE") || msg.includes("rental package") ||
+            code.includes("PACKAGE_NOT") ||
+            code.includes("VEHICLE_NOT_AVAILABLE") || msg.includes("not available for") ||
+            code.includes("FARE") || msg.includes("fare")
+          ) {
+            setProcessing(false);
+            bookingFiredRef.current = false;
+            toast(
+              `${err.message || "This trip can't be booked as selected."} — please adjust your trip and try again.`,
               "error"
             );
             navigate("/booking-search");
@@ -439,12 +461,37 @@ export default function Page() {
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
-            <SummaryRow label="Route"        value={`${journey.pickup} → ${journey.drop}`} />
+            <SummaryRow label="Route"        value={`${shortAddress(journey.pickup)} → ${shortAddress(journey.drop)}`} />
             <SummaryRow label="Date · Time"  value={`${journey.date} · ${journey.time}`} />
-            <SummaryRow label="Base Fare"    value={fmtINR(baseFare)} />
-            {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
-            {surgeFee > 0    && <SummaryRow label={`Surge Fee${selected.surgePct ? ` (${selected.surgePct}%)` : ""}`} value={`+ ${fmtINR(surgeFee)}`} />}
-            {isCorporate     && <SummaryRow label="Taxes (5%)"        value={`+ ${fmtINR(cgst + sgst)}`} />}
+            {journey.tripType === "local" && journey.package && (
+              <SummaryRow label="Package" value={journey.package} />
+            )}
+
+            {/* Real, reconciling fare breakdown — these lines always sum to
+                the trip fare below, whether they came from the backend's
+                own breakdown or were derived from its named components. */}
+            <div style={{ borderTop: "1px dashed #EFEFEF", marginTop: 4, paddingTop: 9, display: "flex", flexDirection: "column", gap: 9 }}>
+              {fareLines.map((l, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <span style={{ color: "#666" }}>
+                    {l.label}
+                    {l.note && <span style={{ display: "block", fontSize: 11, color: "#999" }}>{l.note}</span>}
+                  </span>
+                  <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtINR(l.amount)}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: "1px solid #F2F2F2" }}>
+                <span style={{ fontWeight: 700 }}>Trip fare</span>
+                <span style={{ fontWeight: 700 }}>{fmtINR(tripTotal)}</span>
+              </div>
+            </div>
+
+            {isCorporate && cgst + sgst > 0 && (
+              <>
+                <SummaryRow label="CGST (2.5%)" value={`+ ${fmtINR(cgst)}`} />
+                <SummaryRow label="SGST (2.5%)" value={`+ ${fmtINR(sgst)}`} />
+              </>
+            )}
             {discountAmount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "#666" }}>Promo ({discountCode})</span>
@@ -483,7 +530,8 @@ export default function Page() {
       {showInvoice && (
         <InvoiceModal
           journey={journey} vehicle={vehicle} details={details}
-          baseFare={baseFare} surgeFee={surgeFee} cgst={cgst} sgst={sgst}
+          fareLines={fareLines} tripTotal={tripTotal}
+          cgst={cgst} sgst={sgst}
           discountCode={discountCode} discountAmount={discountAmount}
           totalPayable={totalPayable}
           onClose={() => setShowInvoice(false)}
@@ -503,7 +551,7 @@ function SummaryRow({ label, value }) {
   );
 }
 
-function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgst, discountCode, discountAmount, totalPayable, onClose, onConfirm }) {
+function InvoiceModal({ journey, vehicle, details, fareLines, tripTotal, cgst, sgst, discountCode, discountAmount, totalPayable, onClose, onConfirm }) {
   const isCorporate  = details.customerType === "corporate";
   const invoiceNumber = "INV-" + Date.now().toString().slice(-9);
   const billedOn     = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -611,9 +659,17 @@ function InvoiceModal({ journey, vehicle, details, baseFare, surgeFee, cgst, sgs
                 <td className="px-3 py-1.5 border-t border-gray-200"><span className="text-gray-500">Trip Type</span><span className="ml-2 font-semibold">{journey.tripType}</span></td>
                 <td className="px-3 py-1.5 border-t border-gray-200 border-l border-gray-300 text-right font-semibold" rowSpan={5}>
                   <div className="flex flex-col gap-1.5 items-end pt-1">
-                    <div className="flex justify-between w-full"><span className="text-gray-500">Base Fare</span><span className="font-bold">₹ {baseFare.toLocaleString("en-IN")}</span></div>
-                    {surgeFee > 0 && <div className="flex justify-between w-full"><span className="text-amber-600">Surge Fee (5%)</span><span className="font-bold text-amber-600">₹ {surgeFee.toLocaleString("en-IN")}</span></div>}
-                    {isCorporate && (<>
+                    {fareLines.map((l, i) => (
+                      <div key={i} className="flex justify-between w-full gap-3">
+                        <span className="text-gray-500 text-left">{l.label}</span>
+                        <span className="font-bold whitespace-nowrap">₹ {Math.round(l.amount).toLocaleString("en-IN")}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between w-full border-t border-gray-200 pt-1.5 mt-0.5">
+                      <span className="text-gray-600 font-semibold">Trip Fare</span>
+                      <span className="font-bold">₹ {tripTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    {isCorporate && (cgst + sgst) > 0 && (<>
                       <div className="flex justify-between w-full"><span className="text-gray-500">CGST (2.5%)</span><span className="font-bold">₹ {cgst.toLocaleString("en-IN")}</span></div>
                       <div className="flex justify-between w-full"><span className="text-gray-500">SGST (2.5%)</span><span className="font-bold">₹ {sgst.toLocaleString("en-IN")}</span></div>
                     </>)}

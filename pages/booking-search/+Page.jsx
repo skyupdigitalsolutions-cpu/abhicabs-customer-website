@@ -4,7 +4,7 @@ import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
 import { selectJourney, createJourney } from "../../src/store/slices/journeySlice";
 import { setSelectedCab } from "../../src/store/slices/selectionSlice";
-import { VEHICLE_RATES, fmtINR, shortAddress } from "../../src/data/mockData";
+import { VEHICLE_RATES, fmtINR, shortAddress, toBackendVehicleClass } from "../../src/data/mockData";
 import { faresApi, bookingsApi } from "../../src/api";
 import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
@@ -106,7 +106,7 @@ export default function Page() {
   // BookingWidget.jsx already had this exact fix; porting it here too.
   const today = toLocalISODate(new Date());
   const [inlineTrip, setInlineTrip] = useState({
-    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", stops: [],
+    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km", stops: [],
   });
   const [inlineMapField, setInlineMapField] = useState(null);
   const setInline = (k) => (e) => setInlineTrip((f) => ({ ...f, [k]: e.target.value }));
@@ -155,6 +155,10 @@ export default function Page() {
 
   const [ac, setAc] = useState("all"); // all | on | off
   const [sort, setSort] = useState("recommended");
+  // When a specific vehicle was chosen up front, the priced result for it is
+  // all the customer needs to continue — the rest of the catalogue is opt-in
+  // via "See other vehicles", not the default answer to "I picked this one".
+  const [showOtherVehicles, setShowOtherVehicles] = useState(false);
 
   // Real surge, straight from the backend's quote — every option in
   // apiVehicles carries the same surge info (one demand-pricing decision per
@@ -234,6 +238,53 @@ export default function Page() {
   }
 
   const GROUP_TYPES = ["Coach"];
+
+  // ── Direct vehicle selection ──────────────────────────────────────────────
+  // The customer picked a SPECIFIC vehicle (e.g. Swift Desire) from a fleet
+  // card, so `?vehicle=swift-desire` is in the URL. The backend, though,
+  // prices per CLASS (hatchback/sedan/suv/tempo) and returns one option per
+  // class — which mergeOptionWithCatalogue then labels with that class's
+  // first catalogue match. The result was that after entering trip details
+  // the chosen vehicle vanished and the customer was handed a generic
+  // "sedan" list to choose from all over again.
+  //
+  // Instead: take the priced option for the chosen vehicle's class, and
+  // re-badge it with the chosen vehicle's own identity (name, photo, seats,
+  // bags, features) while keeping the backend's real fare, breakdown,
+  // surge and vehicleClass untouched — those are what get booked.
+  const chosenVehicle = useMemo(
+    () => (urlVehicle ? VEHICLE_RATES.find((v) => v.id === urlVehicle) || null : null),
+    [urlVehicle]
+  );
+
+  const pricedChosen = useMemo(() => {
+    if (!chosenVehicle || browseMode || !apiVehicles?.length) return null;
+    const wantClass = toBackendVehicleClass(chosenVehicle.category);
+    const opt = apiVehicles.find(
+      (o) => String(o.vehicleClass || "").toLowerCase() === wantClass
+    );
+    if (!opt) return null;
+    return {
+      ...opt,
+      // Identity = what the customer actually chose.
+      id:         chosenVehicle.id,
+      vehicleId:  chosenVehicle.id,
+      name:       chosenVehicle.name,
+      img:        chosenVehicle.img,
+      imgFallback: chosenVehicle.img,
+      gallery:    chosenVehicle.gallery,
+      seats:      chosenVehicle.seats,
+      bags:       chosenVehicle.bags,
+      ac:         chosenVehicle.ac,
+      features:   chosenVehicle.features,
+      tagline:    chosenVehicle.tagline,
+      category:   chosenVehicle.category,
+      local:      chosenVehicle.local,
+      outstation: chosenVehicle.outstation,
+      // Price + class stay exactly as the backend quoted them.
+    };
+  }, [chosenVehicle, browseMode, apiVehicles]);
+
   const allSource = (apiVehicles && apiVehicles.length ? apiVehicles : VEHICLE_RATES)
     .filter((v) => Number(v.seats) <= 33); // show vehicles up to 33 seaters only
   // Arriving via "Group / Coach" scopes the whole page to actual
@@ -256,6 +307,15 @@ export default function Page() {
 
   const vehicles = useMemo(() => {
     let list = source;
+    // The chosen vehicle replaces its class's generic stand-in, so the
+    // customer keeps seeing the vehicle they actually picked.
+    if (pricedChosen) {
+      const wantClass = String(pricedChosen.vehicleClass || "").toLowerCase();
+      list = list.filter(
+        (v) => String(v.vehicleClass || "").toLowerCase() !== wantClass
+      );
+      list = [pricedChosen, ...list];
+    }
     if (typeFilters.length) list = list.filter((v) => typeFilters.includes(getVehicleType(v)));
     if (seatFilters.length) list = list.filter((v) => seatFilters.includes(Number(v.seats)));
 
@@ -270,7 +330,7 @@ export default function Page() {
     if (sort === "highlow") list = [...list].sort((a, b) => b.fare - a.fare);
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, typeFilters, seatFilters, ac, sort]);
+  }, [source, pricedChosen, typeFilters, seatFilters, ac, sort]);
 
   function toggleType(t) {
     setTypeFilters((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -316,12 +376,17 @@ export default function Page() {
     const journeyObj = {
       tripType: inlineTrip.tripType,
       pickup: inlineTrip.pickup,
-      drop: inlineTrip.drop,
+      // Local = no destination (see BookingWidget) — don't carry a drop
+      // typed before the trip type was switched.
+      drop: inlineTrip.tripType === "local" ? "" : inlineTrip.drop,
       date: inlineTrip.date,
       time: inlineTrip.time,
       returnDate: inlineTrip.returnDate,
       returnTime: inlineTrip.returnTime,
-      stops: (inlineTrip.stops || []).filter((s) => s.trim()),
+      package: inlineTrip.tripType === "local" ? inlineTrip.package : "",
+      stops: inlineTrip.tripType === "local" || inlineTrip.tripType === "airport"
+        ? []
+        : (inlineTrip.stops || []).filter((s) => s.trim()),
     };
     const action = dispatch(createJourney(journeyObj));
     const newId = action.payload.id;
@@ -670,6 +735,24 @@ export default function Page() {
                     </div>
                   )}
 
+                  {/* Local package — required for an hourly trip, and must
+                      match what the backend has configured, or the booking is
+                      rejected at payment with "rental package not available". */}
+                  {inlineTrip.tripType === "local" && (
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Package</label>
+                      <select
+                        value={inlineTrip.package}
+                        onChange={setInline("package")}
+                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 10px", fontSize: 13, outline: "none", background: "#fff" }}
+                      >
+                        <option value="4 hrs / 40 km">4 hrs / 40 km</option>
+                        <option value="8 hrs / 80 km">8 hrs / 80 km</option>
+                        <option value="12 hrs / 120 km">12 hrs / 120 km</option>
+                      </select>
+                    </div>
+                  )}
+
                   {/* Date + Time — stacked */}
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
@@ -755,10 +838,39 @@ export default function Page() {
 
           {/* RESULTS */}
           <div style={{ flex: "1 1 560px", minWidth: "min(100%,320px)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <h2 style={{ fontWeight: 700, fontSize: 19, margin: 0 }}>Available Vehicles</h2>
-              <span style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>{vehicles.length} found</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
+              <h2 style={{ fontWeight: 700, fontSize: 19, margin: 0 }}>
+                {pricedChosen && !showOtherVehicles ? "Your Vehicle" : "Available Vehicles"}
+              </h2>
+              <span style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>
+                {pricedChosen && !showOtherVehicles ? "Priced for your trip" : `${vehicles.length} found`}
+              </span>
             </div>
+
+            {/* Chose a specific vehicle → confirm THAT one, don't re-open the
+                whole class list they already narrowed down from. */}
+            {pricedChosen && !showOtherVehicles && (
+              <p style={{ margin: "-6px 0 14px", fontSize: 13, color: "#666" }}>
+                {chosenVehicle?.name} is ready to book for this trip.{" "}
+                <button
+                  onClick={() => setShowOtherVehicles(true)}
+                  style={{ background: "none", border: "none", padding: 0, color: "#B8860B", fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+                >
+                  See other vehicles
+                </button>
+              </p>
+            )}
+            {pricedChosen && showOtherVehicles && (
+              <p style={{ margin: "-6px 0 14px", fontSize: 13, color: "#666" }}>
+                Showing all vehicles for this trip.{" "}
+                <button
+                  onClick={() => setShowOtherVehicles(false)}
+                  style={{ background: "none", border: "none", padding: 0, color: "#B8860B", fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+                >
+                  Back to {chosenVehicle?.name}
+                </button>
+              </p>
+            )}
 
             {vehicles.length === 0 ? (
               <div style={{ background: "#fff", border: "1px dashed #E5E5E5", borderRadius: 20, padding: 48, textAlign: "center" }}>
@@ -768,14 +880,17 @@ export default function Page() {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {[...vehicles].sort((a, b) => {
-                  // Pin the URL-selected vehicle to the top
-                  if (urlVehicle) {
-                    if (a.id === urlVehicle) return -1;
-                    if (b.id === urlVehicle) return 1;
-                  }
-                  return 0;
-                }).map((v, idx) => {
+                {(pricedChosen && !showOtherVehicles
+                  ? [pricedChosen]
+                  : [...vehicles].sort((a, b) => {
+                      // Pin the URL-selected vehicle to the top
+                      if (urlVehicle) {
+                        if (a.id === urlVehicle) return -1;
+                        if (b.id === urlVehicle) return 1;
+                      }
+                      return 0;
+                    })
+                ).map((v, idx) => {
                   const type = getVehicleType(v);
                   const isPinned = urlVehicle && v.id === urlVehicle;
                   // Use vehicleClass+idx as key to guarantee uniqueness even if
@@ -838,7 +953,7 @@ export default function Page() {
                             className="hover:!bg-[#FFB300]"
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
-                            {browseMode ? "Get Real Fare" : "Select Vehicle"}
+                            {browseMode ? "Get Real Fare" : (isPinned ? "Continue Booking →" : "Select Vehicle")}
                           </button>
                         </div>
                       </div>

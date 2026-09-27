@@ -10,7 +10,7 @@
 // GET  /bookings/:id/invoice → { invoice }
 import { api, ApiError } from "../client";
 import { USE_MOCK, MOCK_FALLBACK } from "../config";
-import { rid } from "../../data/mockData";
+import { rid, parseRentalPackage, toBackendVehicleClass } from "../../data/mockData";
 import { resolveCityId, ensureCitiesLoaded } from "../cities";
 
 // ── Idempotency key ───────────────────────────────────────────────────────────
@@ -45,24 +45,16 @@ const TRIP_TYPE_MAP = {
   "hourly":     "HOURLY",
 };
 
-// Backend fare_configs only has 4 vehicle classes (from day1-constraints.sql):
-// hatchback, sedan, suv, tempo
-// luxury/premium/bus must map to the nearest real class
-const VEHICLE_CLASS_MAP = {
-  hatchback: "hatchback",
-  sedan:     "sedan",
-  suv:       "suv",
-  tempo:     "tempo",
-  luxury:    "suv",     // no luxury class in fare_configs → suv
-  premium:   "sedan",   // no premium class → sedan
-  bus:       "tempo",   // no bus class → tempo
-};
 
 // ── Build createBookingSchema-compatible body ──────────────────────────────────
 // Matches createBookingSchema in booking.schemas.js field-for-field
 function toBookingRequest(p) {
   const tripType     = TRIP_TYPE_MAP[(p.tripType || "").toLowerCase()] || "ONE_WAY";
-  const vehicleClass = VEHICLE_CLASS_MAP[(p.vehicleCategory || "").toLowerCase()] || "sedan";
+  // Prefer the class the fare was actually QUOTED under (carried through from
+  // /fares/options via selectedCab.vehicleClass). Deriving it again from the
+  // catalogue category risks booking a different class than was priced —
+  // which the customer would see as a changed fare at the last step.
+  const vehicleClass = p.vehicleClass || toBackendVehicleClass(p.vehicleCategory);
   const pickupAt     = p.date && p.time
     ? new Date(`${p.date}T${p.time}:00`).toISOString()
     : new Date().toISOString();
@@ -94,10 +86,14 @@ function toBookingRequest(p) {
 
   // HOURLY — schema requires rentalPackageId OR rentalHours
   if (tripType === "HOURLY") {
+    // Must match exactly what /fares priced, or the booking is rejected
+    // after the customer has already seen and accepted a fare.
+    const pkg = parseRentalPackage(p.package);
     if (p.rentalPackageId) {
       body.rentalPackageId = p.rentalPackageId;
     } else {
-      body.rentalHours = p.rentalHours || 8;
+      body.rentalHours = p.rentalHours || pkg?.hours || 8;
+      if (pkg?.km) body.rentalKm = pkg.km;
     }
   }
 

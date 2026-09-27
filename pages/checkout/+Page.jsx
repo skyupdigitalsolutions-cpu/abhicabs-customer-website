@@ -8,6 +8,7 @@ import { API_BASE_URL } from "../../src/api/config";
 import { isAuthenticated, getStoredUserName } from "../../src/api/tokens";
 import { authApi } from "../../src/api";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import { buildFareLines } from "../../src/lib/fareLines";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
 import StateBlock from "../../src/components/StateBlock";
@@ -15,7 +16,6 @@ import Button from "../../src/components/ui/Button";
 import { FIELD_INPUT } from "../../src/components/ui/classNames";
 import { useToast } from "../../src/hooks/useToast";
 import { IconPin } from "../../src/components/Icons";
-import { FareBreakupSection } from "../../src/components/checkout/FareBreakupSection";
 import { CouponOffersSection } from "../../src/components/checkout/CouponOffersSection";
 
 const INCLUSIONS = [
@@ -238,22 +238,19 @@ export default function Page() {
     );
   }
 
-  const baseFare = selected.baseFare || selected.fare;
-  const surgeFee = selected.surgeFee || 0;
-  const driverBhata = selected.driverBhata || vehicle?.outstation?.driverBhata || 0;
-  // The real, backend-quoted total for this trip (already includes surge,
-  // driver allowance, night allowance, minimum-fare top-up — see breakdown).
-  const quotedTotal = selected.fare;
-  const hasRealBreakdown = Array.isArray(selected.breakdown) && selected.breakdown.length > 0;
   const isCorporate = customerType === "corporate";
-  // GST is shown only when the backend's own breakdown didn't already price
-  // it in (corporate invoicing is applied server-side at booking time via
-  // customerService.resolveBillingEntity) — this is a display-only estimate
-  // for the corporate toggle, not a separate charge collected here.
-  const cgst = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
-  const sgst = isCorporate && !hasRealBreakdown ? Math.round(quotedTotal * 0.025) : 0;
   const discountAmount = discount?.ok ? Number(discount.amount || 0) : 0;
-  const totalPayable = Math.max(0, quotedTotal + cgst + sgst - discountAmount);
+  // Same single source of truth the Payment page and invoice use, so the
+  // total quoted here is exactly the total charged there.
+  const fare = buildFareLines(selected, {
+    isCorporate,
+    discountAmount,
+    discountCode: discount?.code || null,
+  });
+  const { lines: fareLines, tripTotal: quotedTotal, cgst, sgst, totalPayable } = fare;
+  const baseFare = quotedTotal;
+  const surgeFee = Math.round(Number(selected.surgeFee || selected.surgeAmount || 0));
+  const driverBhata = Math.round(Number(selected.driverBhata || selected.driverAllowance || 0));
 
   useEffect(() => {
     function trySendAbandonment() {
@@ -577,21 +574,32 @@ export default function Page() {
                   )}
                 </div>
 
-                {/* Fare breakdown — real, from the backend when available
-                    (base fare, driver allowance, night allowance, surge,
-                    minimum-fare top-up, rounding); falls back to the simpler
-                    summary if this cab was picked without a live quote. */}
+                {/* Fare breakdown — always shown and always reconciling: the
+                    lines below sum exactly to the trip fare, whether they came
+                    from the backend's own breakdown or were derived from the
+                    named components it returned. */}
                 <div style={{ padding: "16px 0", borderBottom: "1px dashed #EFEFEF" }}>
-                  {hasRealBreakdown ? (
-                    <FareBreakupSection breakdown={selected.breakdown} total={quotedTotal} />
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
-                      <SummaryRow label="Base Fare" value={fmtINR(baseFare)} />
-                      {driverBhata > 0 && <SummaryRow label="Driver Allowance" value={`+ ${fmtINR(driverBhata)}`} />}
-                      {surgeFee > 0 && <SummaryRow label={`Surge Fee${selected.surgePct ? ` (${selected.surgePct}%)` : ""}`} value={`+ ${fmtINR(surgeFee)}`} />}
-                      {isCorporate && <SummaryRow label="Taxes (5%)" value={`+ ${fmtINR(cgst + sgst)}`} />}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
+                    {fareLines.map((l, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                        <span style={{ color: "#666" }}>
+                          {l.label}
+                          {l.note && <span style={{ display: "block", fontSize: 11, color: "#999" }}>{l.note}</span>}
+                        </span>
+                        <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtINR(l.amount)}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 9, borderTop: "1px solid #F2F2F2" }}>
+                      <span style={{ fontWeight: 700 }}>Trip Fare</span>
+                      <span style={{ fontWeight: 700 }}>{fmtINR(quotedTotal)}</span>
                     </div>
-                  )}
+                    {isCorporate && (cgst + sgst) > 0 && (
+                      <>
+                        <SummaryRow label="CGST (2.5%)" value={`+ ${fmtINR(cgst)}`} />
+                        <SummaryRow label="SGST (2.5%)" value={`+ ${fmtINR(sgst)}`} />
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Coupon & Offers — real promo codes, checked live against

@@ -199,6 +199,43 @@ export function fmtINR(n) {
   return "₹" + Math.round(n).toLocaleString("en-IN");
 }
 
+// Local ("HOURLY") packages are chosen in the UI as a display string —
+// "4 hrs / 40 km", "8 hrs / 80 km", "12 hrs / 120 km". Both /fares/* and
+// /bookings need the hours as a number. Nothing used to parse this, so
+// every local trip was quoted AND booked as a hardcoded 8-hour package no
+// matter which one the customer picked — and when the backend had no 8h
+// package for that city it rejected the booking outright ("That rental
+// package is not available") only at the payment step, after pricing had
+// already succeeded.
+// The backend prices by vehicleClass, and fare_configs only has these four
+// real classes — luxury/premium/bus have no rate card of their own and must
+// map onto the nearest one. Shared here so the fares service, the bookings
+// service and the UI all resolve a catalogue vehicle to the SAME class
+// (they each had their own private copy of this map before).
+export const VEHICLE_CLASS_MAP = {
+  hatchback: "hatchback",
+  sedan:     "sedan",
+  suv:       "suv",
+  tempo:     "tempo",
+  luxury:    "suv",
+  premium:   "sedan",
+  bus:       "tempo",
+};
+
+export function toBackendVehicleClass(category) {
+  return VEHICLE_CLASS_MAP[String(category || "").toLowerCase()] || "sedan";
+}
+
+export function parseRentalPackage(pkg) {
+  if (!pkg) return null;
+  const s = String(pkg);
+  const h = s.match(/(\d+)\s*h/i);
+  const k = s.match(/(\d+)\s*km/i);
+  const hours = h ? Number(h[1]) : null;
+  if (!hours) return null;
+  return { hours, km: k ? Number(k[1]) : null };
+}
+
 export function rid(prefix) {
   return prefix + Math.random().toString(36).slice(2, 8).toUpperCase();
 }
