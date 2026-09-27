@@ -7,6 +7,7 @@ import { selectCheckoutDetails, setCheckoutDetails } from "../../src/store/slice
 import { API_BASE_URL } from "../../src/api/config";
 import { isAuthenticated, getStoredUserName } from "../../src/api/tokens";
 import { authApi, bookingsApi } from "../../src/api";
+import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
 import { buildFareLines } from "../../src/lib/fareLines";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
@@ -155,6 +156,9 @@ export default function Page() {
   const [mapsLoaded, setMapsLoaded] = useState(
     () => typeof window !== "undefined" && !!window.google?.maps?.places
   );
+  // Track where we've been so BackLink can step back one page.
+  useEffect(() => { recordNavStep("/checkout"); }, []);
+
   useEffect(() => {
     if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
     const iv = setInterval(() => {
@@ -461,10 +465,7 @@ export default function Page() {
       {/* Terms now expand inline in the form — no popup */}
 
       <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
-        <a href="/booking-search" className="inline-flex items-center gap-1.5 hover:!text-[#111]" style={{ color: "#666", fontWeight: 600, fontSize: 13.5, marginBottom: 18 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          Back to Vehicles
-        </a>
+        <BackLink to="/booking-search" label="Back to Vehicles" />
         <h1 style={{ fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", margin: "0 0 22px", letterSpacing: "-.02em" }}>Checkout</h1>
 
         <div className="checkout-grid grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">

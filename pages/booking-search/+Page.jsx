@@ -12,6 +12,8 @@ import { IconPin, IconZap } from "../../src/components/Icons";
 import { useToast } from "../../src/hooks/useToast";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
 import { isSameCityTrip, ensureCitiesLoaded } from "../../src/api/cities";
+import { AIRPORTS } from "../../src/data/airports";
+import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
 
 
@@ -75,6 +77,7 @@ export default function Page() {
   // Reset body scroll lock in case a modal from the previous page left it set
   useEffect(() => {
     document.body.style.overflow = "";
+    recordNavStep("/booking-search");
     // Live serviced-city list for same-city detection. Never throws.
     ensureCitiesLoaded();
   }, []);
@@ -114,7 +117,8 @@ export default function Page() {
   // BookingWidget.jsx already had this exact fix; porting it here too.
   const today = toLocalISODate(new Date());
   const [inlineTrip, setInlineTrip] = useState({
-    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km", stops: [],
+    tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km",
+    airport: "", airportTerminal: "", airportDirection: "drop", stops: [],
   });
   const [inlineMapField, setInlineMapField] = useState(null);
   // Coordinates for the inline pickup/drop, used by the same-city radius test.
@@ -482,7 +486,20 @@ export default function Page() {
   function submitInlineTrip(e) {
     e?.preventDefault?.();
     if (inlineTrip.tripType !== "local" && !inlineTrip.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
-    if ((inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip" || inlineTrip.tripType === "airport") && !inlineTrip.drop.trim()) { toast("Please enter a destination", "error"); return; }
+    if (inlineTrip.tripType === "airport") {
+      // Same requirements as the homepage widget: an airport AND a terminal,
+      // plus the other side of the journey. Without this the two forms made
+      // different airport bookings from the same site.
+      if (!inlineTrip.airport) { toast("Please select an airport", "error"); return; }
+      if (!inlineTrip.airportTerminal) { toast("Please select the airport terminal", "error"); return; }
+      const otherSide = inlineTrip.airportDirection === "pickup" ? inlineTrip.drop : inlineTrip.pickup;
+      if (!String(otherSide || "").trim()) {
+        toast(inlineTrip.airportDirection === "pickup" ? "Please enter a destination" : "Please enter a pickup location", "error");
+        return;
+      }
+    } else if ((inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") && !inlineTrip.drop.trim()) {
+      toast("Please enter a destination", "error"); return;
+    }
     if (inlineTrip.tripType === "local" && !inlineTrip.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
     if (!inlineTrip.date) { toast("Please select a date", "error"); return; }
     if (!inlineTrip.time) { toast("Please select a time", "error"); return; }
@@ -525,12 +542,21 @@ export default function Page() {
   // switching the trip to a local package.
   function submitInlineJourney(localPackage = null) {
     const effType = localPackage ? "local" : inlineTrip.tripType;
+    // Same label the homepage widget builds, so an airport trip booked here is
+    // indistinguishable from one booked there.
+    const airportLabel =
+      (AIRPORTS.find((a) => a.code === inlineTrip.airport)?.name || inlineTrip.airport) +
+      (inlineTrip.airportTerminal ? " — " + inlineTrip.airportTerminal : "");
     const journeyObj = {
       tripType: effType,
-      pickup: inlineTrip.pickup,
+      pickup: effType === "airport" && inlineTrip.airportDirection === "pickup"
+        ? airportLabel
+        : inlineTrip.pickup,
       // Local = no destination (see BookingWidget) — don't carry a drop
       // typed before the trip type was switched.
-      drop: effType === "local" ? "" : inlineTrip.drop,
+      drop: effType === "local"
+        ? ""
+        : (effType === "airport" && inlineTrip.airportDirection === "drop" ? airportLabel : inlineTrip.drop),
       date: inlineTrip.date,
       time: inlineTrip.time,
       returnDate: effType === "local" ? "" : inlineTrip.returnDate,
@@ -727,6 +753,8 @@ export default function Page() {
       {/* Summary bar — real route/date/time when a search was actually
           completed; a simple heading + prompt to search when just browsing
           (e.g. arrived via a homepage tile with no trip specified yet). */}
+      <BackLink to="/" label="Back" />
+
       {browseMode ? (
         <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", color: "#fff", marginBottom: 22 }}>
           <div style={{ fontWeight: 700, fontSize: 19 }}>
@@ -824,12 +852,13 @@ export default function Page() {
               : "This trip can't be booked online until we can quote it. Change the pickup or drop and try again, or send us a request and our team will confirm availability and price for you."}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <a
-              href="/#booking"
-              style={{ display: "block", padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, textDecoration: "none" }}
+            <button
+              type="button"
+              onClick={clearLocations}
+              style={{ display: "block", width: "100%", padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer" }}
             >
               ← Change Pickup Location
-            </a>
+            </button>
             <a
               href="/#contact-form"
               style={{ display: "block", padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", color: "#555", fontWeight: 600, fontSize: 14, textDecoration: "none" }}
@@ -906,7 +935,7 @@ export default function Page() {
                   {inlineTrip.tripType !== "local" && (
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>
-                        {inlineTrip.tripType === "airport" ? "Pickup" : "From"}
+                        {inlineTrip.tripType === "airport" ? "Pickup (your address)" : "From"}
                       </label>
                       <div style={{ display: "flex", gap: 6 }}>
                         <input
@@ -987,6 +1016,66 @@ export default function Page() {
                           style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer", padding: "2px 0" }}>+ Add a stop</button>
                       )}
                     </div>
+                  )}
+
+                  {/* Airport + terminal + direction — mirrors the homepage
+                      widget, so both forms build the same airport journey. */}
+                  {inlineTrip.tripType === "airport" && (
+                    <>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Direction</label>
+                        <div className="filter-pills" style={{ display: "flex", gap: 8 }}>
+                          {[
+                            { key: "drop", label: "To airport" },
+                            { key: "pickup", label: "From airport" },
+                          ].map((d) => (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() => setInlineTrip((f) => ({ ...f, airportDirection: d.key }))}
+                              style={{
+                                flex: 1, height: 38, borderRadius: 9999, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                                border: inlineTrip.airportDirection === d.key ? "none" : "1px solid #E5E5E5",
+                                background: inlineTrip.airportDirection === d.key ? "#111" : "#fff",
+                                color: inlineTrip.airportDirection === d.key ? "#FFC107" : "#444",
+                              }}
+                            >
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Airport</label>
+                        <select
+                          value={inlineTrip.airport}
+                          onChange={(e) => setInlineTrip((f) => ({ ...f, airport: e.target.value, airportTerminal: "" }))}
+                          style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 10px", fontSize: 13, outline: "none", background: "#fff" }}
+                        >
+                          <option value="">Select airport</option>
+                          {AIRPORTS.map((a) => (
+                            <option key={a.code} value={a.code}>{a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {inlineTrip.airport && (
+                        <div>
+                          <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Terminal</label>
+                          <select
+                            value={inlineTrip.airportTerminal}
+                            onChange={setInline("airportTerminal")}
+                            style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 10px", fontSize: 13, outline: "none", background: "#fff" }}
+                          >
+                            <option value="">Select terminal</option>
+                            {(AIRPORTS.find((a) => a.code === inlineTrip.airport)?.terminals || []).map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Local package — required for an hourly trip, and must

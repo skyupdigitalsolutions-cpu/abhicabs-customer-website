@@ -15,6 +15,7 @@ import { useToast } from "../hooks/useToast";
 import { IconArrowRight, IconSwap, IconClock, IconPlane, IconPin, IconZap } from "./Icons";
 import LocationMapPicker from "./LocationMapPicker";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
+import { AIRPORTS } from "../data/airports";
 import { isSameCityTrip, ensureCitiesLoaded } from "../api/cities";
 import { createSupportTicket } from "../api/services/support";
 
@@ -260,22 +261,6 @@ function getMinTime(selectedDate) {
   return `${hh}:${mm}`;
 }
 
-const AIRPORTS = [
-  { code: "BLR", city: "Bengaluru", name: "Kempegowda International Airport (BLR)",
-    terminals: ["Terminal 1 (T1) — Domestic", "Terminal 2 (T2) — International & Domestic"] },
-  { code: "HYD", city: "Hyderabad", name: "Rajiv Gandhi International Airport (HYD)",
-    terminals: ["Terminal 1 (T1) — Domestic & International"] },
-  { code: "MAA", city: "Chennai", name: "Chennai International Airport (MAA)",
-    terminals: ["Terminal 1 (T1) — Domestic", "Terminal 4 (T4) — International"] },
-  { code: "BOM", city: "Mumbai", name: "Chhatrapati Shivaji Maharaj International Airport (BOM)",
-    terminals: ["Terminal 1 (T1) — Domestic", "Terminal 2 (T2) — International & Domestic"] },
-  { code: "MYQ", city: "Mysuru", name: "Mysore Airport (MYQ)", terminals: ["Terminal 1 — Domestic"] },
-  { code: "HBX", city: "Hubballi", name: "Hubballi Airport (HBX)", terminals: ["Terminal 1 — Domestic"] },
-  { code: "VGA", city: "Vijayawada", name: "Vijayawada International Airport (VGA)",
-    terminals: ["Terminal 1 — Domestic & International"] },
-  { code: "IXE", city: "Mangaluru", name: "Mangaluru International Airport (IXE)",
-    terminals: ["Terminal 1 — Domestic & International"] },
-];
 
 const AIRPORT_OPTIONS = AIRPORTS.map((a) => ({
   value: a.code,
@@ -761,6 +746,26 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       <DatePicker ariaLabel="Return date" placeholder="Add return" min={fields.date || today} value={fields.returnDate} onChange={set("returnDate")} />
     </Field>
   );
+  /*
+   * Return TIME. Submit already refused a round trip without one ("Please
+   * select a return time") but no input existed to supply it, so Round Trip
+   * could not be completed from this widget at all. The inline trip form on
+   * /booking-search has had this field; the two forms must accept exactly the
+   * same trip, since either can produce the same booking.
+   *
+   * min: when the return is on the pickup DAY, it cannot be earlier than the
+   * pickup time — the cross-day case is caught by the date+time comparison in
+   * handleSubmit.
+   */
+  const returnTimeField = (
+    <Field label="Return Time">
+      <TimePicker12hr
+        value={fields.returnTime}
+        min={fields.returnDate && fields.returnDate === fields.date ? fields.time || undefined : undefined}
+        onChange={set("returnTime")}
+      />
+    </Field>
+  );
   // Passenger selection removed — the vehicle's seat capacity already conveys
   // how many people it carries, so a separate passenger count is redundant.
 
@@ -778,6 +783,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           <div className="w-full sm:w-[168px]">{dateField("Pick Up Date", !withReturn)}</div>
           <div className="w-full sm:w-[156px]">{timeField(!withReturn)}</div>
           {withReturn && <div className="w-full sm:w-[168px]">{returnDateField}</div>}
+          {withReturn && <div className="w-full sm:w-[156px]">{returnTimeField}</div>}
         </div>
       );
     }
@@ -801,6 +807,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         <m.div layout="position" className="w-full sm:w-[168px]">{dateField()}</m.div>
         <m.div layout="position" className="w-full sm:w-[156px]">{timeField()}</m.div>
         {withReturn && <m.div layout="position" className="w-full sm:w-[168px]">{returnDateField}</m.div>}
+        {withReturn && <m.div layout="position" className="w-full sm:w-[156px]">{returnTimeField}</m.div>}
       </div>
     );
   }

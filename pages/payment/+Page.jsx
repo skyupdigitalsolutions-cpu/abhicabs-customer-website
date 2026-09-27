@@ -9,6 +9,7 @@ import { bookingsApi, paymentsApi } from "../../src/api";
 import { USE_MOCK } from "../../src/api/config";
 import { VEHICLE_RATES, fmtINR, rid, shortAddress } from "../../src/data/mockData";
 import { buildFareLines, splitPayment } from "../../src/lib/fareLines";
+import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import StateBlock from "../../src/components/StateBlock";
 import Modal from "../../src/components/Modal";
 import Button from "../../src/components/ui/Button";
@@ -57,6 +58,9 @@ export default function Page() {
   // Funnel: reaching the payment screen is the deepest pre-booking stage. The
   // backend merges this into the same attempt row started at FARES_VIEWED, so
   // an abandon here is visible in the ERP as a PAYMENT_CHOSEN drop-off.
+  // Track where we've been so BackLink can step back one page.
+  useEffect(() => { recordNavStep("/payment"); }, []);
+
   useEffect(() => {
     if (!selected || !journey) return;
     bookingsApi.trackDraft({
@@ -334,10 +338,7 @@ export default function Page() {
 
   return (
     <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
-      <a href="/checkout" className="inline-flex items-center gap-1.5 hover:!text-[#111]" style={{ color: "#666", fontWeight: 600, fontSize: 13.5, marginBottom: 18 }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        Back to Checkout
-      </a>
+      <BackLink to="/checkout" label="Back to Checkout" />
       <h1 style={{ fontWeight: 800, fontSize: "clamp(24px,3vw,34px)", margin: "0 0 22px", letterSpacing: "-.02em" }}>Payment</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5.5 items-start">
