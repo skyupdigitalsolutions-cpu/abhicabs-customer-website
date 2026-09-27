@@ -277,55 +277,68 @@ export default function Page() {
     [urlVehicle]
   );
 
-  const pricedChosen = useMemo(() => {
-    if (!chosenVehicle || browseMode || !apiVehicles?.length) return null;
-    const wantClass = toBackendVehicleClass(chosenVehicle.category);
-    // Match on CLASS and require a genuine catalogue match, so a borrowed
-    // stand-in (e.g. the hatchback option wearing Swift Dzire's id) can
-    // never be mistaken for the vehicle the customer actually picked.
-    const opt =
-      apiVehicles.find(
-        (o) => String(o.vehicleClass || "").toLowerCase() === wantClass && o.classMatched !== false
-      ) ||
-      apiVehicles.find((o) => String(o.vehicleClass || "").toLowerCase() === wantClass);
-    if (!opt) return null;
-    return {
-      ...opt,
-      // Identity = what the customer actually chose.
-      id:         chosenVehicle.id,
-      vehicleId:  chosenVehicle.id,
-      name:       chosenVehicle.name,
-      img:        chosenVehicle.img,
-      imgFallback: chosenVehicle.img,
-      gallery:    chosenVehicle.gallery,
-      seats:      chosenVehicle.seats,
-      bags:       chosenVehicle.bags,
-      ac:         chosenVehicle.ac,
-      features:   chosenVehicle.features,
-      tagline:    chosenVehicle.tagline,
-      category:   chosenVehicle.category,
-      local:      chosenVehicle.local,
-      outstation: chosenVehicle.outstation,
-      // Price + class stay exactly as the backend quoted them.
-    };
-  }, [chosenVehicle, browseMode, apiVehicles]);
-
-  // Real quotes are on screen (priced mode). In this mode a card's `id` is
-  // NOT trustworthy as identity: mergeOptionWithCatalogue borrows a catalogue
-  // vehicle's id for the class, and the class's display NAME comes from the
-  // backend's own /vehicles row — so a class whose backend row is named
-  // something else entirely (e.g. "Tempo Traveller" sitting on the sedan key)
-  // would still carry Swift Dzire's id and wrongly light up as the selection.
-  // Identity is therefore matched on CLASS only once we're priced.
+  // Real quotes are on screen.
   const pricedMode = !browseMode && Boolean(apiVehicles?.length);
 
-  // The customer asked for a specific vehicle but the backend priced no
-  // option for its class. Say so plainly instead of pinning some other
-  // vehicle as though it were their choice.
+  // The backend prices per CLASS (hatchback/sedan/suv/tempo), not per
+  // vehicle, so /fares/options returns at most four rows. Rendering those
+  // rows directly collapsed the whole 13-vehicle catalogue onto four cards
+  // wearing each class's FIRST catalogue match — which is why picking a
+  // "33 Seater Bharat Benz" (class tempo) showed "12 Seater Tempo Traveler",
+  // and an Innova Crysta (class sedan) showed "Swift Desire".
+  //
+  // Instead: keep the real catalogue as the list, and attach each vehicle's
+  // CLASS PRICE to it. Vehicles whose class the backend didn't quote are
+  // dropped — we can't sell what wasn't priced.
+  const pricedByClass = useMemo(() => {
+    const m = new Map();
+    (apiVehicles || []).forEach((o) => {
+      const k = String(o.vehicleClass || "").toLowerCase();
+      if (k && !m.has(k)) m.set(k, o);
+    });
+    return m;
+  }, [apiVehicles]);
+
+  const allSource = useMemo(() => {
+    const catalogue = VEHICLE_RATES.filter((v) => Number(v.seats) <= 33);
+    if (!pricedMode) return catalogue;
+    return catalogue
+      .filter((v) => pricedByClass.has(toBackendVehicleClass(v)))
+      .map((v) => {
+        const opt = pricedByClass.get(toBackendVehicleClass(v));
+        return {
+          // Price, class and breakdown: exactly as the backend quoted them.
+          ...opt,
+          // Identity: the real catalogue vehicle the customer is looking at.
+          id: v.id,
+          vehicleId: v.id,
+          name: v.name,
+          img: v.img,
+          imgFallback: v.img,
+          gallery: v.gallery,
+          seats: v.seats,
+          bags: v.bags,
+          ac: v.ac,
+          features: v.features,
+          tagline: v.tagline,
+          category: v.category,
+          paxGroup: v.paxGroup,
+          local: v.local,
+          outstation: v.outstation,
+        };
+      });
+  }, [pricedMode, pricedByClass]);
+
+  // With the catalogue as the list, the chosen vehicle is simply its own row.
+  const pricedChosen = useMemo(
+    () => (chosenVehicle && pricedMode
+      ? allSource.find((v) => v.id === chosenVehicle.id) || null
+      : null),
+    [chosenVehicle, pricedMode, allSource]
+  );
+
   const chosenUnavailable = Boolean(chosenVehicle && pricedMode && !pricedChosen);
 
-  const allSource = (apiVehicles && apiVehicles.length ? apiVehicles : VEHICLE_RATES)
-    .filter((v) => Number(v.seats) <= 33); // show vehicles up to 33 seaters only
   // Arriving via "Group / Coach" scopes the whole page to actual
   // coaches/buses only — not the smaller Tempo Traveller/Urbania vans,
   // which are a different vehicle class even though they're also used for
@@ -348,19 +361,10 @@ export default function Page() {
     let list = source;
     // The chosen vehicle replaces its class's generic stand-in, so the
     // customer keeps seeing the vehicle they actually picked.
+    // Chosen vehicle leads the list. No re-badging needed any more: every
+    // card is already its own real catalogue vehicle.
     if (pricedChosen) {
-      const wantClass = String(pricedChosen.vehicleClass || "").toLowerCase();
-      list = list.filter(
-        (v) => String(v.vehicleClass || "").toLowerCase() !== wantClass
-      );
-      // Drop any other option that is only a borrowed stand-in wearing the
-      // chosen vehicle's catalogue id/photo (the "Hatchback" card that was
-      // really a second Swift Dzire). It's a duplicate of what's already
-      // shown, under a class the catalogue doesn't actually stock.
-      list = list.filter(
-        (v) => !(v.classMatched === false && v.vehicleId === pricedChosen.vehicleId)
-      );
-      list = [pricedChosen, ...list];
+      list = [pricedChosen, ...list.filter((v) => v.id !== pricedChosen.id)];
     }
     if (typeFilters.length) list = list.filter((v) => typeFilters.includes(getVehicleType(v)));
     if (seatFilters.length) list = list.filter((v) => seatFilters.includes(Number(v.seats)));
@@ -500,7 +504,7 @@ export default function Page() {
     // service-area / couldn't-price screen) renders as before.
     if (chosenVehicle) {
       setAutoPricing(true);
-      const wantClass = toBackendVehicleClass(chosenVehicle.category);
+      const wantClass = toBackendVehicleClass(chosenVehicle);
       faresApi.getFareOptions({ ...journeyObj, id: newId })
         .then((options) => {
           const opt = (options || []).find(
@@ -512,16 +516,21 @@ export default function Page() {
             surgeMultiplier: opt.surgeMultiplier || 1,
             surgePct: opt.surgePct || 0,
           };
-          // Keep the customer's chosen vehicle identity on the priced option
-          // (the backend prices per class, not per vehicle).
+          // Price + class from the backend; identity from the real catalogue
+          // vehicle the customer picked (the backend prices per class, so the
+          // quote itself carries the class representative's details).
           selectAndGoToCheckout({
             ...opt,
             id: chosenVehicle.id,
+            vehicleId: chosenVehicle.id,
             name: chosenVehicle.name,
             img: chosenVehicle.img,
             imgFallback: chosenVehicle.img,
+            gallery: chosenVehicle.gallery,
             seats: chosenVehicle.seats,
+            bags: chosenVehicle.bags,
             ac: chosenVehicle.ac,
+            category: chosenVehicle.category,
           }, newId, ctx);
         })
         .catch(() => setAutoPricing(false)); // the main effect surfaces the error
@@ -1066,15 +1075,8 @@ export default function Page() {
                   : [...vehicles].sort((a, b) => {
                       // Pin the chosen vehicle to the top — by class when a
                       // real quote exists, else by catalogue id.
-                      const chosenClass = pricedChosen
-                        ? String(pricedChosen.vehicleClass || "").toLowerCase()
-                        : null;
-                      const isA = chosenClass
-                        ? String(a.vehicleClass || "").toLowerCase() === chosenClass
-                        : (!pricedMode && urlVehicle && a.id === urlVehicle);
-                      const isB = chosenClass
-                        ? String(b.vehicleClass || "").toLowerCase() === chosenClass
-                        : (!pricedMode && urlVehicle && b.id === urlVehicle);
+                      const isA = urlVehicle && a.id === urlVehicle;
+                      const isB = urlVehicle && b.id === urlVehicle;
                       if (isA && !isB) return -1;
                       if (isB && !isA) return 1;
                       return 0;
@@ -1085,10 +1087,9 @@ export default function Page() {
                   // prices per class, and two classes can share one catalogue
                   // id (see classMatched in fares.js), which previously lit up
                   // two cards as "Your Selection" for a single choice.
-                  const isPinned = pricedChosen
-                    ? String(v.vehicleClass || "").toLowerCase() ===
-                      String(pricedChosen.vehicleClass || "").toLowerCase()
-                    : (!pricedMode && Boolean(urlVehicle && v.id === urlVehicle));
+                  // Each card is now a real catalogue vehicle with its own
+                  // unique id, so identity is unambiguous again.
+                  const isPinned = Boolean(urlVehicle && v.id === urlVehicle);
                   // Key on the priced class so two options can't collide.
                   const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (

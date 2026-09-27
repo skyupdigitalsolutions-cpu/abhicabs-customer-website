@@ -183,8 +183,22 @@ export const VEHICLE_CLASS_MAP = {
   bus:       "tempo",
 };
 
-export function toBackendVehicleClass(category) {
-  return VEHICLE_CLASS_MAP[String(category || "").toLowerCase()] || "sedan";
+export function toBackendVehicleClass(vehicleOrCategory, seatsArg) {
+  const isObj = vehicleOrCategory && typeof vehicleOrCategory === "object";
+  const category = String((isObj ? vehicleOrCategory.category : vehicleOrCategory) || "").toLowerCase();
+  const seats = Number(isObj ? vehicleOrCategory.seats : seatsArg);
+
+  // Seat count is what actually determines which rate card applies, so it
+  // wins whenever we know it. Mapping by marketing tier alone mis-priced
+  // real vehicles: "premium" (Innova Crysta, 8 seats) fell to the SEDAN
+  // rate, and "luxury" (20 Seater Urbania, 20 seats) fell to the SUV rate —
+  // a 20-seater quoted at SUV prices.
+  if (Number.isFinite(seats) && seats > 0) {
+    if (seats > 8) return "tempo";
+    if (seats > 4) return "suv";
+    return VEHICLE_CLASS_MAP[category] === "hatchback" ? "hatchback" : "sedan";
+  }
+  return VEHICLE_CLASS_MAP[category] || "sedan";
 }
 
 export function parseRentalPackage(pkg) {

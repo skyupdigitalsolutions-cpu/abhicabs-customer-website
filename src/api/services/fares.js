@@ -54,7 +54,7 @@ function toIsoDateTime(date, time) {
 
 // Build the request body for /fares/options and /fares/estimate
 // Matches allClassesSchema / estimateSchema in fare.schemas.js exactly
-function toFareRequest(journey, vehicleCategory) {
+function toFareRequest(journey, vehicleCategory, vehicleSeats) {
   const tripType = toRealTripType(journey.tripType);
   const body = {
     // Correct city's rate card for this pickup (Bengaluru today; routes
@@ -68,7 +68,7 @@ function toFareRequest(journey, vehicleCategory) {
   };
 
   if (vehicleCategory) {
-    body.vehicleClass = toRealVehicleClass(vehicleCategory);
+    body.vehicleClass = toRealVehicleClass(vehicleCategory, vehicleSeats);
   }
 
   if (tripType === "ROUND_TRIP") {
@@ -141,7 +141,7 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
   // Dzire card, and match `?vehicle=swift-desire` too, so BOTH cards lit up
   // as "✓ Your Selection". `classMatched` below flags that case so the UI
   // can tell a real catalogue vehicle from a borrowed stand-in.
-  const exactMatch = VEHICLE_RATES.find((v) => toRealVehicleClass(v.category) === classKey);
+  const exactMatch = VEHICLE_RATES.find((v) => toRealVehicleClass(v) === classKey);
   const mockMatch = exactMatch || VEHICLE_RATES[0];
   const classMatched = Boolean(exactMatch);
 
@@ -256,7 +256,7 @@ export async function estimateFare(journey, vehicleId) {
     const vehicle = VEHICLE_RATES.find((v) => v.id === vehicleId);
     const data = await api.post(
       "/fares/estimate",
-      toFareRequest(journey, vehicle?.category)
+      toFareRequest(journey, vehicle?.category, vehicle?.seats)
     );
     // /fares/estimate nests the priced result under `quote` (see
     // quote.service.js#getQuote) rather than flattening it like /fares/options

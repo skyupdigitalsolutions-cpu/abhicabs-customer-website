@@ -54,7 +54,7 @@ function toBookingRequest(p) {
   // /fares/options via selectedCab.vehicleClass). Deriving it again from the
   // catalogue category risks booking a different class than was priced —
   // which the customer would see as a changed fare at the last step.
-  const vehicleClass = p.vehicleClass || toBackendVehicleClass(p.vehicleCategory);
+  const vehicleClass = p.vehicleClass || toBackendVehicleClass(p.vehicleCategory, p.vehicleSeats);
   const pickupAt     = p.date && p.time
     ? new Date(`${p.date}T${p.time}:00`).toISOString()
     : new Date().toISOString();
