@@ -780,16 +780,24 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           <div className="w-full sm:w-[136px]">
             <Field label="Stops"><AddStopTile onAdd={addStop} /></Field>
           </div>
-          <div className="w-full sm:w-[168px]">{dateField("Pick Up Date", !withReturn)}</div>
-          <div className="w-full sm:w-[156px]">{timeField(!withReturn)}</div>
-          {withReturn && <div className="w-full sm:w-[168px]">{returnDateField}</div>}
-          {withReturn && <div className="w-full sm:w-[156px]">{returnTimeField}</div>}
+          {/* Date + time travel together, so the time never wraps onto a
+              row of its own and stretches across the whole form. */}
+          <div className="w-full sm:w-auto sm:flex-[2_1_340px] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>{dateField("Pick Up Date", !withReturn)}</div>
+            <div>{timeField(!withReturn)}</div>
+          </div>
+          {withReturn && (
+            <div className="w-full sm:w-auto sm:flex-[2_1_340px] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div>{returnDateField}</div>
+              <div>{returnTimeField}</div>
+            </div>
+          )}
         </div>
       );
     }
     return (
       <div className="relative flex flex-wrap gap-3 sm:gap-4 items-end">
-        <div className="w-full sm:w-[230px]">{fromField}</div>
+        <div className="w-full sm:w-auto sm:flex-[1_1_230px]">{fromField}</div>
         <SwapButton onClick={swapPickupDrop} />
         <StopFields
           stops={stops}
@@ -803,11 +811,17 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
             <AddStopTile onAdd={addStop} />
           </m.div>
         )}
-        <m.div layout="position" className="w-full sm:w-[230px]">{toField}</m.div>
-        <m.div layout="position" className="w-full sm:w-[168px]">{dateField()}</m.div>
-        <m.div layout="position" className="w-full sm:w-[156px]">{timeField()}</m.div>
-        {withReturn && <m.div layout="position" className="w-full sm:w-[168px]">{returnDateField}</m.div>}
-        {withReturn && <m.div layout="position" className="w-full sm:w-[156px]">{returnTimeField}</m.div>}
+        <m.div layout="position" className="w-full sm:w-auto sm:flex-[1_1_230px]">{toField}</m.div>
+        <m.div layout="position" className="w-full sm:w-auto sm:flex-[2_1_340px] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div>{dateField()}</div>
+          <div>{timeField()}</div>
+        </m.div>
+        {withReturn && (
+          <m.div layout="position" className="w-full sm:w-auto sm:flex-[2_1_340px] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>{returnDateField}</div>
+            <div>{returnTimeField}</div>
+          </m.div>
+        )}
       </div>
     );
   }

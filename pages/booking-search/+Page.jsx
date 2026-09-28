@@ -33,7 +33,9 @@ function getVehicleType(v) {
   const n = v.name.toLowerCase();
   if (n.includes("urbania")) return "Urbania";
   if (n.includes("tempo traveler") || n.includes("tempo traveller")) return "Tempo Traveller";
-  if (n.includes("bharat benz") || n.includes("ashok leyland")) return "Coach";
+  if (n.includes("bharat benz") || n.includes("ashok leyland") || /\b(bus|coach)\b/.test(n)) return "Coach";
+  // A vehicle this size is a coach whatever the admin named it.
+  if (Number(v.seats) >= 20) return "Coach";
   if (v.category === "sedan") return "Sedan";
   return "MPV";
 }
@@ -315,7 +317,7 @@ export default function Page() {
   const isLocal = !browseMode && journey?.tripType === "local";
   const isRound = !browseMode && journey?.tripType === "round-trip";
 
-  const GROUP_TYPES = ["Coach"];
+  const GROUP_MIN_SEATS = 12;
 
   // ── Direct vehicle selection ──────────────────────────────────────────────
   // The customer picked a SPECIFIC vehicle (e.g. Swift Desire) from a fleet
@@ -378,9 +380,16 @@ export default function Page() {
   // by the vehicles available, not by an applied filter.
   // When arriving via a fleet card (?vehicle=...), show the full catalogue
   // regardless of type=group — the specific vehicle may not be a Coach.
-  const source = (browseType === "group" && !urlVehicle)
-    ? allSource.filter((v) => GROUP_TYPES.includes(getVehicleType(v)))
-    : allSource;
+  // "Group" = every vehicle built for groups, i.e. 12 seats and up — exactly
+  // the range the homepage seater buttons offer (12–33). This used to keep
+  // only vehicles typed "Coach" (the 22/28/33-seat Bharat Benz buses), so
+  // picking 12, 13, 16 or 17 seats always ended in "0 found" even though the
+  // Tempo Travellers and Urbanias with those seat counts were in the fleet.
+  const source = useMemo(() => (
+    (browseType === "group" && !urlVehicle)
+      ? allSource.filter((v) => Number(v.seats) >= GROUP_MIN_SEATS)
+      : allSource
+  ), [browseType, urlVehicle, allSource]);
 
   // Available filter options derived from the actual vehicle list, not
   // hardcoded — so a filter pill never appears for something that isn't
@@ -398,7 +407,18 @@ export default function Page() {
       list = [pricedChosen, ...list.filter((v) => v.id !== pricedChosen.id)];
     }
     if (typeFilters.length) list = list.filter((v) => typeFilters.includes(getVehicleType(v)));
-    if (seatFilters.length) list = list.filter((v) => seatFilters.includes(Number(v.seats)));
+    if (seatFilters.length) {
+      const exact = list.filter((v) => seatFilters.includes(Number(v.seats)));
+      // The requested size has no active vehicle right now (e.g. it was
+      // retired on the backend). Rather than a dead-end "0 found", offer the
+      // next sizes up that can still carry the whole group.
+      if (!exact.length && seatFilters.length === 1) {
+        const want = seatFilters[0];
+        list = list.filter((v) => Number(v.seats) >= want).sort((a, b) => a.seats - b.seats);
+      } else {
+        list = exact;
+      }
+    }
 
     if (ac === "on") list = list.filter((v) => v.ac);
     if (ac === "off") list = list.filter((v) => !v.ac);
@@ -423,6 +443,9 @@ export default function Page() {
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, pricedChosen, typeFilters, seatFilters, ac, sort]);
+  // True when the seat filter found no exact match and fell back to larger sizes.
+  const seatFallback = seatFilters.length === 1 && vehicles.length > 0 &&
+    !vehicles.some((v) => Number(v.seats) === seatFilters[0]);
 
   function toggleType(t) {
     setTypeFilters((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -558,6 +581,8 @@ export default function Page() {
       const qs = new URLSearchParams();
       qs.set("j", newId);
       if (urlVehicle) qs.set("vehicle", urlVehicle);
+      if (browseType) qs.set("type", browseType);
+      if (seatFilters.length === 1) qs.set("seater", String(seatFilters[0]));
       window.history.replaceState(window.history.state, "", `/booking-search?${qs.toString()}`);
     } catch { /* non-browser / SSR guard */ }
 
@@ -871,10 +896,16 @@ export default function Page() {
             <span style={{ fontSize: 20 }}>🚌</span>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: "#111" }}>
-                Showing {urlSeater} Seater {urlVehicle ? "vehicles" : "coaches"}
+                {seatFallback
+                  ? `No ${urlSeater} seater is available right now`
+                  : `Showing ${urlSeater} Seater ${urlVehicle ? "vehicles" : "group vehicles"}`}
               </p>
               <p style={{ fontSize: 12.5, color: "#666", margin: "2px 0 0" }}>
-                {urlVehicle ? "Your selected vehicle is shown first." : `Vehicles with ${urlSeater} seats are pre-filtered below.`}
+                {urlVehicle
+                  ? "Your selected vehicle is shown first."
+                  : seatFallback
+                    ? `Showing the next larger vehicles that fit ${urlSeater} or more passengers.`
+                    : `Vehicles with ${urlSeater} seats are pre-filtered below.`}
               </p>
             </div>
             <button
@@ -1262,7 +1293,7 @@ export default function Page() {
                           {browseMode ? "✓ Pre-selected" : "✓ Your Selection"}
                         </div>
                       )}
-                      <div className="vehicle-card-image" style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", minHeight: 200, position: "relative" }}>
+                      <div className="vehicle-card-image" style={{ flex: "1 1 240px", minWidth: "min(100%, 220px)", minHeight: 200, position: "relative" }}>
                         <img src={v.img || v.imgFallback} alt={v.name} onError={(e) => { const fb = v.imgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
                       </div>
                       <div style={{ flex: "2 1 320px", padding: "20px 22px", display: "flex", flexDirection: "column" }}>
@@ -1332,7 +1363,7 @@ export default function Page() {
             <p style={{ marginTop: 18, fontSize: 11.5, color: "#999", fontWeight: 400, textAlign: "center" }}>
               {apiVehicles?.length
                 ? "Fares are calculated live for your exact route, including surge, driver allowance and night charges where they apply."
-                : "Showing sample fares from the rate sheet — search a real trip above to get live pricing for your route."}
+                : "Enter your trip details to get the live fare for your exact route."}
             </p>
           </div>
         </div>

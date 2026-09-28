@@ -655,6 +655,7 @@ export default function Page() {
                 <img
                   src={selected.vehicleImg || vehicle.img}
                   alt={selected.vehicleName || vehicle.name}
+                  onError={(e) => { const fb = vehicle.imgFallback || selected.vehicleImgFallback; if (fb && e.currentTarget.src !== fb) e.currentTarget.src = fb; }}
                   style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
                 />
                 {/* subtle gradient overlay so vehicle name below blends cleanly */}

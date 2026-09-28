@@ -3,6 +3,7 @@ import { useSelector } from "react-redux";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
 import { selectJourney } from "../../src/store/slices/journeySlice";
 import { fmtINR } from "../../src/data/mockData";
+import { buildFareLines } from "../../src/lib/fareLines";
 import useSelectedVehicle from "../../src/hooks/useSelectedVehicle";
 import StateBlock from "../../src/components/StateBlock";
 import MobileStickyBar from "../../src/components/MobileStickyBar";
@@ -97,7 +98,7 @@ export default function Page() {
             </div>
           </div>
 
-          {isBrowse ? <BrowseFareCard /> : <FareCard fare={selected.fare} />}
+          {isBrowse ? <BrowseFareCard /> : <FareCard selected={selected} />}
         </div>
       )}
 
@@ -133,7 +134,7 @@ function BrowsePrompt() {
 
 function BrowseFareCard() {
   return (
-    <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22, position: "sticky", top: 120 }}>
+    <div className="cab-fare-card" style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22, position: "sticky", top: 120 }}>
       <h3 style={{ fontSize: 16.5, fontWeight: 700, margin: "0 0 8px" }}>See your fare</h3>
       <p style={{ fontSize: 13.5, color: "#666", lineHeight: 1.6, margin: "0 0 16px" }}>
         Enter your trip details — trip type, pickup, drop and date — and we'll show the exact fare for this vehicle on your route.
@@ -164,17 +165,16 @@ function JourneyMini({ journey }) {
   );
 }
 
-function FareCard({ fare }) {
-  const base = Math.round(fare * 0.82);
-  const driverAllowance = Math.round(fare * 0.08);
-  const tax = fare - base - driverAllowance;
+function FareCard({ selected }) {
+  // The backend's own breakdown for this quote (same lines checkout shows) —
+  // never a percentage split invented on the client.
+  const { lines, tripTotal } = buildFareLines(selected);
+  const fare = tripTotal;
   return (
-    <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22, position: "sticky", top: 120 }}>
+    <div className="cab-fare-card" style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22, position: "sticky", top: 120 }}>
       <h3 style={{ fontSize: 16.5, fontWeight: 700, margin: "0 0 14px" }}>Fare Breakdown</h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
-        <FareRow label="Base Fare" value={fmtINR(base)} />
-        <FareRow label="Driver Allowance" value={fmtINR(driverAllowance)} />
-        <FareRow label="Taxes & Fees" value={fmtINR(tax)} />
+        {lines.map((l, i) => <FareRow key={`${l.label}-${i}`} label={l.label} value={fmtINR(l.amount)} />)}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 14, marginTop: 14, borderTop: "1px dashed #EFEFEF" }}>
         <span style={{ fontWeight: 700, fontSize: 15 }}>Total</span>
@@ -202,13 +202,13 @@ function FareRow({ label, value }) {
 
 function Breadcrumb({ items }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "#666", marginBottom: 18 }}>
+    <nav aria-label="Breadcrumb" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 8, rowGap: 2, fontSize: 13.5, color: "#666", marginBottom: 18, lineHeight: "24px" }}>
       {items.map(([label, href], i) => (
         <React.Fragment key={label}>
           {i > 0 && <span>/</span>}
-          {href ? <a href={href} className="hover:!text-primary" style={{ fontWeight: 600 }}>{label}</a> : <span>{label}</span>}
+          {href ? <a href={href} className="no-touch-target hover:!text-primary" style={{ fontWeight: 600, whiteSpace: "nowrap", padding: "10px 0", margin: "-10px 0" }}>{label}</a> : <span style={{ whiteSpace: "nowrap" }}>{label}</span>}
         </React.Fragment>
       ))}
-    </div>
+    </nav>
   );
 }

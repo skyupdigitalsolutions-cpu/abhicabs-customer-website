@@ -54,12 +54,10 @@ export default function Page() {
   const vehicle = useSelectedVehicle(selected);
   const details   = useSelector(selectCheckoutDetails);
 
-  const [payMethod,    setPayMethod]    = useState("upi");
   const [paymentMode,  setPaymentMode]  = useState(details.paymentMode || "FULL");
   const [processing,   setProcessing]   = useState(false);
   const [payFailOpen,  setPayFailOpen]  = useState(false);
   const [showInvoice,  setShowInvoice]  = useState(false);
-  const [step,         setStep]         = useState(1);
 
   // Funnel: reaching the payment screen is the deepest pre-booking stage. The
   // backend merges this into the same attempt row started at FARES_VIEWED, so
@@ -153,7 +151,7 @@ export default function Page() {
 
   const confirmButtonLabel =
     paymentMode === "ZERO"    ? "Confirm Booking" :
-    paymentMode === "PARTIAL" ? "Confirm & Pay Advance" :
+    paymentMode === "PARTIAL" ? `Pay ${fmtINR(payNowAmount)} Advance` :
     `Pay ${fmtINR(payNowAmount)}`;
 
   // ── confirmAndPay — called at most ONCE ───────────────────────────────────
@@ -211,7 +209,9 @@ export default function Page() {
       // stay local, for the confirmation screen only.
       discountCode, discountAmount, discountDescription,
       promoCode: discountCode || undefined,
-      paymentMethod: payMethod,
+      // The actual instrument (UPI / card / net banking / wallet) is chosen
+      // inside Razorpay's checkout and recorded by the backend from the webhook.
+      paymentMethod: paymentMode === "ZERO" ? "PAY_LATER" : "ONLINE",
       paymentMode,
       paymentStatus:
         paymentMode === "ZERO"    ? "Pay on trip completion" :
@@ -297,7 +297,7 @@ export default function Page() {
       // the backend: it prices the order, creates the Razorpay order, returns
       // the public key, and confirms the payment via Razorpay's webhook.
       let paymentPending = false;
-      if (paymentMode !== "ZERO" && payMethod !== "cash") {
+      if (paymentMode !== "ZERO") {
         const purpose = paymentMode === "PARTIAL" ? "ADVANCE" : "FULL";
         let order;
         try {
@@ -372,7 +372,7 @@ export default function Page() {
       toast(err.message || "Something went wrong. Please try again.", "error");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentMode, payMethod]);
+  }, [paymentMode]);
 
   return (
     <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 60px" }}>
@@ -383,7 +383,7 @@ export default function Page() {
         <div className="flex flex-col gap-5">
 
           {/* ── Step 1: Payment Options ──────────────────────────────── */}
-          {step === 1 && (
+          {(
             <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
               <h2 className="text-[17px] font-bold mb-4">Payment Options</h2>
               <div style={{ border: "1px solid #EFEFEF", borderRadius: 12, overflow: "hidden" }}>
@@ -419,7 +419,7 @@ export default function Page() {
 
               <button
                 disabled={processing}
-                onClick={() => paymentMode === "ZERO" ? confirmAndPay() : setStep(2)}
+                onClick={confirmAndPay}
                 className="hover:!bg-[#FFB300]"
                 style={{
                   width: "100%", marginTop: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
@@ -428,78 +428,22 @@ export default function Page() {
                 }}
               >
                 {processing && <span style={{ width: 18, height: 18, borderRadius: "50%", border: "2.4px solid rgba(17,17,17,.3)", borderTopColor: "#111", display: "inline-block", animation: "spin .7s linear infinite" }} />}
-                {processing ? "Processing…" : paymentMode === "ZERO" ? confirmButtonLabel : "Continue"}
-              </button>
-            </div>
-          )}
-
-          {/* ── Step 2: Payment Method ───────────────────────────────── */}
-          {step === 2 && (
-            <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 26 }}>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="inline-flex items-center gap-1.5 hover:!text-[#111]"
-                style={{ color: "#666", fontWeight: 600, fontSize: 12.5, marginBottom: 14, background: "none", border: "none", cursor: "pointer", padding: 0 }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                Back to Payment Options
-              </button>
-              <h2 className="text-[17px] font-bold mb-1">Choose Payment Method</h2>
-              <p style={{ fontSize: 13, color: "#666", margin: "0 0 18px" }}>{USE_MOCK ? "This is a demo flow — no real payment is processed." : "Payments are processed securely via Razorpay."}</p>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {[
-                  { key: "upi",        title: "UPI",          sub: "GPay · PhonePe · Paytm",  icon: <path d="M4 17V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="1.8" /> },
-                  { key: "card",       title: "Card",         sub: "Credit / Debit",           icon: <><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" /></> },
-                  { key: "netbanking", title: "Net Banking",  sub: "All major banks",          icon: <path d="M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 19h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /> },
-                ].map((opt) => {
-                  const active = payMethod === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => setPayMethod(opt.key)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", textAlign: "left", cursor: "pointer",
-                        borderRadius: 14, border: active ? "1.5px solid #FFC107" : "1px solid #E5E5E5",
-                        background: active ? "#FFFBEA" : "#fff",
-                      }}
-                    >
-                      <span style={{ width: 40, height: 40, borderRadius: 10, background: active ? "rgba(255,193,7,.18)" : "#F7F7F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: active ? "#B8860B" : "#666" }}>
-                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">{opt.icon}</svg>
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "#111" }}>{opt.title}</p>
-                        <p style={{ fontSize: 12.5, color: "#666", margin: "2px 0 0" }}>{opt.sub}</p>
-                      </div>
-                      <span style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${active ? "#FFC107" : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {active && <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#FFC107" }} />}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                disabled={processing}
-                onClick={confirmAndPay}
-                className="hover:!bg-[#FFB300]"
-                style={{
-                  width: "100%", marginTop: 22, display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  padding: 16, borderRadius: 12, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 16,
-                  cursor: processing ? "default" : "pointer", opacity: processing ? 0.7 : 1, boxShadow: "0 10px 26px rgba(255,193,7,.4)",
-                }}
-              >
-                {processing && <span style={{ width: 18, height: 18, borderRadius: "50%", border: "2.4px solid rgba(17,17,17,.3)", borderTopColor: "#111", display: "inline-block", animation: "spin .7s linear infinite" }} />}
                 {processing ? "Processing…" : confirmButtonLabel}
               </button>
-              <p style={{ fontSize: 11.5, color: "#666", textAlign: "center", marginTop: 10 }}>
-                By confirming, you agree to our <a href="/terms" style={{ color: "#FFC107", fontWeight: 600 }}>Terms</a> &amp;{" "}
-                <a href="/cancellation" style={{ color: "#FFC107", fontWeight: 600 }}>Cancellation Policy</a>.
+              <p style={{ fontSize: 12, color: "#666", textAlign: "center", margin: "10px 0 0", lineHeight: 1.5 }}>
+                {paymentMode === "ZERO"
+                  ? "No payment now — pay the full fare at the end of your trip."
+                  : USE_MOCK
+                    ? "Demo mode — no real payment is processed."
+                    : "Opens Razorpay's secure checkout — pay by UPI, card, net banking or wallet."}
+              </p>
+              <p style={{ fontSize: 11.5, color: "#666", textAlign: "center", marginTop: 6 }}>
+                By confirming, you agree to our <a href="/terms" style={{ color: "#B8860B", fontWeight: 600 }}>Terms</a> &amp;{" "}
+                <a href="/cancellation" style={{ color: "#B8860B", fontWeight: 600 }}>Cancellation Policy</a>.
               </p>
             </div>
           )}
+
         </div>
 
         {/* ── Booking Summary ─────────────────────────────────────────── */}

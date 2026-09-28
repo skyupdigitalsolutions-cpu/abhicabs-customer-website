@@ -109,12 +109,12 @@ button { cursor: pointer; }
   }
 
   /* All grid fields stack to 1 col */
-  .bw-grid { grid-template-columns: 1fr !important; }
+  .bw-grid { grid-template-columns: minmax(0, 1fr) !important; }
 
   /* Date/time side by side on mobile */
   .bw-date-time-row {
     display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
   }
 
@@ -166,19 +166,19 @@ button { cursor: pointer; }
    phone made each step a few characters wide. Stack them instead, and drop
    the connector track (it only reads as a line across a horizontal row). */
 @media (max-width: 768px) {
-  .hiw-grid { grid-template-columns: 1fr 1fr !important; gap: 22px 12px !important; }
+  .hiw-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 22px 12px !important; }
   .hiw-grid > div[style*="position: absolute"] { display: none !important; }
 }
 @media (max-width: 460px) {
-  .hiw-grid { grid-template-columns: 1fr !important; }
+  .hiw-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* ── Rate grids inside vehicle modals ─────────────────────────────────────────*/
 @media (max-width: 520px) {
-  .rate-grid-3 { grid-template-columns: 1fr 1fr !important; }
+  .rate-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 @media (max-width: 340px) {
-  .rate-grid-3 { grid-template-columns: 1fr !important; }
+  .rate-grid-3 { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* ── Booking widget trip-type tabs ───────────────────────────────────────────*/
@@ -240,13 +240,13 @@ button { cursor: pointer; }
 
 /* ── Checkout ─────────────────────────────────────────────────────────────────*/
 @media (max-width: 768px) {
-  .checkout-grid { grid-template-columns: 1fr !important; }
+  .checkout-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .checkout-summary { order: -1; }
 }
 
 /* ── Payment ──────────────────────────────────────────────────────────────────*/
 @media (max-width: 640px) {
-  .payment-method-grid { grid-template-columns: 1fr !important; }
+  .payment-method-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* ── My bookings ──────────────────────────────────────────────────────────────*/
@@ -263,10 +263,10 @@ button { cursor: pointer; }
 
 /* ── Footer ───────────────────────────────────────────────────────────────────*/
 @media (max-width: 640px) {
-  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+  .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 24px !important; }
 }
 @media (max-width: 400px) {
-  .footer-grid { grid-template-columns: 1fr !important; }
+  .footer-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* ── Coverage section ─────────────────────────────────────────────────────────*/
@@ -381,4 +381,41 @@ table { max-width: 100%; }
 /* Comfortable tap targets on touch devices without changing desktop sizing. */
 @media (hover: none) and (pointer: coarse) {
   button, a[role="button"], .btn { min-height: 40px; }
+}
+
+/* ── Shrink-to-fit safety net ────────────────────────────────────────────────
+   Grid and flex items default to min-width:auto, i.e. they refuse to get
+   narrower than their longest unbreakable line. One full Google address
+   ("MG Road, Bengaluru, Karnataka 560001, India") was enough to push the
+   whole checkout column ~40px past a 360px screen, and because html/body
+   hide horizontal overflow, the right edge (prices, Apply button) was simply
+   cut off rather than scrollable. Letting items shrink, and letting long text
+   wrap, makes every layout fit whatever width the device gives it. */
+.grid > *,
+[style*="display: grid"] > *,
+[style*="display:grid"] > * { min-width: 0; }
+body { overflow-wrap: break-word; }
+input, select, textarea { max-width: 100%; min-width: 0; }
+iframe, video, canvas, svg { max-width: 100%; }
+
+/* The fixed "Ready to ride? / Book Now" bar sat on top of the last ~70px of
+   every page on phones (footer links, copyright, final buttons). Reserve its
+   height at the bottom of the page whenever it is present. */
+@media (max-width: 767px) {
+  body:has(.mobile-sticky-bar) { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Stacked single-column on phones/tablets: a sticky side card would pin
+   itself over the content it now sits above. */
+@media (max-width: 1023px) {
+  .cab-fare-card { position: static !important; top: auto !important; }
+}
+
+/* Group-travel promo: on phones the text column was held to 60% of a ~330px
+   card, wrapping the heading word-by-word and the button onto three lines.
+   Give the text the full width and fade the photo further behind it. */
+@media (max-width: 520px) {
+  .promo-group-text { max-width: 100% !important; }
+  .promo-group-photo { width: 62% !important; opacity: .55; }
+  .promo-group-fade { background: linear-gradient(90deg,#FFC107 45%,rgba(255,193,7,.55) 75%,rgba(255,193,7,.25)) !important; }
 }
