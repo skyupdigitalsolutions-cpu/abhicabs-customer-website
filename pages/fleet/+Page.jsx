@@ -190,7 +190,7 @@ function FleetCard({ vehicle: v, onView }) {
           alt={v.name}
           loading="lazy"
           onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          className="vehicle-photo w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
         />
         {/* Category badge */}
         <span className={`absolute top-2.5 left-2.5 text-[11px] font-bold px-2.5 py-1 rounded-full capitalize ${catColors[v.category] || "bg-gray-100 text-gray-600"}`}>
@@ -275,7 +275,7 @@ function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
                 src={v.gallery?.[activeImg] || v.img}
                 alt={v.name}
                 onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }}
-                className="w-full h-full object-cover object-center"
+                className="vehicle-photo w-full h-full object-cover object-center"
               />
             </div>
             {/* Thumbnails */}

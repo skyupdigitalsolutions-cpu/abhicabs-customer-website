@@ -152,7 +152,7 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
               >
                 {/* Vehicle image */}
                 <div style={{ aspectRatio: "16/9", background: "#F7F7F7", position: "relative", overflow: "hidden", flex: "none" }}>
-                  <img src={v.img} alt={v.name} loading="lazy" onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+                  <img className="vehicle-photo" src={v.img} alt={v.name} loading="lazy" onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
                 </div>
 
                 {/* Card body */}
@@ -224,6 +224,7 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
                 <div style={{ position: "relative", aspectRatio: "16/9", background: "#F7F7F7", borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
                   <AnimatePresence initial={false}>
                     <m.img
+                      className="vehicle-photo"
                       key={modal.gallery?.[activeImg] || modal.img}
                       src={modal.gallery?.[activeImg] || modal.img}
                       onError={(e) => { if (modal.imgFallback && e.currentTarget.src !== modal.imgFallback) e.currentTarget.src = modal.imgFallback; }}

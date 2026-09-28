@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { OPEN_LOGIN, notifyAuthChanged } from "../lib/authEvents";
 import Button from "./ui/Button";
 import { FIELD_LABEL, FIELD_INPUT } from "./ui/classNames";
 import { IconCheckCircle, IconClose } from "./Icons";
@@ -37,6 +38,31 @@ export default function LoginPopup() {
   const [resending, setResending] = useState(false);
   const codeRef = useRef(null);
 
+  // Opened on request from a page (e.g. checkout's "Sign in"): after signing
+  // in, close and let that page update itself instead of reloading it — a
+  // reload threw away everything the guest had typed into checkout.
+  const stayOnPageRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onOpen = (e) => {
+      if (isAuthenticated()) return;
+      stayOnPageRef.current = Boolean(e?.detail?.stayOnPage);
+      setAuthMode("login"); setStep("form"); setCode(""); setOtpError(""); setFormError(""); setDone(false);
+      setVisible(true);
+    };
+    window.addEventListener(OPEN_LOGIN, onOpen);
+    return () => window.removeEventListener(OPEN_LOGIN, onOpen);
+  }, []);
+
+  function finishSignIn() {
+    setDone(true);
+    if (stayOnPageRef.current) {
+      setTimeout(() => { setVisible(false); setDone(false); notifyAuthChanged(); }, 1100);
+    } else {
+      setTimeout(() => { window.location.reload(); }, 1800);
+    }
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (isAuthenticated()) return;
@@ -69,8 +95,7 @@ export default function LoginPopup() {
     try {
       await authApi.register({ name: name.trim(), email: email.trim(), phone: normalisePhone(phone) });
       requestNotificationPermission();
-      setDone(true);
-      setTimeout(() => { window.location.reload(); }, 1800);
+      finishSignIn();
     } catch (err) {
       setFormError(err.message || "Couldn't create your account. Please try again.");
     } finally {
@@ -128,8 +153,7 @@ export default function LoginPopup() {
     try {
       await authApi.verifyOtp(phone, code);
       requestNotificationPermission();
-      setDone(true);
-      setTimeout(() => { window.location.reload(); }, 1800);
+      finishSignIn();
     } catch (err) {
       setOtpError(err.message || "That code didn't work. Try again.");
       setCode("");

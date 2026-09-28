@@ -419,3 +419,20 @@ iframe, video, canvas, svg { max-width: 100%; }
   .promo-group-photo { width: 62% !important; opacity: .55; }
   .promo-group-fade { background: linear-gradient(90deg,#FFC107 45%,rgba(255,193,7,.55) 75%,rgba(255,193,7,.25)) !important; }
 }
+
+/* ── Vehicle photos ───────────────────────────────────────────────────────────
+   Fleet photos are side-on shots of the whole vehicle. Cropping them to fill a
+   tall card ("cover") cut off the bonnet and the boot — on the vehicle list
+   and the checkout banner only the middle of the car was visible. Show the
+   whole vehicle, centred on a light backdrop, whatever the card's shape.
+   (Overrides the inline object-fit on each <img>, hence !important.) */
+img.vehicle-photo {
+  object-fit: contain !important;
+  object-position: center !important;
+  background: #F6F6F4;
+  padding: 10px 12px;
+}
+img.vehicle-photo--thumb { padding: 3px; }
+/* The fleet card zooms its photo on hover; with the whole car visible that
+   pushes the ends back out of frame, so keep it still. */
+.group:hover img.vehicle-photo { transform: none !important; }

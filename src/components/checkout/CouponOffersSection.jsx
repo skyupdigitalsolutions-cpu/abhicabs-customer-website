@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { discountsApi } from "../../api";
 import { isAuthenticated } from "../../api/tokens";
 import { fmtINR } from "../../data/mockData";
+import { signInClick, AUTH_CHANGED } from "../../lib/authEvents";
 
 /**
  * src/components/checkout/CouponOffersSection.jsx
@@ -38,7 +39,13 @@ import { fmtINR } from "../../data/mockData";
  *     applied, or null when the customer removes it
  */
 export function CouponOffersSection({ fareTotal, tripType, applied, onApplied }) {
-  const signedIn = isAuthenticated();
+  // Re-checked when the guest signs in from the popup on this page.
+  const [signedIn, setSignedIn] = useState(() => isAuthenticated());
+  useEffect(() => {
+    const onAuth = () => setSignedIn(isAuthenticated());
+    window.addEventListener(AUTH_CHANGED, onAuth);
+    return () => window.removeEventListener(AUTH_CHANGED, onAuth);
+  }, []);
 
   const [code, setCode] = useState(applied?.code || "");
   const [message, setMessage] = useState("");
@@ -127,7 +134,7 @@ export function CouponOffersSection({ fareTotal, tripType, applied, onApplied })
           )}
           {!signedIn && (
             <p className="text-[12px] text-text-secondary mt-1.5">
-              <a href="/login" className="font-semibold text-primary">Sign in</a> to check a promo code.
+              <a href="/login" data-vike="false" onClick={signInClick} className="font-semibold text-primary">Sign in</a> to check a promo code.
             </p>
           )}
         </>

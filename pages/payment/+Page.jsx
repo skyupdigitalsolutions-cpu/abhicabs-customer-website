@@ -451,7 +451,7 @@ export default function Page() {
           <h3 style={{ fontWeight: 700, fontSize: 15, margin: "0 0 14px" }}>Booking Summary</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
             <span style={{ width: 56, height: 40, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
-              <img src={selected.vehicleImg || selected.vehicleImgFallback || vehicle.img} alt={selected.vehicleName || vehicle.name} onError={(e) => { const fb = vehicle.imgFallback || selected.vehicleImgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+              <img className="vehicle-photo vehicle-photo--thumb" src={selected.vehicleImg || selected.vehicleImgFallback || vehicle.img} alt={selected.vehicleName || vehicle.name} onError={(e) => { const fb = vehicle.imgFallback || selected.vehicleImgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
             </span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{selected.vehicleName || vehicle.name}</div>

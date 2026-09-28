@@ -56,13 +56,25 @@ export default function Page() {
   // Back from checkout pageContext said "no ?j=" and the page reopened in
   // browse mode with every location/date/time blank, even though the trip was
   // still saved. On the server (first render) both sources are the same URL.
-  const search = typeof window !== "undefined"
+  // …but only while the address bar is actually showing THIS page. On Back
+  // from checkout the page's first render can run a beat before the address
+  // bar has switched from /checkout, and reading it then made the page think
+  // there was no trip and no seater; pageContext already has the right URL at
+  // that moment, so fall back to it.
+  const locationIsThisPage = typeof window !== "undefined" && window.location.pathname.startsWith("/booking-search");
+  const search = locationIsThisPage
     ? Object.fromEntries(new URLSearchParams(window.location.search))
     : (pageContext.urlParsed?.search || {});
   const journeyId  = search.j || null;
   const browseType = search.type || null;    // e.g. "group"
   const urlSeater  = search.seater || null;  // e.g. "13" from group section
-  const urlVehicle = search.vehicle || null; // e.g. "swift-dzire" from fleet card
+  // The vehicle the customer has committed to: from ?vehicle= (fleet card),
+  // or from tapping "Book Now" on a card here (pickedKey, set below).
+  // Either way, once the trip is entered it goes straight to checkout with
+  // THAT vehicle — previously a card tap only opened the trip form, and after
+  // searching the customer was dumped back on the list to pick it again.
+  const [pickedKey, setPickedKey] = useState(null);
+  const urlVehicle = search.vehicle || pickedKey || null;
   const dispatch = useDispatch();
   const toast = useToast();
 
@@ -119,6 +131,10 @@ export default function Page() {
   const [seatFilters, setSeatFilters] = useState(() =>
     urlSeater ? [Number(urlSeater)] : []
   );
+  // Keep it in step with the address (e.g. returning with ?seater=12).
+  useEffect(() => {
+    if (urlSeater) setSeatFilters([Number(urlSeater)]);
+  }, [urlSeater]);
 
   // Inline trip form (browse mode) — lets the user set trip type + details
   // right here without redirecting to the home booking widget.
@@ -312,7 +328,10 @@ export default function Page() {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [journey?.id]);
+  // Keyed on browseMode as well: selectJourney() falls back to the last trip,
+  // so journey?.id alone could stay the same while this page moved from "no
+  // trip" to "this trip" (e.g. on Back from checkout), and fares never loaded.
+  }, [journey?.id, browseMode]);
 
   const isLocal = !browseMode && journey?.tripType === "local";
   const isRound = !browseMode && journey?.tripType === "round-trip";
@@ -386,10 +405,10 @@ export default function Page() {
   // picking 12, 13, 16 or 17 seats always ended in "0 found" even though the
   // Tempo Travellers and Urbanias with those seat counts were in the fleet.
   const source = useMemo(() => (
-    (browseType === "group" && !urlVehicle)
+    browseType === "group"
       ? allSource.filter((v) => Number(v.seats) >= GROUP_MIN_SEATS)
       : allSource
-  ), [browseType, urlVehicle, allSource]);
+  ), [browseType, allSource]);
 
   // Available filter options derived from the actual vehicle list, not
   // hardcoded — so a filter pill never appears for something that isn't
@@ -629,17 +648,17 @@ export default function Page() {
 
   function selectVehicle(v) {
     if (browseMode) {
-      // No real trip yet — a fare/booking can't be attached to nothing. Keep
-      // the user HERE and reveal the trip-details panel, rather than bouncing
-      // them back to the home page (which felt like the flow "resetting").
-      toast(
-        browseType === "group"
-          ? "Choose a trip type and fill in the details on the left to get a real fare."
-          : "Set your pickup, drop and date in the trip details panel to get a real fare.",
-        "error"
-      );
+      // No trip yet, so nothing to price. Remember THIS vehicle and take the
+      // customer to the trip form; submitting it prices this vehicle and goes
+      // straight to checkout (see the direct-vehicle fast path).
+      setPickedKey(v.id);
+      toast(`Enter your trip details to book the ${v.name}.`, "success");
       setShowFilters(true);
-      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* SSR guard */ }
+      setTimeout(() => {
+        try {
+          document.getElementById("trip-details-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        } catch { /* SSR guard */ }
+      }, 50);
       return;
     }
     // HARD STOP — the backend refused to price this trip (outside service
@@ -936,9 +955,12 @@ export default function Page() {
               <button onClick={clearFilters} style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}>Clear all</button>
             </div>
 
-            {/* ── Trip details (browse mode only — set trip type + route inline) ── */}
-            {browseMode && (
-              <div style={{ marginBottom: 22, paddingBottom: 20, borderBottom: "1px solid #F0F0F0" }}>
+            {/* ── Trip details — always editable here. Before a search it sets
+                 the trip; after one it is pre-filled with that trip, so the
+                 route / date / trip type can be changed in place instead of
+                 disappearing once prices load. ── */}
+            {(
+              <div id="trip-details-panel" style={{ marginBottom: 22, paddingBottom: 20, borderBottom: "1px solid #F0F0F0", scrollMarginTop: 90 }}>
                 <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
                 <div className="filter-pills" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
                   {[
@@ -1152,9 +1174,9 @@ export default function Page() {
 
                   <button onClick={submitInlineTrip}
                     style={{ height: 46, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 800, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
-                    {urlVehicle
-                      ? `Confirm Trip Details — Book ${vehicles.find(v => v.id === urlVehicle)?.name || "this Vehicle"} →`
-                      : "Search Available Cabs →"}
+                    {chosenVehicle
+                      ? `Confirm Trip Details — Book ${chosenVehicle.name} →`
+                      : browseMode ? "Search Available Cabs →" : "Update Search →"}
                   </button>
                 </div>
               </div>
@@ -1294,7 +1316,7 @@ export default function Page() {
                         </div>
                       )}
                       <div className="vehicle-card-image" style={{ flex: "1 1 240px", minWidth: "min(100%, 220px)", minHeight: 200, position: "relative" }}>
-                        <img src={v.img || v.imgFallback} alt={v.name} onError={(e) => { const fb = v.imgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
+                        <img className="vehicle-photo" src={v.img || v.imgFallback} alt={v.name} onError={(e) => { const fb = v.imgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
                       </div>
                       <div style={{ flex: "2 1 320px", padding: "20px 22px", display: "flex", flexDirection: "column" }}>
                         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -1306,7 +1328,7 @@ export default function Page() {
                           <span>{v.ac ? "A/C" : "Non-A/C"}</span>
                           {v.bags && <span>{v.bags}</span>}
                         </div>
-                        {!browseMode && v.vehicleClass ? (
+                        {!browseMode && v.vehicleClass && v.fare != null && Number(v.fare) > 0 ? (
                           // Real quote for THIS journey, straight from the backend —
                           // not a rate-card reference number.
                           <div style={{ padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
@@ -1351,7 +1373,7 @@ export default function Page() {
                             className="hover:!bg-[#FFB300]"
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
-                            {browseMode ? "Get Real Fare" : (isPinned ? "Continue Booking →" : "Select Vehicle")}
+                            {browseMode ? "Book Now" : (isPinned ? "Continue Booking →" : "Select Vehicle")}
                           </button>
                         </div>
                       </div>

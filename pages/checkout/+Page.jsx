@@ -10,6 +10,7 @@ import { authApi, bookingsApi } from "../../src/api";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import { fmtINR } from "../../src/data/mockData";
 import useSelectedVehicle from "../../src/hooks/useSelectedVehicle";
+import { AUTH_CHANGED, signInClick } from "../../src/lib/authEvents";
 import { buildFareLines } from "../../src/lib/fareLines";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
@@ -154,7 +155,9 @@ export default function Page() {
   const vehicle = useSelectedVehicle(selected);
   const saved = useSelector(selectCheckoutDetails);
 
-  const isGuest = !isAuthenticated();
+  // Live, not computed once: signing in from the popup on this page flips it
+  // without a reload, so the guest notice disappears and details prefill.
+  const [isGuest, setIsGuest] = useState(() => !isAuthenticated());
 
   const [fullName, setFullName] = useState(saved.fullName || "");
   const [mobile, setMobile] = useState(saved.mobile || "");
@@ -212,34 +215,42 @@ export default function Page() {
   const bookingCompletedRef = useRef(false);
   const abandonmentSentRef = useRef(false);
 
-  // Auto-fill from logged-in user profile on mount.
-  // Only fills fields the user hasn't already typed — never overwrites edits.
-  useEffect(() => {
+  // Auto-fill from the logged-in user's profile — on mount, and again the
+  // moment a guest signs in from the popup on this page. Functional setters,
+  // so a field the customer has already typed is never overwritten.
+  const prefillFromProfile = React.useCallback(() => {
     if (!isAuthenticated()) return;
-    // Stored name is instant (no request); getMe() below fills in the rest
-    // (and overwrites with the fresher name if the profile has one), same
-    // pattern Header.jsx uses.
     const storedName = getStoredUserName();
-    if (!fullName && storedName) setFullName(storedName);
+    if (storedName) setFullName((v) => v || storedName);
     authApi.getMe()
       .then((data) => {
         // /auth/me can come back either as the user object directly or
-        // wrapped as { user: {...} } depending on backend vs mock — Header.jsx
-        // already has to handle both; this effect previously only checked
-        // the flat shape, so real logged-in profiles never actually
-        // auto-filled the checkout form.
+        // wrapped as { user: {...} } depending on backend vs mock.
         const user = data?.user || data;
         if (!user) return;
-        if (!fullName && (user.name || user.fullName))
-          setFullName(user.name || user.fullName || "");
-        if (!mobile && (user.phone || user.mobile))
-          setMobile(String(user.phone || user.mobile).replace(/[^\d]/g, "").slice(-10));
-        if (!email && user.email && !user.email.includes("@placeholder.local"))
-          setEmail(user.email);
+        const name = user.name || user.fullName || "";
+        const phone = user.phone || user.mobile ? String(user.phone || user.mobile).replace(/[^\d]/g, "").slice(-10) : "";
+        const mail = user.email && !user.email.includes("@placeholder.local") ? user.email : "";
+        if (name) setFullName((v) => v || name);
+        if (phone) setMobile((v) => v || phone);
+        if (mail) setEmail((v) => v || mail);
       })
       .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { prefillFromProfile(); }, [prefillFromProfile]);
+
+  // Signed in from the popup without leaving checkout: stay right here.
+  useEffect(() => {
+    const onAuth = () => {
+      setIsGuest(!isAuthenticated());
+      prefillFromProfile();
+      toast("You're signed in — continue your booking.", "success");
+    };
+    window.addEventListener(AUTH_CHANGED, onAuth);
+    return () => window.removeEventListener(AUTH_CHANGED, onAuth);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillFromProfile]);
 
   if (!selected || !vehicle || !journey) {
     return (
@@ -492,7 +503,7 @@ export default function Page() {
                     <p style={{ fontWeight: 700, fontSize: 13.5, color: "#1e3a5f", margin: 0 }}>Booking as Guest</p>
                     <p style={{ fontSize: 12.5, color: "#3b5998", margin: "4px 0 0", lineHeight: 1.5 }}>
                       No account needed. Fill your details and proceed to payment.{" "}
-                      <a href="/login" style={{ fontWeight: 700, color: "#1d4ed8" }}>Sign in</a> to track bookings later.
+                      <a href="/login" data-vike="false" onClick={signInClick} style={{ fontWeight: 700, color: "#1d4ed8" }}>Sign in</a> to track bookings later.
                     </p>
                   </div>
                 </div>
@@ -651,15 +662,14 @@ export default function Page() {
           <div className="lg:sticky lg:top-[120px]" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden" }}>
               {/* Vehicle banner — actual selected vehicle photo */}
-              <div style={{ height: 180, overflow: "hidden", position: "relative", background: "#F7F7F7" }}>
+              <div style={{ height: 180, overflow: "hidden", position: "relative", background: "#F6F6F4" }}>
                 <img
+                  className="vehicle-photo"
                   src={selected.vehicleImg || vehicle.img}
                   alt={selected.vehicleName || vehicle.name}
                   onError={(e) => { const fb = vehicle.imgFallback || selected.vehicleImgFallback; if (fb && e.currentTarget.src !== fb) e.currentTarget.src = fb; }}
                   style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
                 />
-                {/* subtle gradient overlay so vehicle name below blends cleanly */}
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 55%, rgba(0,0,0,0.18))" }} />
               </div>
 
               <div style={{ padding: 22 }}>

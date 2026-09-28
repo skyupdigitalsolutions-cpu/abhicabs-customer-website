@@ -4,6 +4,15 @@ import { navigate } from "vike/client/router";
 import { LazyMotion, domMax, m, MotionConfig, AnimatePresence } from "framer-motion";
 import { selectMobileNavOpen, setMobileNavOpen } from "../store/slices/uiSlice";
 import { isAuthenticated, getStoredUserName } from "../api/tokens";
+import { AUTH_CHANGED, signInClick, rememberReturnTo } from "../lib/authEvents";
+
+// Pages with a trip in progress: signing in must not navigate away from them.
+const IN_PLACE_SIGN_IN = ["/booking-search", "/cab-details", "/checkout", "/payment"];
+function headerSignInClick(e) {
+  const path = typeof window !== "undefined" ? window.location.pathname : "";
+  if (IN_PLACE_SIGN_IN.some((p) => path.startsWith(p))) return signInClick(e);
+  rememberReturnTo(); // full /login page, then back here
+}
 import { authApi } from "../api";
 import { useToast } from "../hooks/useToast";
 
@@ -55,6 +64,7 @@ export default function Header() {
   const [hoveredLink, setHoveredLink] = useState(null); // drives the gliding hover background
 
   useEffect(() => {
+    const sync = () => {
     const auth = isAuthenticated();
     setLoggedIn(auth);
     if (auth) {
@@ -71,6 +81,11 @@ export default function Header() {
         })
         .catch(() => { /* keep stored name */ });
     }
+    };
+    sync();
+    // Signed in from the popup (e.g. on checkout) without a reload.
+    window.addEventListener(AUTH_CHANGED, sync);
+    return () => window.removeEventListener(AUTH_CHANGED, sync);
   }, []);
 
   // Close dropdown on outside click
@@ -249,6 +264,8 @@ export default function Header() {
                 <div className="hidden lg:flex items-center gap-2">
                   <a
                     href="/login"
+                    data-vike="false"
+                    onClick={headerSignInClick}
                     className="inline-flex items-center gap-1.5 font-semibold text-[13.5px] text-brand-black hover:!text-[#B8860B]"
                   >
                     <UserIcon size={17} />
@@ -373,7 +390,8 @@ export default function Header() {
                     <>
                       <a
                         href="/login"
-                        onClick={() => dispatch(setMobileNavOpen(false))}
+                        data-vike="false"
+                        onClick={(e) => { dispatch(setMobileNavOpen(false)); headerSignInClick(e); }}
                         className="w-full py-3 rounded-xl border border-[#E5E5E5] font-semibold text-center inline-flex items-center justify-center gap-2"
                       >
                         <UserIcon size={16} />
