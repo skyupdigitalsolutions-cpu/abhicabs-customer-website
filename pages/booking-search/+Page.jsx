@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../../src/lib/googleMaps";
 import { useSelector, useDispatch } from "react-redux";
 import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
@@ -76,7 +77,9 @@ export default function Page() {
   // THAT vehicle — previously a card tap only opened the trip form, and after
   // searching the customer was dumped back on the list to pick it again.
   const [pickedKey, setPickedKey] = useState(null);
-  const urlVehicle = search.vehicle || pickedKey || null;
+  // The customer's own tap wins over the ?vehicle= pre-selection, so a
+  // pre-selected vehicle can always be swapped for another one.
+  const urlVehicle = pickedKey || search.vehicle || null;
   const dispatch = useDispatch();
   const toast = useToast();
 
@@ -197,41 +200,35 @@ export default function Page() {
   // point-to-point trip does).
 
   // Maps SDK is loaded by LocationMapPicker's singleton loader — poll for it.
-  const [mapsLoaded, setMapsLoaded] = useState(
-    () => typeof window !== "undefined" && !!window.google?.maps?.places
-  );
-  useEffect(() => {
-    if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
-    const iv = setInterval(() => {
-      if (window.google?.maps?.places) { setMapsLoaded(true); clearInterval(iv); }
-    }, 200);
-    return () => clearInterval(iv);
-  }, [mapsLoaded]);
+  // Loads Google Maps itself (it used to wait for the map popup to do it,
+  // so suggestions never appeared until a map had been opened).
+  const mapsLoaded = useGoogleMapsReady();
 
   // Attach Google Places Autocomplete to an inline input by ref.
   const inlinePickupAcRef = useRef(null);
   const inlineDropAcRef = useRef(null);
   function attachInlineAc(field, storedRef) {
+    // Re-binds when the <input> changes — the trip form can re-mount (sidebar
+    // ↔ step 2 of the seat-size flow), and a binding to the old element made
+    // suggestions silently stop working.
     return (el) => {
-      if (!el || !mapsLoaded || storedRef.current) return;
-      storedRef.current = new window.google.maps.places.Autocomplete(el, {
-        componentRestrictions: { country: "in" },
-        // `geometry` is needed for the same-city (local radius) test — that
-        // is a kilometre rule, so it cannot run off the address text.
-        fields: ["formatted_address", "name", "geometry"],
-      });
-      storedRef.current.addListener("place_changed", () => {
-        const p = storedRef.current.getPlace();
+      if (!el || !mapsLoaded) return;
+      bindPlacesAutocomplete(el, storedRef, (p) => {
         const addr = p?.formatted_address || p?.name || el.value;
-        const loc = p?.geometry?.location;
-        const pt = loc
-          ? {
-              lat: typeof loc.lat === "function" ? loc.lat() : loc.lat,
-              lng: typeof loc.lng === "function" ? loc.lng() : loc.lng,
-            }
-          : null;
         setInlineTrip((f) => ({ ...f, [field]: addr }));
-        setInlinePoints((pts) => ({ ...pts, [field]: pt }));
+        setInlinePoints((pts) => ({ ...pts, [field]: mapsPointFromPlace(p) }));
+      });
+    };
+  }
+  // Stops get the same Google suggestions as pickup/drop.
+  const inlineStopAcRefs = useRef({});
+  function attachStopAc(i) {
+    return (el) => {
+      if (!el || !mapsLoaded) return;
+      if (!inlineStopAcRefs.current[i]) inlineStopAcRefs.current[i] = { current: null };
+      bindPlacesAutocomplete(el, inlineStopAcRefs.current[i], (p) => {
+        const addr = p?.formatted_address || p?.name || el.value;
+        setInlineTrip((f) => { const st = [...(f.stops || [])]; st[i] = addr; return { ...f, stops: st }; });
       });
     };
   }
@@ -663,6 +660,13 @@ export default function Page() {
       // customer to the trip form; submitting it prices this vehicle and goes
       // straight to checkout (see the direct-vehicle fast path).
       setPickedKey(v.id);
+      if (search.vehicle && search.vehicle !== v.id) {
+        try {
+          const qs = new URLSearchParams(window.location.search);
+          qs.set("vehicle", v.id);
+          window.history.replaceState(window.history.state, "", `${window.location.pathname}?${qs.toString()}`);
+        } catch { /* ignore */ }
+      }
       if (seaterFlow) {
         // Step 2 replaces the list with this vehicle + the trip form.
         setTimeout(() => {
@@ -699,7 +703,30 @@ export default function Page() {
       toast("This trip hasn't been priced yet — please search again or request a custom booking.", "error");
       return;
     }
+    // Another vehicle than the selected one: make IT the selection (the
+    // "✓ Your Selection" badge moves to it) — the customer confirms with
+    // "Continue Booking". Tapping the selected one continues to checkout.
+    if (chosenKey && String(v.vehicleClass || v.id).toLowerCase() !== chosenKey) {
+      switchSelection(v);
+      return;
+    }
     selectAndGoToCheckout(v, journey.id, { surge, surgeMultiplier, surgePct });
+  }
+
+  // Make `v` the selected vehicle, keep the address in step (so Back/refresh
+  // come back to it), and bring the customer to it.
+  function switchSelection(v) {
+    setPickedKey(v.id);
+    setShowOtherVehicles(false);
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      qs.set("vehicle", v.id);
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}?${qs.toString()}`);
+    } catch { /* ignore */ }
+    toast(`${v.name} selected.`, "success");
+    setTimeout(() => {
+      try { document.querySelector(".vehicle-card-wrap")?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch { /* */ }
+    }, 60);
   }
 
   // Puts a priced vehicle into the store and moves to checkout. Shared by the
@@ -892,7 +919,7 @@ export default function Page() {
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Stops</label>
                       {(inlineTrip.stops || []).map((s, i) => (
                         <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                          <input value={s} onChange={(e) => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = e.target.value; return { ...f, stops: st }; })} placeholder={`Stop ${i + 1}`}
+                          <input ref={attachStopAc(i)} value={s} onChange={(e) => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = e.target.value; return { ...f, stops: st }; })} placeholder={`Stop ${i + 1}`} autoComplete="off"
                             style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
                           <button type="button" onClick={() => setInlineMapField(`stop:${i}`)} title="Pick on map"
                             style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
@@ -1361,7 +1388,7 @@ export default function Page() {
                     <div key={cardKey} className="vehicle-card-wrap" style={{ background: "#fff", border: isPinned ? "2px solid #FFC107" : "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexWrap: "wrap", position: "relative", boxShadow: isPinned ? "0 0 0 4px rgba(255,193,7,.15)" : "none" }}>
                       {isPinned && (
                         <div style={{ position: "absolute", top: 14, left: 14, zIndex: 10, background: "#FFC107", color: "#111", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", padding: "3px 10px", borderRadius: 9999, textTransform: "uppercase" }}>
-                          {browseMode ? "✓ Pre-selected" : "✓ Your Selection"}
+                          {!browseMode ? "✓ Your Selection" : pickedKey ? "✓ Selected" : "✓ Pre-selected"}
                         </div>
                       )}
                       <div className="vehicle-card-image" style={{ flex: "1 1 240px", minWidth: "min(100%, 220px)", minHeight: 200, position: "relative" }}>
@@ -1422,7 +1449,9 @@ export default function Page() {
                             className="hover:!bg-[#FFB300]"
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
-                            {browseMode ? "Book Now" : (isPinned ? "Continue Booking →" : "Select Vehicle")}
+                            {browseMode
+                              ? (isPinned ? "Selected ✓" : chosenKey ? "Select This Instead" : "Book Now")
+                              : (isPinned ? "Continue Booking →" : chosenKey ? "Select This Instead" : "Select Vehicle")}
                           </button>
                         </div>
                       </div>

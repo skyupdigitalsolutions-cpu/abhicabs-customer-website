@@ -1,27 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { GOOGLE_MAPS_API_KEY } from "../api/config";
+import { loadGoogleMaps } from "../lib/googleMaps";
 
-// ─── Singleton Google Maps loader ─────────────────────────────────────────────
-// Loads the Maps JS API once per page; all LocationMapPicker instances share it.
-let _mapsPromise = null;
-function loadGoogleMaps() {
-  if (_mapsPromise) return _mapsPromise;
-  if (window.google?.maps?.places) {
-    _mapsPromise = Promise.resolve();
-    return _mapsPromise;
-  }
-  _mapsPromise = new Promise((resolve, reject) => {
-    const cb = "__abhiCabsMapsReady";
-    window[cb] = () => { delete window[cb]; resolve(); };
-    const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=${cb}&loading=async`;
-    s.async = true;
-    s.defer = true;
-    s.onerror = () => { _mapsPromise = null; reject(new Error("Maps failed to load")); };
-    document.head.appendChild(s);
-  });
-  return _mapsPromise;
-}
+// Google Maps is loaded by the shared loader (src/lib/googleMaps.js), so the
+// map picker and every location field on the page share one script.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getState(comps) {

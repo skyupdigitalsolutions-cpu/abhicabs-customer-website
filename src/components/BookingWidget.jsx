@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useId } from "react";
+import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../lib/googleMaps";
 import { createPortal } from "react-dom";
 import { useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
@@ -433,16 +434,9 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     }
   }
 
-  const [mapsLoaded, setMapsLoaded] = useState(
-    () => typeof window !== "undefined" && !!window.google?.maps?.places
-  );
-  useEffect(() => {
-    if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
-    const iv = setInterval(() => {
-      if (window.google?.maps?.places) { setMapsLoaded(true); clearInterval(iv); }
-    }, 200);
-    return () => clearInterval(iv);
-  }, [mapsLoaded]);
+  // Loads Google Maps itself (it used to wait for the map popup to do it,
+  // so suggestions never appeared until a map had been opened).
+  const mapsLoaded = useGoogleMapsReady();
 
   const pickupAutocompleteRef = useRef(null);
   const dropAutocompleteRef = useRef(null);

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../../src/lib/googleMaps";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -167,19 +168,11 @@ export default function Page() {
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const addressInputRef = useRef(null);
   const addressAutocompleteRef = useRef(null);
-  const [mapsLoaded, setMapsLoaded] = useState(
-    () => typeof window !== "undefined" && !!window.google?.maps?.places
-  );
+  // Loads Google Maps itself (it used to wait for the map popup to do it,
+  // so the address field gave no suggestions until a map had been opened).
+  const mapsLoaded = useGoogleMapsReady();
   // Track where we've been so BackLink can step back one page.
   useEffect(() => { recordNavStep("/checkout"); }, []);
-
-  useEffect(() => {
-    if (mapsLoaded || !GOOGLE_MAPS_API_KEY) return;
-    const iv = setInterval(() => {
-      if (window.google?.maps?.places) { setMapsLoaded(true); clearInterval(iv); }
-    }, 300);
-    return () => clearInterval(iv);
-  }, [mapsLoaded]);
   // Places Autocomplete on the pickup-address text field — mirrors the
   // From/To fields on the booking widget so typing here also suggests
   // real addresses, not just a plain free-text box.
