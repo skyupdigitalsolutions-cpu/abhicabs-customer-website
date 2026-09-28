@@ -11,7 +11,7 @@ import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
 import { useToast } from "../../src/hooks/useToast";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
-import { isSameCityTrip, ensureCitiesLoaded } from "../../src/api/cities";
+import { isSameCityTrip, ensureCitiesLoaded, cityFromAddress } from "../../src/api/cities";
 import { AIRPORTS } from "../../src/data/airports";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
@@ -28,6 +28,8 @@ import LocationMapPicker from "../../src/components/LocationMapPicker";
 function toLocalISODate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+const TRIP_LABEL = { "one-way": "One Way", "round-trip": "Round Trip", local: "Local", airport: "Airport", "multi-city": "Multi-city" };
 
 function getVehicleType(v) {
   const n = v.name.toLowerCase();
@@ -354,11 +356,19 @@ export default function Page() {
   // ?vehicle= may carry a backend catalogue key (swift-dzire) or a bundled
   // local id (swift-desire) depending on which screen linked here, so resolve
   // against the live catalogue first and fall back to the bundled list.
+  // Seat-size flow (arrived with ?seater=, e.g. "12 Seater" on the homepage):
+  //   step 1 — choose a vehicle of that size (list + filters, no trip form);
+  //   step 2 — after "Book Now", enter trip details for THAT vehicle, then
+  //            Confirm & Continue goes straight to checkout.
+  // No vehicle is picked automatically; the customer chooses it in step 1.
+  const seaterFlow = browseMode && Boolean(urlSeater) && !search.vehicle;
+  const vehicleKey = urlVehicle;
+
   const chosenVehicle = useMemo(() => {
-    if (!urlVehicle) return null;
-    const key = toBackendVehicleClass(urlVehicle) || urlVehicle;
+    if (!vehicleKey) return null;
+    const key = toBackendVehicleClass(vehicleKey) || vehicleKey;
     return (catalogue || []).find((v) => v.id === key) || null;
-  }, [urlVehicle, catalogue]);
+  }, [vehicleKey, catalogue]);
 
   // Real quotes are on screen.
   const pricedMode = !browseMode && Boolean(apiVehicles?.length);
@@ -380,6 +390,7 @@ export default function Page() {
 
   // The chosen vehicle is the priced row whose class matches its backend key.
   const chosenKey = chosenVehicle ? toBackendVehicleClass(chosenVehicle) : null;
+  const seaterStep2 = seaterFlow && Boolean(chosenVehicle) && !autoPricing;
   const pricedChosen = useMemo(() => {
     if (!chosenKey || !pricedMode) return null;
     return (
@@ -495,7 +506,7 @@ export default function Page() {
     // Drop ?j= from the URL so a refresh doesn't restore the cleared trip.
     try {
       const qs = new URLSearchParams();
-      if (urlVehicle) qs.set("vehicle", urlVehicle);
+      if (vehicleKey) qs.set("vehicle", vehicleKey);
       if (browseType) qs.set("type", browseType);
       const q = qs.toString();
       window.history.replaceState(window.history.state, "", `/booking-search${q ? `?${q}` : ""}`);
@@ -599,7 +610,7 @@ export default function Page() {
     try {
       const qs = new URLSearchParams();
       qs.set("j", newId);
-      if (urlVehicle) qs.set("vehicle", urlVehicle);
+      if (vehicleKey) qs.set("vehicle", vehicleKey);
       if (browseType) qs.set("type", browseType);
       if (seatFilters.length === 1) qs.set("seater", String(seatFilters[0]));
       window.history.replaceState(window.history.state, "", `/booking-search?${qs.toString()}`);
@@ -652,6 +663,14 @@ export default function Page() {
       // customer to the trip form; submitting it prices this vehicle and goes
       // straight to checkout (see the direct-vehicle fast path).
       setPickedKey(v.id);
+      if (seaterFlow) {
+        // Step 2 replaces the list with this vehicle + the trip form.
+        setTimeout(() => {
+          try { document.getElementById("seater-step-2")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+          catch { /* SSR guard */ }
+        }, 50);
+        return;
+      }
       toast(`Enter your trip details to book the ${v.name}.`, "success");
       setShowFilters(true);
       setTimeout(() => {
@@ -778,188 +797,9 @@ export default function Page() {
     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#B8860B",
   };
 
-  return (
-    <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 22px 60px" }}>
-      {/* Summary bar — real route/date/time when a search was actually
-          completed; a simple heading + prompt to search when just browsing
-          (e.g. arrived via a homepage tile with no trip specified yet). */}
-      <BackLink to="/" label="Back" />
-
-      {browseMode ? (
-        <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", color: "#fff", marginBottom: 22 }}>
-          <div style={{ fontWeight: 700, fontSize: 19 }}>
-            {urlVehicle
-              ? "Available Vehicles"
-              : browseType === "group"
-                ? "Group & Coach Vehicles"
-                : browseType === "fleet"
-                  ? "Available Vehicles"
-                  : "Browse Our Fleet"}
-          </div>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
-            Set your trip details in the filters panel to get a real fare.
-          </p>
-        </div>
-      ) : (
-        <div className="summary-bar" style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
-          <div className="summary-bar-route" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <IconPin className="w-4 h-4 text-primary" />
-            <span title={journey.pickup} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.pickup)}</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <span title={journey.drop} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.drop)}</span>
-          </div>
-          <span style={{ width: 1, height: 22, background: "rgba(255,255,255,.2)" }} className="hidden sm:block" />
-          <div className="summary-bar-meta" style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
-            <span>{journey.date}</span>
-            <span>{(() => {
-              if (!journey.time) return "";
-              const [hh, mm] = journey.time.split(":").map(Number);
-              const ap = hh < 12 ? "AM" : "PM";
-              const h  = hh % 12 || 12;
-              return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
-            })()}</span>
-            <span style={{ textTransform: "capitalize" }}>{journey.tripType?.replace("-", " ")}</span>
-            {journey.passengers && <span>{journey.passengers} passenger(s)</span>}
-          </div>
-          <button
-            onClick={() => navigate(`/?j=${encodeURIComponent(effectiveJourneyId)}#booking`)}
-            className="summary-bar-btn hover:!bg-[#FFB300]"
-            style={{ marginLeft: "auto", padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}
-          >
-            Modify Search
-          </button>
-          {/* Drop the locations entirely and re-open the trip form here, so a
-              wrong pickup/drop can be cleared without going back to the
-              homepage widget and re-entering everything. */}
-          <button
-            onClick={clearLocations}
-            className="summary-bar-btn"
-            style={{ padding: "10px 16px", borderRadius: 9999, background: "transparent", color: "rgba(255,255,255,.75)", fontWeight: 600, fontSize: 13, border: "1px solid rgba(255,255,255,.28)", cursor: "pointer" }}
-          >
-            Clear Locations
-          </button>
-        </div>
-      )}
-
-      {surge && (
-        <div style={{ marginBottom: 22, background: "#FFF4E5", border: "1px solid #FBBF77", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-          <IconZap className="w-5 h-5 text-amber-500 shrink-0" />
-          <div>
-            <b style={{ color: "#92400E", fontSize: 14.5 }}>Surge pricing active — {surgePct}% added</b>
-            <p style={{ color: "#B45309", fontSize: 13, margin: 0 }}>
-              {realSurge?.surgeTier ? `Demand is high in this area right now. ` : ""}
-              Prices below already include this fee.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {autoPricing ? (
-        <StateBlock
-          icon={<Spinner />}
-          title={`Pricing your ${chosenVehicle?.name || "vehicle"}…`}
-          description="Taking you straight to checkout."
-        />
-      ) : loading ? (
-        <StateBlock icon={<Spinner />} title="Finding available cabs…" description="Matching vehicles to your journey." />
-      ) : (browseMode && catalogueLoading) ? (
-        <StateBlock icon={<Spinner />} title="Loading our fleet…" description="Fetching available vehicles." />
-      ) : (browseMode && catalogueError) ? (
-        <StateBlock
-          tone="empty"
-          icon={<IconPin className="w-6.5 h-6.5" />}
-          title="We couldn't load the fleet"
-          description={catalogueError}
-          action={<button onClick={retryCatalogue} style={{ height: 44, padding: "0 24px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 700, border: "none", cursor: "pointer" }}>Try again</button>}
-        />
-      ) : (serviceAreaError || fareError) ? (
-        <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
-          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#F59E0B" strokeWidth="2" strokeLinejoin="round"/>
-              <circle cx="12" cy="10" r="2" fill="#F59E0B"/>
-            </svg>
-          </div>
-          <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>
-            {serviceAreaError ? "Location Outside Service Area" : "We couldn't price this trip"}
-          </h3>
-          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
-            {serviceAreaError || fareError}
-          </p>
-          <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 22px" }}>
-            {serviceAreaError
-              ? "We currently operate within a service radius around specific cities, not every address in a state — please enter a pickup closer to one of our serviced cities and try again."
-              : "This trip can't be booked online until we can quote it. Change the pickup or drop and try again, or send us a request and our team will confirm availability and price for you."}
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <button
-              type="button"
-              onClick={clearLocations}
-              style={{ display: "block", width: "100%", padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer" }}
-            >
-              ← Change Pickup Location
-            </button>
-            <a
-              href="/#contact-form"
-              style={{ display: "block", padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", color: "#555", fontWeight: 600, fontSize: 14, textDecoration: "none" }}
-            >
-              Request a Custom Booking
-            </a>
-          </div>
-        </div>
-      ) : (
-        <>
-        {/* Seater pre-selected banner */}
-        {urlSeater && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEA", border: "1.5px solid #FFC107", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
-            <span style={{ fontSize: 20 }}>🚌</span>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: "#111" }}>
-                {seatFallback
-                  ? `No ${urlSeater} seater is available right now`
-                  : `Showing ${urlSeater} Seater ${urlVehicle ? "vehicles" : "group vehicles"}`}
-              </p>
-              <p style={{ fontSize: 12.5, color: "#666", margin: "2px 0 0" }}>
-                {urlVehicle
-                  ? "Your selected vehicle is shown first."
-                  : seatFallback
-                    ? `Showing the next larger vehicles that fit ${urlSeater} or more passengers.`
-                    : `Vehicles with ${urlSeater} seats are pre-filtered below.`}
-              </p>
-            </div>
-            <button
-              onClick={() => { setSeatFilters([]); window.history.replaceState(window.history.state, "", "/booking-search?type=group"); }}
-              style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
-            >
-              Clear
-            </button>
-          </div>
-        )}
-
-        {/* Mobile filter toggle */}
-        <div className="lg:hidden mb-3">
-          <button
-            onClick={() => setShowFilters(v => !v)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 12h10M10 18h4" stroke="#111" strokeWidth="2" strokeLinecap="round"/></svg>
-            {showFilters ? "Hide Filters" : "Show Filters"}
-          </button>
-        </div>
-
-        <div className="booking-search-layout" style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
-          {/* FILTERS */}
-          <aside className={`booking-search-sidebar ${showFilters ? "" : "hidden lg:block"}`} style={{ flex: "1 1 240px", minWidth: "min(100%,240px)", position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <h3 style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>Filters</h3>
-              <button onClick={clearFilters} style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}>Clear all</button>
-            </div>
-
-            {/* ── Trip details — always editable here. Before a search it sets
-                 the trip; after one it is pre-filled with that trip, so the
-                 route / date / trip type can be changed in place instead of
-                 disappearing once prices load. ── */}
-            {(
+  // The trip details form, rendered in the sidebar normally and in the main
+  // column as step 2 of the seat-size flow.
+  const tripForm = (
               <div id="trip-details-panel" style={{ marginBottom: 22, paddingBottom: 20, borderBottom: "1px solid #F0F0F0", scrollMarginTop: 90 }}>
                 <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Trip Type</div>
                 <div className="filter-pills" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
@@ -1174,13 +1014,207 @@ export default function Page() {
 
                   <button onClick={submitInlineTrip}
                     style={{ height: 46, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 800, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
-                    {chosenVehicle
-                      ? `Confirm Trip Details — Book ${chosenVehicle.name} →`
-                      : browseMode ? "Search Available Cabs →" : "Update Search →"}
+                    {chosenVehicle && seaterFlow
+                      ? "Confirm & Continue to Checkout →"
+                      : chosenVehicle
+                        ? `Book ${chosenVehicle.name} →`
+                        : browseMode ? "Search Available Cabs →" : "Update Search →"}
                   </button>
                 </div>
               </div>
-            )}
+  );
+
+  return (
+    <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 22px 60px" }}>
+      {/* Summary bar — real route/date/time when a search was actually
+          completed; a simple heading + prompt to search when just browsing
+          (e.g. arrived via a homepage tile with no trip specified yet). */}
+      <BackLink to="/" label="Back" />
+
+      {browseMode ? (
+        <div style={{ background: "#111", borderRadius: 18, padding: "18px 22px", color: "#fff", marginBottom: 22 }}>
+          <div style={{ fontWeight: 700, fontSize: 19 }}>
+            {urlVehicle
+              ? "Available Vehicles"
+              : browseType === "group"
+                ? "Group & Coach Vehicles"
+                : browseType === "fleet"
+                  ? "Available Vehicles"
+                  : "Browse Our Fleet"}
+          </div>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,.6)", margin: "4px 0 0" }}>
+            {seaterFlow
+              ? "Choose a vehicle, then add your trip details and continue to checkout."
+              : "Set your trip details in the filters panel to get a real fare."}
+          </p>
+        </div>
+      ) : (
+        <div className="summary-bar" style={{ background: "#111", borderRadius: 18, padding: "18px 22px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px 26px", color: "#fff", marginBottom: 22 }}>
+          <div className="summary-bar-route" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <IconPin className="w-4 h-4 text-primary" />
+            <span title={journey.pickup} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.pickup)}</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <span title={journey.drop} style={{ fontWeight: 700, fontSize: 22 }}>{shortAddress(journey.drop)}</span>
+          </div>
+          <span style={{ width: 1, height: 22, background: "rgba(255,255,255,.2)" }} className="hidden sm:block" />
+          <div className="summary-bar-meta" style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
+            <span>{journey.date}</span>
+            <span>{(() => {
+              if (!journey.time) return "";
+              const [hh, mm] = journey.time.split(":").map(Number);
+              const ap = hh < 12 ? "AM" : "PM";
+              const h  = hh % 12 || 12;
+              return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
+            })()}</span>
+            <span style={{ textTransform: "capitalize" }}>{journey.tripType?.replace("-", " ")}</span>
+            {journey.passengers && <span>{journey.passengers} passenger(s)</span>}
+          </div>
+          <button
+            onClick={() => navigate(`/?j=${encodeURIComponent(effectiveJourneyId)}#booking`)}
+            className="summary-bar-btn hover:!bg-[#FFB300]"
+            style={{ marginLeft: "auto", padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}
+          >
+            Modify Search
+          </button>
+          {/* Drop the locations entirely and re-open the trip form here, so a
+              wrong pickup/drop can be cleared without going back to the
+              homepage widget and re-entering everything. */}
+          <button
+            onClick={clearLocations}
+            className="summary-bar-btn"
+            style={{ padding: "10px 16px", borderRadius: 9999, background: "transparent", color: "rgba(255,255,255,.75)", fontWeight: 600, fontSize: 13, border: "1px solid rgba(255,255,255,.28)", cursor: "pointer" }}
+          >
+            Clear Locations
+          </button>
+        </div>
+      )}
+
+      {surge && (
+        <div style={{ marginBottom: 22, background: "#FFF4E5", border: "1px solid #FBBF77", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+          <IconZap className="w-5 h-5 text-amber-500 shrink-0" />
+          <div>
+            <b style={{ color: "#92400E", fontSize: 14.5 }}>Surge pricing active — {surgePct}% added</b>
+            <p style={{ color: "#B45309", fontSize: 13, margin: 0 }}>
+              {realSurge?.surgeTier ? `Demand is high in this area right now. ` : ""}
+              Prices below already include this fee.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {autoPricing ? (
+        <StateBlock
+          icon={<Spinner />}
+          title={`Pricing your ${chosenVehicle?.name || "vehicle"}…`}
+          description="Taking you straight to checkout."
+        />
+      ) : loading ? (
+        <StateBlock icon={<Spinner />} title="Finding available cabs…" description="Matching vehicles to your journey." />
+      ) : (browseMode && catalogueLoading) ? (
+        <StateBlock icon={<Spinner />} title="Loading our fleet…" description="Fetching available vehicles." />
+      ) : (browseMode && catalogueError) ? (
+        <StateBlock
+          tone="empty"
+          icon={<IconPin className="w-6.5 h-6.5" />}
+          title="We couldn't load the fleet"
+          description={catalogueError}
+          action={<button onClick={retryCatalogue} style={{ height: 44, padding: "0 24px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 700, border: "none", cursor: "pointer" }}>Try again</button>}
+        />
+      ) : (serviceAreaError || fareError) ? (
+        <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#F59E0B" strokeWidth="2" strokeLinejoin="round"/>
+              <circle cx="12" cy="10" r="2" fill="#F59E0B"/>
+            </svg>
+          </div>
+          <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>
+            {serviceAreaError ? "Location Outside Service Area" : "We couldn't price this trip"}
+          </h3>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
+            {serviceAreaError || fareError}
+          </p>
+          <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 22px" }}>
+            {serviceAreaError
+              ? "We currently operate within a service radius around specific cities, not every address in a state — please enter a pickup closer to one of our serviced cities and try again."
+              : "This trip can't be booked online until we can quote it. Change the pickup or drop and try again, or send us a request and our team will confirm availability and price for you."}
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              type="button"
+              onClick={clearLocations}
+              style={{ display: "block", width: "100%", padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer" }}
+            >
+              ← Change Pickup Location
+            </button>
+            <a
+              href="/#contact-form"
+              style={{ display: "block", padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", color: "#555", fontWeight: 600, fontSize: 14, textDecoration: "none" }}
+            >
+              Request a Custom Booking
+            </a>
+          </div>
+        </div>
+      ) : (
+        <>
+        {/* Seater pre-selected banner */}
+        {urlSeater && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFFBEA", border: "1.5px solid #FFC107", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+            <span style={{ fontSize: 20 }}>🚌</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, fontSize: 14, margin: 0, color: "#111" }}>
+                {seatFallback
+                  ? `No ${urlSeater} seater is available right now`
+                  : `Showing ${urlSeater} Seater ${urlVehicle ? "vehicles" : "group vehicles"}`}
+              </p>
+              <p style={{ fontSize: 12.5, color: "#666", margin: "2px 0 0" }}>
+                {urlVehicle
+                  ? "Your selected vehicle is shown first."
+                  : seatFallback
+                    ? `Showing the next larger vehicles that fit ${urlSeater} or more passengers.`
+                    : `Vehicles with ${urlSeater} seats are pre-filtered below.`}
+              </p>
+            </div>
+            <button
+              onClick={() => { setSeatFilters([]); window.history.replaceState(window.history.state, "", "/booking-search?type=group"); }}
+              style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Mobile filter toggle */}
+        <div className="lg:hidden mb-3" style={{ display: seaterStep2 ? "none" : undefined }}>
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "1.5px solid #E5E5E5", background: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M7 12h10M10 18h4" stroke="#111" strokeWidth="2" strokeLinecap="round"/></svg>
+            {showFilters ? "Hide Filters" : "Show Filters"}
+          </button>
+        </div>
+
+        <div className="booking-search-layout" style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-start" }}>
+          {seaterStep2 && (
+            <SeaterStepTwo
+              vehicle={chosenVehicle}
+              seats={urlSeater}
+              onChange={() => { setPickedKey(null); try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* */ } }}
+              form={tripForm}
+            />
+          )}
+
+          {/* FILTERS */}
+          <aside className={`booking-search-sidebar ${showFilters ? "" : "hidden lg:block"}`} style={{ display: seaterStep2 ? "none" : undefined, flex: "1 1 240px", minWidth: "min(100%,240px)", position: "sticky", top: 120, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <h3 style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>Filters</h3>
+              <button onClick={clearFilters} style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer" }}>Clear all</button>
+            </div>
+
+            {/* Trip details form (see tripForm). In the seat-size flow it moves
+                to the main column as step 2 instead of sitting here. */}
+            {!seaterFlow && tripForm}
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 12, color: "#666", letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 10 }}>Vehicle Type</div>
@@ -1229,7 +1263,15 @@ export default function Page() {
           </aside>
 
           {/* RESULTS */}
-          <div style={{ flex: "1 1 560px", minWidth: "min(100%,320px)" }}>
+          <div style={{ flex: "1 1 560px", minWidth: "min(100%,320px)", display: seaterStep2 ? "none" : undefined }}>
+            {seaterFlow && (
+              <div style={{ margin: "0 0 14px" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#B8860B" }}>Step 1 of 2</div>
+                <div style={{ fontSize: 14, color: "#555", marginTop: 3 }}>
+                  Choose your {urlSeater}-seater — tap <b>Book Now</b> on the vehicle you want, then add your trip details.
+                </div>
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
               <h2 style={{ fontWeight: 700, fontSize: 19, margin: 0 }}>
                 {pricedChosen && !showOtherVehicles ? "Your Vehicle" : "Available Vehicles"}
@@ -1268,11 +1310,18 @@ export default function Page() {
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#FFF7ED", border: "1.5px solid #FBBF77", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
                 <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
                 <div style={{ flex: 1 }}>
+                  {/* Say WHY. The backend prices a vehicle only when it has an
+                      active rate card for this city AND trip type; the vehicle
+                      picked has none, so it can't be quoted on any such trip —
+                      it is not a restriction on this particular route. */}
                   <p style={{ fontWeight: 700, fontSize: 13.5, margin: 0, color: "#92400E" }}>
-                    {chosenVehicle?.name} isn’t available for this trip
+                    {chosenVehicle?.name} can’t be booked online for {TRIP_LABEL[journey?.tripType] || "this type of"} trips
+                    {cityFromAddress(journey?.pickup)?.name ? ` from ${cityFromAddress(journey?.pickup).name}` : ""} yet
                   </p>
                   <p style={{ fontSize: 12.5, color: "#B45309", margin: "2px 0 0" }}>
-                    Here are the vehicles we can offer instead.
+                    No fare has been set up for it. {vehicles.length
+                      ? `These ${vehicles.length === 1 ? "vehicle is" : "vehicles are"} priced for your trip instead.`
+                      : "Try another trip type, or request a custom quote."}
                   </p>
                 </div>
               </div>
@@ -1291,8 +1340,8 @@ export default function Page() {
                   : [...vehicles].sort((a, b) => {
                       // Pin the chosen vehicle to the top — by class when a
                       // real quote exists, else by catalogue id.
-                      const isA = urlVehicle && a.id === urlVehicle;
-                      const isB = urlVehicle && b.id === urlVehicle;
+                      const isA = vehicleKey && a.id === vehicleKey;
+                      const isB = vehicleKey && b.id === vehicleKey;
                       if (isA && !isB) return -1;
                       if (isB && !isA) return 1;
                       return 0;
@@ -1548,5 +1597,51 @@ function MapPinIcon() {
       <path d="M9 20l-6-3V4l6 3 6-3 6 3v13l-6-3-6 3z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
       <path d="M9 4v13M15 7v13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
+  );
+}
+
+// Step 2 of the seat-size flow: the vehicle the customer chose in step 1, a
+// way back to change it, and the trip form whose submit goes straight to
+// checkout for this vehicle.
+function SeaterStepTwo({ vehicle, seats, onChange, form }) {
+  if (!vehicle) return null;
+  return (
+    <section id="seater-step-2" style={{ flex: "1 1 100%", maxWidth: 760, margin: "0 auto", width: "100%", scrollMarginTop: 90 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#B8860B" }}>Step 2 of 2</div>
+      <h2 style={{ fontWeight: 800, fontSize: 22, margin: "4px 0 14px" }}>Add your trip details</h2>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 16, background: "#fff", border: "2px solid #FFC107", borderRadius: 18, padding: 14, marginBottom: 18, flexWrap: "wrap" }}>
+        <img
+          className="vehicle-photo"
+          src={vehicle.img}
+          alt={vehicle.name}
+          onError={(e) => { if (vehicle.imgFallback && e.currentTarget.src !== vehicle.imgFallback) e.currentTarget.src = vehicle.imgFallback; }}
+          style={{ width: 150, height: 96, borderRadius: 12, flex: "none" }}
+        />
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#B8860B", letterSpacing: ".06em", textTransform: "uppercase" }}>Your vehicle</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 2 }}>{vehicle.name}</div>
+          <div style={{ fontSize: 13, color: "#666", marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <span>{vehicle.seats} Seater</span>
+            <span>{vehicle.ac ? "A/C" : "Non-A/C"}</span>
+            {vehicle.bags && <span>{vehicle.bags}</span>}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onChange}
+          style={{ flex: "none", height: 40, padding: "0 16px", borderRadius: 9999, border: "1.5px solid #111", background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+        >
+          Change vehicle
+        </button>
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: 22 }}>
+        {form}
+      </div>
+      <p style={{ fontSize: 12, color: "#888", textAlign: "center", margin: "10px 0 0" }}>
+        The fare for this {seats ? `${seats}-seater` : "vehicle"} is calculated live for your route before you pay.
+      </p>
+    </section>
   );
 }
