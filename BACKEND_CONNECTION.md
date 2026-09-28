@@ -39,6 +39,8 @@ Env changes only apply on restart:
 
 | Feature            | Endpoint                          |
 |--------------------|-----------------------------------|
+| Vehicle catalogue  | `GET  /vehicles` (public)         |
+| Local rate cards   | `GET  /fares/rental-packages`     |
 | Vehicle options    | `POST /fares/options`             |
 | Fare estimate      | `POST /fares/estimate`            |
 | Create booking     | `POST /bookings` (Idempotency-Key)|
@@ -50,6 +52,28 @@ Env changes only apply on restart:
 | OTP request        | `POST /auth/otp/request`          |
 | OTP verify         | `POST /auth/otp/verify`           |
 | Token refresh      | `POST /auth/refresh` (auto)       |
+
+## Vehicles
+
+All vehicle data (names, seats, luggage, photos, specs) comes from
+`GET /vehicles`. There is no bundled fleet in the frontend: if the backend is
+unreachable the fleet sections show an error with a retry button. Local
+package prices on browse cards come from `GET /fares/rental-packages`;
+outstation prices are only shown as a live quote for a real route.
+
+## Payments (Razorpay)
+
+1. `POST /payments/orders` → backend prices the order, creates the Razorpay
+   order and returns `{ payment, provider, keyId }`.
+2. The site opens Razorpay Checkout with that `keyId` and `providerOrderId`.
+3. Razorpay's webhook (`/webhooks/razorpay`) marks the payment CAPTURED.
+4. The site polls `GET /payments/:id` until CAPTURED / FAILED (60 s). If the
+   webhook is late the booking is confirmed as "payment processing" — the
+   customer is never asked to pay twice.
+
+No Razorpay key lives in the frontend. With `PAYMENT_PROVIDER=mock` on the
+backend, the site completes payment through `/payments/:id/simulate-webhook`
+(non-production only).
 
 ## How auth works
 

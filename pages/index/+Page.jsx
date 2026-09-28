@@ -14,12 +14,11 @@ import CoverageSection from "../../src/components/CoverageSection";
 import PopularRoutesSection from "../../src/components/PopularRoutesSection";
 import WhyAbhiCabsSection from "../../src/components/WhyAbhiCabsSection";
 import PromoBannersSection from "../../src/components/PromoBannersSection";
-import GroupFleetSection from "../../src/components/GroupFleetSection";
 import GroupTransportBannerSection from "../../src/components/GroupTransportBannerSection";
 import ServiceStripSection from "../../src/components/ServiceStripSection";
 import FleetCarouselSection from "../../src/components/FleetCarouselSection";
 import HeroSection from "../../src/components/HeroSection";
-import { ROUTES, VEHICLE_RATES } from "../../src/data/mockData";
+import { ROUTES } from "../../src/data/mockData";
 import useVehicleCatalogue from "../../src/hooks/useVehicleCatalogue";
 import { IconClock, IconShield, IconTag, IconCar } from "../../src/components/Icons";
 
@@ -51,24 +50,6 @@ const STEPS = [
   { n: "01", title: "Search", desc: "Choose pickup, destination, date and time." },
   { n: "02", title: "Choose", desc: "Select the vehicle that fits your journey." },
   { n: "03", title: "Travel", desc: "Your driver arrives at the scheduled pickup point." }
-];
-
-// NEW: "Premium & Group Fleet" — coaches/vans not in VEHICLE_RATES at all
-// (those are sedans/SUVs only). No real backend vehicle-class or pricing
-// exists yet for these (same gap flagged on the Group/Coach quote-request
-// tab) — this is a display-only catalogue for now, "View Details" links to
-// the group quote request rather than a real fare page. Only 3 real photos
-// exist in this project for coach-type vehicles, reused across the 11
-// entries rather than inventing fake distinct photos.
-const GROUP_FLEET = [
-  { name: "12 Seater Tempo Traveller", type: "A/C · Tempo Traveller", seats: "12 Seater", img: "/images/12seatertempo.jpg" },
-  { name: "12 Seater Urbania",          type: "A/C · Urbania",         seats: "12 Seater", img: "/images/12seaterurbian.jpg" },
-  { name: "13 Seater Force Urbania",    type: "A/C · Urbania",         seats: "13 Seater", img: "/images/13seater.jpg" },
-  { name: "16 Seater Force Urbania",    type: "A/C · Urbania",         seats: "16 Seater", img: "/images/14seatre.jpg" },
-  { name: "17 Seater Tempo Traveller",  type: "A/C · Tempo Traveller", seats: "17 Seater", img: "/images/17seater.jpg" },
-  { name: "22 Seater BharatBenz",       type: "A/C · Coach",           seats: "22 Seater", img: "/images/22seater.jpg" },
-  { name: "28 Seater BharatBenz",       type: "A/C · Coach",           seats: "28 Seater", img: "/images/28seater.jpg" },
-  { name: "33 Seater BharatBenz",       type: "A/C · Coach",           seats: "33 Seater", img: "/images/33seater.jpg" },
 ];
 
 const SEATER_OPTIONS = ["12", "13", "16", "17", "22", "28", "33"];
@@ -141,7 +122,7 @@ export default function Page() {
   // service cards read this so they highlight the same thing the widget shows.
   const [activeMode, setActiveMode] = useState("one-way");
   // Show the fleet the backend actually has switched on, not a bundled list.
-  const { vehicles: fleetVehicles } = useVehicleCatalogue();
+  const { vehicles: fleetVehicles, loading: fleetLoading, error: fleetError, retry: fleetRetry } = useVehicleCatalogue();
 
   // NOTE: this homepage previously had its own embedded Contact form
   // (id="contact") wired to the real POST /api/v1/contact endpoint — the
@@ -212,16 +193,13 @@ export default function Page() {
       <ServiceStripSection onSelect={bookMode} activeMode={activeMode} />
 
       {/* ============================== CHOOSE YOUR RIDE (fleet carousel) ============================== */}
-      <FleetCarouselSection vehicles={fleetVehicles} />
+      <FleetCarouselSection vehicles={fleetVehicles} loading={fleetLoading} error={fleetError} onRetry={fleetRetry} />
 
       {/* ============================== GROUP TRANSPORTATION ============================== */}
       <GroupTransportBannerSection
         seaterOptions={SEATER_OPTIONS}
         onRequestQuote={() => bookMode("group-coach")}
       />
-
-      {/* ============================== FEATURED VEHICLES ============================== */}
-      <GroupFleetSection vehicles={GROUP_FLEET} />
 
       {/* ============================== PROMO BANNERS ============================== */}
       <PromoBannersSection

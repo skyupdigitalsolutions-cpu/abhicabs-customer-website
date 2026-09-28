@@ -1,60 +1,57 @@
-import { useEffect, useState } from "react";
-import { getVehicleCatalogue } from "../api/services/vehicles";
-import { VEHICLE_RATES, localVehicleForKey } from "../data/mockData";
+import { useCallback, useEffect, useState } from "react";
+import {
+  getVehicleCatalogue,
+  getRentalRates,
+  invalidateVehicleCatalogueCache,
+} from "../api/services/vehicles";
 
 /**
- * The live fleet, straight from GET /vehicles (public, no auth).
+ * The live fleet, straight from the backend (GET /vehicles), with each
+ * vehicle's real local-package rate card attached from
+ * GET /fares/rental-packages. There is no bundled fallback fleet: while the
+ * request is in flight `loading` is true, and if it fails `error` is set so
+ * the screen can show a proper retry state.
  *
- * This is the admin-managed vehicle_catalog: one ACTIVE row per real car, and
- * its `key` is the same value fare_configs prices against. Showing anything
- * else means offering cars the backend will not quote — which is exactly what
- * the bundled VEHICLE_RATES list was doing, including sizes that had been
- * retired on the backend.
- *
- * The bundled list survives only as (a) cosmetics the catalogue doesn't carry
- * — feature bullets, per-km display rates — and (b) a first-render fallback
- * so the page is never blank while the fetch is in flight.
+ * Each vehicle gets `rate` = { label, hours, km, packageFare, extraPerKm,
+ * extraPerHour } or null when the backend has no package for that class.
  */
-export default function useVehicleCatalogue() {
-  const [vehicles, setVehicles] = useState(null);
+export default function useVehicleCatalogue({ withRates = true } = {}) {
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    getVehicleCatalogue()
-      .then((rows) => {
-        if (cancelled || !Array.isArray(rows) || !rows.length) return;
-        setVehicles(
-          rows
-            .filter((r) => r && r.isActive !== false)
-            .map((r) => {
-              const local = localVehicleForKey(r.key);
-              return {
-                id: r.key,
-                vehicleClass: r.key,
-                name: r.name,
-                seats: r.seats,
-                bags: r.luggage || local?.bags,
-                ac: local?.ac ?? true,
-                img: r.heroUrl || local?.img,
-                imgFallback: local?.img,
-                gallery: (r.images || []).map((i) => i.url).filter(Boolean),
-                tagline: r.blurb || local?.tagline,
-                detail: r.detail,
-                features: local?.features,
-                category: local?.category,
-                local: local?.local,
-                outstation: local?.outstation,
-                rating: r.rating ?? null,
-              };
-            })
-        );
-      })
-      .catch(() => { /* keep the bundled fallback */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const list = await getVehicleCatalogue();
+        if (cancelled) return;
+        setVehicles(list.map((v) => ({ ...v, rate: null })));
+        setLoading(false);
+
+        if (withRates && list.length) {
+          const rates = await getRentalRates();
+          if (cancelled) return;
+          setVehicles(list.map((v) => ({ ...v, rate: rates.get(v.key) || null })));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setError(err?.message || "Couldn't load vehicles.");
+        setLoading(false);
+      }
+    })();
+
     return () => { cancelled = true; };
+  }, [nonce, withRates]);
+
+  const retry = useCallback(() => {
+    invalidateVehicleCatalogueCache();
+    setNonce((n) => n + 1);
   }, []);
 
-  // Never blank: bundled list until the real one lands.
-  return { vehicles: vehicles || VEHICLE_RATES, isLive: Boolean(vehicles), loading };
+  return { vehicles, loading, error, retry, isLive: !loading && !error };
 }

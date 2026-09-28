@@ -1,6 +1,7 @@
 import React from "react";
 import { usePageContext } from "vike-react/usePageContext";
-import { fmtINR, VEHICLE_RATES, shortAddress } from "../../src/data/mockData";
+import { fmtINR, shortAddress } from "../../src/data/mockData";
+import useVehicleLookup from "../../src/hooks/useVehicleLookup";
 import { useToast } from "../../src/hooks/useToast";
 import useBookingLookup from "../../src/hooks/useBookingLookup";
 import StateBlock from "../../src/components/StateBlock";
@@ -19,6 +20,7 @@ import { IconPin } from "../../src/components/Icons";
 // assignment policy ("Assigned 2 hrs before pickup") rather than claiming
 // one is assigned already, so this isn't reintroducing that inaccuracy.
 export default function Page() {
+  const lookupVehicle = useVehicleLookup();
   const pageContext = usePageContext();
   const bookingId = pageContext.urlParsed?.search?.b || null;
   const toast = useToast();
@@ -72,8 +74,7 @@ export default function Page() {
         <div style={{ aspectRatio: "16/9", overflow: "hidden", background: "#F7F7F7", position: "relative" }}>
           {(() => {
             const img = booking.vehicleImg ||
-              VEHICLE_RATES.find(v => v.id === booking.vehicleId)?.img ||
-              VEHICLE_RATES.find(v => v.category === booking.vehicleClass)?.img;
+              lookupVehicle(booking.vehicleClass || booking.vehicleId)?.img;
             return img
               ? <img src={img} alt={booking.vehicle} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)", display: "flex", alignItems: "center", justifyContent: "center" }}>

@@ -6,7 +6,8 @@ import { isAuthenticated } from "../../src/api/tokens";
 import { listMyBookings, getInvoice, cancelBooking as cancelBookingApi } from "../../src/api/services/bookings";
 import StateBlock from "../../src/components/StateBlock";
 import Button from "../../src/components/ui/Button";
-import { fmtINR, VEHICLE_RATES } from "../../src/data/mockData";
+import { fmtINR } from "../../src/data/mockData";
+import useVehicleLookup from "../../src/hooks/useVehicleLookup";
 
 const STATUS_LABEL = { upcoming: "Upcoming", ongoing: "Ongoing", completed: "Completed", cancelled: "Cancelled" };
 const STATUS_COLORS = {
@@ -143,6 +144,7 @@ const TABS = [
 ];
 
 export default function Page() {
+  const lookupVehicle = useVehicleLookup();
   const toast = useToast();
 
   const [loggedIn, setLoggedIn] = useState(null);
@@ -391,14 +393,13 @@ export default function Page() {
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {filtered.map((b) => {
                   const sc = STATUS_COLORS[b.displayStatus];
-                  const vehicleName = b.vehicleClass ? b.vehicleClass.charAt(0).toUpperCase() + b.vehicleClass.slice(1) : "";
+                  const vehicleName = lookupVehicle(b.vehicleClass)?.name || (b.vehicleClass ? b.vehicleClass.charAt(0).toUpperCase() + b.vehicleClass.slice(1) : "");
                   return (
                     <div key={b.id} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: "20px 22px", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
                       <span style={{ width: 64, height: 46, borderRadius: 10, background: "#F7F7F7", flex: "none", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         {(() => {
                           const img = b.vehicleImg ||
-                            VEHICLE_RATES.find(v => v.id === b.vehicleId)?.img ||
-                            VEHICLE_RATES.find(v => v.category === b.vehicleClass)?.img;
+                            lookupVehicle(b.vehicleClass || b.vehicleId)?.img;
                           return img
                             ? <img src={img} alt={vehicleName} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
                             : <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 16l1.5-5A2 2 0 017.4 9.5h9.2a2 2 0 011.9 1.5L20 16" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><rect x="2.5" y="16" width="19" height="4" rx="1.5" stroke="#B8860B" strokeWidth="1.5" /><circle cx="7" cy="20" r="1.6" fill="#B8860B" /><circle cx="17" cy="20" r="1.6" fill="#B8860B" /><path d="M8 9.5l1-3.5h6l1 3.5" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;

@@ -8,7 +8,8 @@ import { API_BASE_URL } from "../../src/api/config";
 import { isAuthenticated, getStoredUserName } from "../../src/api/tokens";
 import { authApi, bookingsApi } from "../../src/api";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
-import { VEHICLE_RATES, fmtINR, localVehicleForKey } from "../../src/data/mockData";
+import { fmtINR } from "../../src/data/mockData";
+import useSelectedVehicle from "../../src/hooks/useSelectedVehicle";
 import { buildFareLines } from "../../src/lib/fareLines";
 import { GOOGLE_MAPS_API_KEY } from "../../src/api/config";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
@@ -150,19 +151,7 @@ export default function Page() {
   // priced selection is never lost just because the local rate sheet has no
   // matching row (e.g. a backend-only car). `vehicle` is used ONLY for these
   // display fallbacks — the fare comes from `selected` via buildFareLines.
-  const vehicle =
-    VEHICLE_RATES.find((v) => v.id === selected?.vehicleId) ||
-    localVehicleForKey(selected?.vehicleId) ||
-    (selected && (selected.vehicleName || selected.vehicleImg)
-      ? {
-          id: selected.vehicleId,
-          name: selected.vehicleName || "Selected vehicle",
-          img: selected.vehicleImg || selected.vehicleImgFallback || "",
-          imgFallback: selected.vehicleImgFallback || selected.vehicleImg || "",
-          seats: selected.vehicleSeats,
-          ac: selected.vehicleAc,
-        }
-      : null);
+  const vehicle = useSelectedVehicle(selected);
   const saved = useSelector(selectCheckoutDetails);
 
   const isGuest = !isAuthenticated();

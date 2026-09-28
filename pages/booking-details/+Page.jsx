@@ -1,6 +1,7 @@
 import React from "react";
 import { usePageContext } from "vike-react/usePageContext";
-import { fmtINR, VEHICLE_RATES } from "../../src/data/mockData";
+import { fmtINR } from "../../src/data/mockData";
+import useVehicleLookup from "../../src/hooks/useVehicleLookup";
 import useBookingLookup from "../../src/hooks/useBookingLookup";
 import StateBlock from "../../src/components/StateBlock";
 import Button from "../../src/components/ui/Button";
@@ -33,6 +34,7 @@ function toDisplayStatus(realStatus) {
 // Confirmed", etc.), which is only appropriate right after paying, not
 // when revisiting an existing booking later from the My Bookings list.
 export default function Page() {
+  const lookupVehicle = useVehicleLookup();
   const pageContext = usePageContext();
   const bookingId = pageContext.urlParsed?.search?.b || null;
   const { booking, loading } = useBookingLookup(bookingId);
@@ -69,8 +71,7 @@ export default function Page() {
         <div style={{ aspectRatio: "16/9", overflow: "hidden", background: "#F7F7F7", position: "relative" }}>
           {(() => {
             const img = booking.vehicleImg ||
-              VEHICLE_RATES.find(v => v.id === booking.vehicleId)?.img ||
-              VEHICLE_RATES.find(v => v.category === booking.vehicleClass)?.img;
+              lookupVehicle(booking.vehicleClass || booking.vehicleId)?.img;
             return img
               ? <img src={img} alt={booking.vehicle} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)", display: "flex", alignItems: "center", justifyContent: "center" }}>

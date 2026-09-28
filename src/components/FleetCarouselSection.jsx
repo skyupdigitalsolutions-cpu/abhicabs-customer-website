@@ -21,7 +21,7 @@ const cardReveal = {
   show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE_OUT } },
 };
 
-export default function FleetCarouselSection({ vehicles }) {
+export default function FleetCarouselSection({ vehicles = [], loading = false, error = null, onRetry }) {
   const scrollRef = useRef(null);
   const [modal, setModal] = useState(null);   // vehicle object or null
   const [activeImg, setActiveImg] = useState(0);
@@ -120,6 +120,19 @@ export default function FleetCarouselSection({ vehicles }) {
             </div>
           </m.div>
 
+          {(loading || error || !vehicles.length) && (
+            <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: "36px 20px", textAlign: "center", color: "#666", fontSize: 14.5 }}>
+              {loading ? "Loading our fleet…" : error ? (
+                <>
+                  <div style={{ marginBottom: 12 }}>We couldn't load the fleet right now.</div>
+                  {onRetry && (
+                    <button onClick={onRetry} style={{ padding: "10px 22px", borderRadius: 11, border: "1.5px solid #111", background: "#fff", fontWeight: 600, cursor: "pointer" }}>Try again</button>
+                  )}
+                </>
+              ) : "No vehicles are available right now."}
+            </div>
+          )}
+
           {/* Track — overflow-x auto (scrollbar hidden) so phones can swipe too */}
           <m.div
             ref={scrollRef}
@@ -139,7 +152,7 @@ export default function FleetCarouselSection({ vehicles }) {
               >
                 {/* Vehicle image */}
                 <div style={{ aspectRatio: "16/9", background: "#F7F7F7", position: "relative", overflow: "hidden", flex: "none" }}>
-                  <img src={v.img} alt={v.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+                  <img src={v.img} alt={v.name} loading="lazy" onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
                 </div>
 
                 {/* Card body */}
@@ -152,12 +165,12 @@ export default function FleetCarouselSection({ vehicles }) {
                     {v.ac ? "A/C" : "Non-A/C"} · {v.category}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
-                    <span style={{ color: "#666" }}>Local from</span>
-                    <span style={{ fontWeight: 700, color: "#111" }}>₹{v.local?.base8hr80km ?? "—"}</span>
+                    <span style={{ color: "#666" }}>{v.rate ? `Local ${v.rate.hours} hr / ${v.rate.km} km` : "Local package"}</span>
+                    <span style={{ fontWeight: 700, color: "#111" }}>{v.rate ? fmtINR(v.rate.packageFare) : "On request"}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                     <span style={{ color: "#666" }}>Outstation</span>
-                    <span style={{ fontWeight: 700, color: "#B8860B" }}>₹{v.outstation?.perKm ?? "—"}/km</span>
+                    <span style={{ fontWeight: 700, color: "#B8860B" }}>Live quote</span>
                   </div>
                   <button
                     onClick={() => openModal(v)}
@@ -213,6 +226,7 @@ export default function FleetCarouselSection({ vehicles }) {
                     <m.img
                       key={modal.gallery?.[activeImg] || modal.img}
                       src={modal.gallery?.[activeImg] || modal.img}
+                      onError={(e) => { if (modal.imgFallback && e.currentTarget.src !== modal.imgFallback) e.currentTarget.src = modal.imgFallback; }}
                       alt={modal.name}
                       initial={{ opacity: 0, scale: 1.03 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -245,7 +259,7 @@ export default function FleetCarouselSection({ vehicles }) {
                         aria-label={`Show image ${i + 1}`}
                         style={{ width: 64, height: 44, borderRadius: 8, overflow: "hidden", border: activeImg === i ? "2px solid #FFC107" : "2px solid transparent", opacity: activeImg === i ? 1 : 0.55, cursor: "pointer", padding: 0, transition: "opacity .2s, border-color .2s" }}
                       >
-                        <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <img src={src} alt="" onError={(e) => { if (modal.imgFallback && e.currentTarget.src !== modal.imgFallback) e.currentTarget.src = modal.imgFallback; }} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </m.button>
                     ))}
                   </div>
@@ -263,17 +277,23 @@ export default function FleetCarouselSection({ vehicles }) {
                   <div style={{ display: "flex", gap: 20, fontSize: 13.5, color: "#666", fontWeight: 500, marginBottom: 16 }}>
                     <span>👤 {modal.seats} Seater</span>
                     <span>❄️ {modal.ac ? "A/C" : "Non A/C"}</span>
-                    <span>🧳 {modal.bags} Bags</span>
+                    {modal.bags && <span>🧳 {modal.bags}</span>}
                   </div>
 
-                  <div className="rate-grid-3" style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 10px", marginBottom: 20 }}>
-                    <Rate label="Local Package" value={fmtINR(modal.local?.base8hr80km ?? 0)} />
-                    <Rate label="Outstation" value={`₹${modal.outstation?.perKm ?? 0}/km`} gold />
-                    <Rate label="Extra Hour" value="₹150" />
-                    <Rate label="Extra KM" value={`₹${modal.local?.extraKm ?? modal.outstation?.perKm ?? 0}`} />
-                    <Rate label="Min / day" value="300 km" />
-                    <Rate label="Driver Allowance" value={fmtINR(modal.outstation?.driverBhata ?? 500)} />
+                  <div className="rate-grid-3" style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 10px", marginBottom: 12 }}>
+                    <Rate label={modal.rate ? `Local ${modal.rate.hours} hr / ${modal.rate.km} km` : "Local Package"} value={modal.rate ? fmtINR(modal.rate.packageFare) : "On request"} />
+                    <Rate label="Extra Hour" value={modal.rate ? `${fmtINR(modal.rate.extraPerHour)}/hr` : "—"} />
+                    <Rate label="Extra KM" value={modal.rate ? `${fmtINR(modal.rate.extraPerKm)}/km` : "—"} />
+                    <Rate label="Outstation" value="Live quote for your route" gold />
                   </div>
+                  {modal.detail && <p style={{ fontSize: 13.5, color: "#555", lineHeight: 1.55, margin: "0 0 12px" }}>{modal.detail}</p>}
+                  {modal.features?.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+                      {modal.features.map((f) => (
+                        <span key={f} style={{ fontSize: 11.5, fontWeight: 600, background: "#F7F7F7", color: "#444", padding: "4px 10px", borderRadius: 9999 }}>{f}</span>
+                      ))}
+                    </div>
+                  )}
 
                   <div style={{ display: "flex", gap: 12 }}>
                     <m.button

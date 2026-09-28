@@ -2,7 +2,8 @@ import React from "react";
 import { useSelector } from "react-redux";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
 import { selectJourney } from "../../src/store/slices/journeySlice";
-import { VEHICLE_RATES, fmtINR, localVehicleForKey } from "../../src/data/mockData";
+import { fmtINR } from "../../src/data/mockData";
+import useSelectedVehicle from "../../src/hooks/useSelectedVehicle";
 import StateBlock from "../../src/components/StateBlock";
 import MobileStickyBar from "../../src/components/MobileStickyBar";
 import Button from "../../src/components/ui/Button";
@@ -19,19 +20,7 @@ export default function Page() {
   // a BACKEND catalogue key (swift-dzire); matching only the local id sent a
   // backend-keyed selection to the "No cab selected" empty state. Falls back
   // to a display-only object built from the selection so details still render.
-  const vehicle =
-    VEHICLE_RATES.find((v) => v.id === selected?.vehicleId) ||
-    localVehicleForKey(selected?.vehicleId) ||
-    (selected && (selected.vehicleName || selected.vehicleImg)
-      ? {
-          id: selected.vehicleId,
-          name: selected.vehicleName || "Selected vehicle",
-          img: selected.vehicleImg || selected.vehicleImgFallback || "",
-          imgFallback: selected.vehicleImgFallback || selected.vehicleImg || "",
-          seats: selected.vehicleSeats,
-          ac: selected.vehicleAc,
-        }
-      : null);
+  const vehicle = useSelectedVehicle(selected, { withRate: true });
 
   // Browse = a vehicle was opened from the "View Details" button WITHOUT a real
   // trip (no trip type / pickup / drop chosen yet). selectJourney() falls back
@@ -57,13 +46,13 @@ export default function Page() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 22 }} className="lg:!grid-cols-[1fr_360px]">
           <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 22, overflow: "hidden" }}>
             <div style={{ position: "relative", height: 260, background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)" }}>
-              <img src={selected?.img || selected?.vehicleImg || vehicle.img} alt={vehicle.name} onError={(e) => { const fb = selected?.vehicleImgFallback || vehicle.img || "/images/sedan-studio.jpg"; if (e.currentTarget.src.indexOf(fb) === -1) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={vehicle.img || selected?.vehicleImg} alt={vehicle.name} onError={(e) => { const fb = vehicle.imgFallback || selected?.vehicleImgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
             <div style={{ padding: 26 }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <h1 style={{ fontWeight: 800, fontSize: 22, margin: 0 }}>{vehicle.name}</h1>
                 <span style={{ fontSize: 12, fontWeight: 600, color: "#111", background: "#FFF7DE", padding: "5px 12px", borderRadius: 9999 }}>
-                  {vehicle.category} · {vehicle.seats} Seater
+                  {vehicle.category ? `${vehicle.category} · ` : ""}{vehicle.seats} Seater
                 </span>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 14, margin: "14px 0 18px", fontSize: 13, color: "#666", fontWeight: 500 }}>
@@ -73,11 +62,11 @@ export default function Page() {
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M8 8v8M16 8v8" stroke="#666" strokeWidth="2" strokeLinecap="round" /></svg>
-                  A/C
+                  {vehicle.ac === false ? "Non-A/C" : "A/C"}
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="5" y="8" width="14" height="10" rx="2" stroke="#666" strokeWidth="2" /><path d="M9 8V6h6v2" stroke="#666" strokeWidth="2" /></svg>
-                  {vehicle.bags} Bags
+                  {vehicle.bags || "Luggage on request"}
                 </span>
               </div>
 
@@ -86,10 +75,10 @@ export default function Page() {
                 : <BrowsePrompt />}
 
               <div style={{ background: "#F7F7F7", borderRadius: 14, padding: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: "14px 18px", margin: "22px 0 4px" }}>
-                <PricePair label="Local Package" value={fmtINR(vehicle.local?.base8hr80km ?? 0)} />
-                <PricePair label="Outstation" value={`₹${vehicle.outstation?.perKm ?? 0}/km`} accent />
-                <PricePair label="Extra KM" value={`₹${vehicle.local?.extraKm ?? 0}`} />
-                <PricePair label="Driver Allowance" value={fmtINR(vehicle.outstation?.driverBhata ?? 0)} />
+                <PricePair label={vehicle.rate ? `Local ${vehicle.rate.hours} hr / ${vehicle.rate.km} km` : "Local Package"} value={vehicle.rate ? fmtINR(vehicle.rate.packageFare) : "On request"} />
+                <PricePair label="Extra KM" value={vehicle.rate ? `${fmtINR(vehicle.rate.extraPerKm)}/km` : "—"} />
+                <PricePair label="Extra Hour" value={vehicle.rate ? `${fmtINR(vehicle.rate.extraPerHour)}/hr` : "—"} />
+                <PricePair label="Outstation" value="Live quote" accent />
               </div>
 
               <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: "22px 0 10px" }}>Included Services</h3>

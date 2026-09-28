@@ -1,67 +1,207 @@
-// Vehicle catalogue service — the real, admin-managed vehicle classes.
-// Backend: GET /vehicles (PUBLIC, no auth) → { count, vehicles: [{ key, name,
-//   seats, blurb, detail, luggage, glyph, transmission, fuel, rating, trips,
-//   heroUrl, images, cars, sortOrder, isActive }] }
+// Vehicle catalogue service — the ONLY source of vehicle data on the site.
 //
-// This is the source of truth for what a vehicle CLASS actually looks like —
-// real Cloudinary photos uploaded by an admin, real seat counts, real ratings.
-// fares.js merges this with the priced options /fares/options returns (which
-// only carries a bare `vehicleClass` key and money) so the booking-search and
-// checkout screens show a real photo and real copy, not a hardcoded mock.
+// Backend:
+//   GET /vehicles                 (PUBLIC)  → { count, vehicles: [{ key, name,
+//        seats, blurb, detail, luggage, glyph, transmission, fuel, rating,
+//        trips, heroUrl, images:[{label,url}], cars:[{specs,…}], sortOrder,
+//        isActive }] }
+//   GET /fares/rental-packages?cityId  (guest auth) → { packages: [{
+//        vehicleClass, label, includedHours, includedKm, packageFare,
+//        extraPerHour, extraPerKm }] }
+//
+// Nothing here is bundled or invented: names, seats, luggage, photos, specs
+// and every rupee shown on a browse card come from these two calls. When the
+// backend has no photo for a class, a neutral placeholder is generated from
+// the backend's own `glyph` + `name` rather than borrowing another car's photo.
 import { api } from "../client";
-import { USE_MOCK } from "../config";
+import { ensureCitiesLoaded, getDefaultCityId } from "../cities";
 
-// Cached in memory for the tab's lifetime — this is "six cached rows of
-// marketing copy" per the backend's own comment, safe to fetch once and
-// reuse across every fare lookup in the session instead of once per option.
-let cache = null;
+let cache = null;          // normalised vehicle list
 let inflight = null;
+let ratesCache = new Map(); // cityId → Map(vehicleClass → rate)
+let ratesInflight = new Map();
 
-function normaliseKey(key) {
+export function normaliseKey(key) {
   return String(key || "").trim().toLowerCase();
 }
 
+// ── Presentation helpers derived ONLY from backend fields ────────────────────
+
+function placeholderImage(name, glyph) {
+  const label = String(name || "Vehicle").replace(/[<>&"]/g, "");
+  const icon = String(glyph || "🚗").replace(/[<>&"]/g, "");
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF7DE"/><stop offset="1" stop-color="#F3F2EF"/></linearGradient></defs>` +
+    `<rect width="640" height="360" fill="url(#g)"/>` +
+    `<text x="320" y="185" font-size="110" text-anchor="middle" dominant-baseline="middle">${icon}</text>` +
+    `<text x="320" y="300" font-family="Montserrat,Arial,sans-serif" font-size="26" font-weight="700" fill="#555" text-anchor="middle">${label}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function categoryFor(row, specs) {
+  const seats = Number(row.seats) || 0;
+  const tags = specs.map((s) => String(s).toLowerCase());
+  const premium = tags.some((t) => t.includes("luxury") || t.includes("executive") || t.includes("premium") || t.includes("recliner"));
+  if (seats <= 8 && premium) return "luxury";
+  if (seats <= 4) return "sedan";
+  if (seats <= 8) return "suv";
+  if (seats <= 20) return premium ? "luxury" : "tempo";
+  return "bus";
+}
+
+/** Backend catalogue row → the vehicle shape every screen renders. */
+export function normaliseVehicle(row) {
+  if (!row || !row.key) return null;
+  const car = Array.isArray(row.cars) && row.cars.length ? row.cars[0] : null;
+  const specs = Array.isArray(car?.specs) ? car.specs.filter(Boolean) : [];
+  const gallery = (Array.isArray(row.images) ? row.images : [])
+    .map((i) => i?.url)
+    .filter((u) => typeof u === "string" && /^https?:\/\//i.test(u));
+  const hero = row.heroUrl || gallery[0] || null;
+  const placeholder = placeholderImage(row.name, row.glyph);
+  const ac =
+    specs.some((s) => /a\/?c/i.test(String(s))) || /a\/c/i.test(String(row.name || ""));
+
+  const features = [
+    ...specs,
+    row.transmission,
+    row.fuel,
+  ].filter(Boolean).filter((f, i, a) => a.indexOf(f) === i);
+
+  return {
+    id: normaliseKey(row.key),
+    key: normaliseKey(row.key),
+    vehicleClass: normaliseKey(row.key),
+    name: row.name,
+    seats: row.seats,
+    bags: row.luggage || null,          // backend text, e.g. "2 medium bags"
+    ac,
+    img: hero || placeholder,
+    imgFallback: placeholder,
+    hasPhoto: Boolean(hero),
+    gallery: gallery.length ? gallery : [hero || placeholder],
+    tagline: row.blurb || "",
+    detail: row.detail || "",
+    glyph: row.glyph || "🚗",
+    transmission: row.transmission || null,
+    fuel: row.fuel || null,
+    specs,
+    features,
+    category: categoryFor(row, specs),
+    rating: row.rating ?? null,
+    trips: row.trips ?? null,
+    sortOrder: row.sortOrder ?? 0,
+    isActive: row.isActive !== false,
+  };
+}
+
+// ── Catalogue ────────────────────────────────────────────────────────────────
+
 async function fetchCatalogue() {
-  if (USE_MOCK) return [];
   if (cache) return cache;
   if (inflight) return inflight;
 
   inflight = api
     .get("/vehicles", { auth: false })
     .then((data) => {
-      const list = Array.isArray(data?.vehicles) ? data.vehicles : Array.isArray(data) ? data : [];
-      cache = list;
-      return list;
-    })
-    .catch(() => {
-      // Genuinely unreachable — callers fall back to the local mock catalogue
-      // for presentation only; the PRICE always still comes from /fares.
-      cache = [];
-      return [];
+      const rows = Array.isArray(data?.vehicles) ? data.vehicles : Array.isArray(data) ? data : [];
+      cache = rows
+        .map(normaliseVehicle)
+        .filter((v) => v && v.isActive)
+        .sort((a, b) => (a.sortOrder - b.sortOrder) || String(a.name).localeCompare(String(b.name)));
+      return cache;
     })
     .finally(() => {
       inflight = null;
     });
 
+  // Errors are NOT swallowed: an unreachable backend must show a real error
+  // state, never a bundled stand-in fleet.
   return inflight;
 }
 
-/** The full public catalogue, as the backend actually has it configured. */
+/** The full, active, normalised catalogue exactly as the backend has it. */
 export async function getVehicleCatalogue() {
   return fetchCatalogue();
 }
 
-/**
- * The catalogue as a Map keyed by vehicleClass ("sedan", "suv", "tempo",
- * "hatchback", …) so a fare option can look up its real photo/name in O(1).
- */
+/** Map keyed by vehicleClass for O(1) lookup (fare options, bookings). */
 export async function getVehicleCatalogueMap() {
-  const list = await fetchCatalogue();
-  return new Map(list.map((v) => [normaliseKey(v.key), v]));
+  const list = await fetchCatalogue().catch(() => []);
+  return new Map(list.map((v) => [v.key, v]));
 }
 
-/** Force a re-fetch next time — call after an admin might have changed the
- *  catalogue in the same session (rare on the customer site, but cheap). */
+/** One vehicle by backend key (fetches the catalogue if needed). */
+export async function getVehicleByKey(key) {
+  const map = await getVehicleCatalogueMap();
+  return map.get(normaliseKey(key)) || null;
+}
+
+/** Synchronous lookup in the already-loaded catalogue (null if not loaded). */
+export function peekVehicle(key) {
+  if (!cache) return null;
+  const k = normaliseKey(key);
+  return cache.find((v) => v.key === k) || null;
+}
+
 export function invalidateVehicleCatalogueCache() {
   cache = null;
+  ratesCache = new Map();
+}
+
+// ── Local package rates (real rate cards, from the backend) ──────────────────
+
+function pickHeadlinePackage(list) {
+  if (!list.length) return null;
+  // Prefer the classic 8 hr package; otherwise the smallest one offered.
+  const eight = list.find((p) => Number(p.includedHours) === 8);
+  const sorted = [...list].sort((a, b) => Number(a.includedHours) - Number(b.includedHours));
+  return eight || sorted[0];
+}
+
+/**
+ * Map(vehicleClass → { label, hours, km, packageFare, extraPerKm,
+ * extraPerHour, packages }) for the default (or given) city. Empty map on
+ * failure — cards then say "fare on request" instead of showing a number.
+ */
+export async function getRentalRates(cityIdArg) {
+  await ensureCitiesLoaded();
+  const cityId = cityIdArg || getDefaultCityId();
+  if (ratesCache.has(cityId)) return ratesCache.get(cityId);
+  if (ratesInflight.has(cityId)) return ratesInflight.get(cityId);
+
+  const p = api
+    .get("/fares/rental-packages", { params: { cityId } })
+    .then((data) => {
+      const pkgs = Array.isArray(data?.packages) ? data.packages : [];
+      const byClass = new Map();
+      for (const pkg of pkgs) {
+        const k = normaliseKey(pkg.vehicleClass);
+        if (!byClass.has(k)) byClass.set(k, []);
+        byClass.get(k).push(pkg);
+      }
+      const out = new Map();
+      for (const [k, list] of byClass) {
+        const head = pickHeadlinePackage(list);
+        if (!head) continue;
+        out.set(k, {
+          label: head.label || `${head.includedHours} hrs / ${head.includedKm} km`,
+          hours: Number(head.includedHours),
+          km: Number(head.includedKm),
+          packageFare: Number(head.packageFare),
+          extraPerKm: Number(head.extraPerKm),
+          extraPerHour: Number(head.extraPerHour),
+          packages: list,
+        });
+      }
+      ratesCache.set(cityId, out);
+      return out;
+    })
+    .catch(() => new Map())
+    .finally(() => ratesInflight.delete(cityId));
+
+  ratesInflight.set(cityId, p);
+  return p;
 }

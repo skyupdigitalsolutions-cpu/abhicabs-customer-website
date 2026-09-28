@@ -7,7 +7,8 @@ import { createBooking } from "../../src/store/slices/bookingSlice";
 import { selectCheckoutDetails, clearCheckoutDetails } from "../../src/store/slices/checkoutSlice";
 import { bookingsApi, paymentsApi } from "../../src/api";
 import { USE_MOCK } from "../../src/api/config";
-import { VEHICLE_RATES, fmtINR, rid, shortAddress, localVehicleForKey } from "../../src/data/mockData";
+import { fmtINR, rid, shortAddress } from "../../src/data/mockData";
+import useSelectedVehicle from "../../src/hooks/useSelectedVehicle";
 import { buildFareLines, splitPayment } from "../../src/lib/fareLines";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import StateBlock from "../../src/components/StateBlock";
@@ -50,19 +51,7 @@ export default function Page() {
   // backend-keyed selection to the "No cab selected" state right before
   // payment. Final fallback is synthesized from the selection (which already
   // carries name/img/seats/ac) so a real, priced booking is never lost.
-  const vehicle   =
-    VEHICLE_RATES.find((v) => v.id === selected?.vehicleId) ||
-    localVehicleForKey(selected?.vehicleId) ||
-    (selected && (selected.vehicleName || selected.vehicleImg)
-      ? {
-          id: selected.vehicleId,
-          name: selected.vehicleName || "Selected vehicle",
-          img: selected.vehicleImg || selected.vehicleImgFallback || "",
-          imgFallback: selected.vehicleImgFallback || selected.vehicleImg || "",
-          seats: selected.vehicleSeats,
-          ac: selected.vehicleAc,
-        }
-      : null);
+  const vehicle = useSelectedVehicle(selected);
   const details   = useSelector(selectCheckoutDetails);
 
   const [payMethod,    setPayMethod]    = useState("upi");
@@ -304,7 +293,10 @@ export default function Page() {
       }
       bookingRef.current = booking;
 
-      // Payment step (skip for ZERO or cash)
+      // Payment step (skip for ZERO or cash). Everything here is driven by
+      // the backend: it prices the order, creates the Razorpay order, returns
+      // the public key, and confirms the payment via Razorpay's webhook.
+      let paymentPending = false;
       if (paymentMode !== "ZERO" && payMethod !== "cash") {
         const purpose = paymentMode === "PARTIAL" ? "ADVANCE" : "FULL";
         let order;
@@ -315,33 +307,62 @@ export default function Page() {
         }
 
         if (!USE_MOCK) {
-          await paymentsApi.openRazorpayCheckout({
-            order,
-            // Charge the backend-priced amount tied to this order, not the
-            // client estimate — Razorpay rejects a charge that doesn't match
-            // the order it was created for.
-            amount:      order.amount ?? payNowAmount,
-            name:        details.fullName,
-            email:       details.email,
-            contact:     details.mobile,
-            description: `${journey.pickup} → ${journey.drop}`,
-          });
+          if (order.provider === "mock") {
+            // Server is on the mock gateway (test environments): confirm through
+            // the backend's own signed-webhook pipeline instead of Razorpay.
+            try {
+              await paymentsApi.completeMockPayment(order);
+            } catch (err) {
+              throw new Error(`Test payment couldn't be completed — ${err.message || "please try again."}`);
+            }
+          } else {
+            try {
+              await paymentsApi.openRazorpayCheckout({
+                order,
+                name:        details.fullName,
+                email:       details.email,
+                contact:     details.mobile,
+                description: `${shortAddress(journey.pickup, 30)} → ${shortAddress(journey.drop || journey.pickup, 30)}`,
+              });
+            } catch (err) {
+              setProcessing(false);
+              bookingFiredRef.current = false; // booking is kept in bookingRef; only payment retries
+              if (err?.code === "PAYMENT_CANCELLED") {
+                toast(order.lastError
+                  ? `${order.lastError} Your booking is saved — you can try paying again.`
+                  : "Payment cancelled. Your booking is saved — you can try paying again.", "error");
+              } else {
+                toast(err.message || "Payment couldn't be started.", "error");
+              }
+              return;
+            }
+          }
         }
 
-        // Poll the INTERNAL payment id (GET /payments/:id), which the Razorpay
-        // webhook advances to CAPTURED server-side — not the gateway order id.
+        // Wait for the webhook to mark the payment CAPTURED on the server.
         const result = await paymentsApi.waitForPayment(order.paymentId);
-        if (!result.success) {
-          // Payment failed — allow retry (only payment, NOT booking creation)
+        if (!result.success && !result.pending) {
+          // Definitively failed — allow a payment retry (booking is reused).
           setProcessing(false);
-          bookingFiredRef.current = false; // allow payment retry
+          bookingFiredRef.current = false;
           setPayFailOpen(true);
           return;
         }
+        // Checkout completed but the webhook hasn't landed yet. The money may
+        // already be taken, so never ask to pay again — confirm the booking and
+        // let the server finish reconciling.
+        paymentPending = result.pending;
       }
 
-      dispatch(createBooking({ ...bookingPayload, ...booking }));
+      dispatch(createBooking({
+        ...bookingPayload,
+        ...booking,
+        ...(paymentPending ? { paymentStatus: "Payment processing — confirmation shortly" } : {}),
+      }));
       dispatch(clearCheckoutDetails());
+      if (paymentPending) {
+        toast("Payment received. It may take a minute to show as confirmed.", "success");
+      }
       const id = booking.bookingNumber || booking.id;
       navigate("/confirmation?b=" + id);
 
@@ -486,7 +507,7 @@ export default function Page() {
           <h3 style={{ fontWeight: 700, fontSize: 15, margin: "0 0 14px" }}>Booking Summary</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
             <span style={{ width: 56, height: 40, borderRadius: 9, overflow: "hidden", flexShrink: 0 }}>
-              <img src={selected.vehicleImg || selected.vehicleImgFallback || vehicle.img} alt={selected.vehicleName || vehicle.name} onError={(e) => { const fb = selected.vehicleImgFallback || vehicle.img || "/images/sedan-studio.jpg"; if (e.currentTarget.src.indexOf(fb) === -1) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+              <img src={selected.vehicleImg || selected.vehicleImgFallback || vehicle.img} alt={selected.vehicleName || vehicle.name} onError={(e) => { const fb = vehicle.imgFallback || selected.vehicleImgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
             </span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{selected.vehicleName || vehicle.name}</div>
@@ -554,7 +575,7 @@ export default function Page() {
       <Modal
         open={payFailOpen}
         title="Payment Failed"
-        description="We couldn't process your payment. No amount has been deducted — please try again or use a different method."
+        description="The payment didn't go through. Your booking is saved — try again, or choose another payment option. If any amount was deducted, it will be refunded automatically by your bank."
         confirmLabel="Try Again"
         onClose={() => setPayFailOpen(false)}
         onConfirm={() => setPayFailOpen(false)}

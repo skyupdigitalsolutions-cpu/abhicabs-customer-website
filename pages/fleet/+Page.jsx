@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { VEHICLE_RATES, fmtINR } from "../../src/data/mockData";
+import { fmtINR } from "../../src/data/mockData";
 import useVehicleCatalogue from "../../src/hooks/useVehicleCatalogue";
 import Button from "../../src/components/ui/Button";
 import SectionHead from "../../src/components/ui/SectionHead";
@@ -24,8 +24,11 @@ const CATEGORY_INFO = {
 
 export default function FleetPage() {
   // The live, admin-managed fleet — see useVehicleCatalogue.
-  const { vehicles: fleet } = useVehicleCatalogue();
-  const ctx = usePageContext();
+  const { vehicles: fleet, loading, error, retry } = useVehicleCatalogue();
+  const seatList = fleet.map((v) => Number(v.seats)).filter(Boolean);
+  const seatRange = seatList.length ? `${Math.min(...seatList)}–${Math.max(...seatList)}` : "—";
+  // Only offer tabs the live fleet actually has.
+  const tabs = TABS.filter((t) => t.id === "all" || fleet.some((v) => v.category === t.id));
   const [activeTab, setActiveTab] = useState("all");
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [activeImg, setActiveImg] = useState(0);
@@ -56,7 +59,9 @@ export default function FleetPage() {
             Every Vehicle.<br className="hidden sm:block" /> Every Group Size.
           </h1>
           <p className="mt-4 text-[16px] text-text-secondary max-w-[520px] mx-auto">
-            From sedans to 49-seater buses — all A/C, all verified, all ready for your journey.
+            {seatList.length
+              ? `From ${Math.min(...seatList)}-seaters to ${Math.max(...seatList)}-seater coaches — all verified, all ready for your journey.`
+              : "Sedans, SUVs, tempos and coaches — all verified, all ready for your journey."}
           </p>
           <Button href="/#booking" size="lg" className="mt-6">Book a Vehicle</Button>
         </div>
@@ -65,7 +70,7 @@ export default function FleetPage() {
       {/* Stats bar */}
       <div className="bg-primary text-white py-4">
         <div className="max-w-[1264px] mx-auto px-6 flex items-center justify-center gap-8 md:gap-16 flex-wrap">
-          {[["17+","Vehicle Types"],["4–49","Seat Options"],["100%","Verified Drivers"],["24×7","Support"]].map(([n,l])=>(
+          {[[fleet.length ? String(fleet.length) : "—","Vehicle Types"],[seatRange,"Seat Options"],["100%","Verified Drivers"],["24×7","Support"]].map(([n,l])=>(
             <div key={l} className="text-center">
               <div className="text-[22px] font-extrabold">{n}</div>
               <div className="text-[12px] text-white/70 font-semibold">{l}</div>
@@ -80,7 +85,7 @@ export default function FleetPage() {
 
           {/* Category tabs */}
           <div className="flex gap-2 flex-wrap justify-center mb-10">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
@@ -106,6 +111,17 @@ export default function FleetPage() {
             <div className="max-w-[640px] mx-auto text-center mb-8">
               <h2 className="text-[20px] font-bold">{CATEGORY_INFO[activeTab].title}</h2>
               <p className="text-text-secondary mt-1.5 text-[14.5px]">{CATEGORY_INFO[activeTab].desc}</p>
+            </div>
+          )}
+
+          {(loading || error || !filtered.length) && (
+            <div className="bg-white border border-border rounded-2xl py-12 px-6 text-center text-text-secondary">
+              {loading ? "Loading our fleet…" : error ? (
+                <>
+                  <p className="mb-3">We couldn't load the fleet right now.</p>
+                  <button onClick={retry} className="border-2 border-primary text-primary font-bold px-5 py-2 rounded-[10px]">Try again</button>
+                </>
+              ) : "No vehicles in this category right now."}
             </div>
           )}
 
@@ -172,6 +188,8 @@ function FleetCard({ vehicle: v, onView }) {
         <img
           src={v.img}
           alt={v.name}
+          loading="lazy"
+          onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }}
           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
         />
         {/* Category badge */}
@@ -198,19 +216,19 @@ function FleetCard({ vehicle: v, onView }) {
         <div className="flex gap-3 text-[12.5px] text-text-secondary">
           <span className="flex items-center gap-1"><IconSeat className="w-3.5 h-3.5" />{v.seats} Seats</span>
           <span className="flex items-center gap-1"><IconAC className="w-3.5 h-3.5" />{v.ac ? "A/C" : "Non-A/C"}</span>
-          <span className="flex items-center gap-1"><IconLuggage className="w-3.5 h-3.5" />{v.bags} Bags</span>
+          {v.bags && <span className="flex items-center gap-1"><IconLuggage className="w-3.5 h-3.5" />{v.bags}</span>}
         </div>
         <p className="text-[12.5px] text-text-secondary flex-1 line-clamp-2">{v.tagline}</p>
 
         {/* Rates */}
         <div className="grid grid-cols-2 gap-1.5 mt-1">
           <div className="bg-[#f4f6ff] rounded-[8px] px-2.5 py-1.5 text-center">
-            <div className="text-[10px] text-text-secondary font-semibold">Local/8hr</div>
-            <div className="text-[14px] font-extrabold text-primary">{fmtINR(v.local.base8hr80km)}</div>
+            <div className="text-[10px] text-text-secondary font-semibold">{v.rate ? `Local/${v.rate.hours}hr` : "Local"}</div>
+            <div className="text-[14px] font-extrabold text-primary">{v.rate ? fmtINR(v.rate.packageFare) : "On request"}</div>
           </div>
           <div className="bg-[#f4fff6] rounded-[8px] px-2.5 py-1.5 text-center">
             <div className="text-[10px] text-text-secondary font-semibold">Outstation</div>
-            <div className="text-[14px] font-extrabold text-success">{fmtINR(v.outstation.perKm)}<span className="text-[10px] font-normal">/km</span></div>
+            <div className="text-[14px] font-extrabold text-success">Live quote</div>
           </div>
         </div>
 
@@ -256,6 +274,7 @@ function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
               <img
                 src={v.gallery?.[activeImg] || v.img}
                 alt={v.name}
+                onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }}
                 className="w-full h-full object-cover object-center"
               />
             </div>
@@ -270,11 +289,13 @@ function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
                       activeImg === i ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"
                     }`}
                   >
-                    <img src={src} alt="" className="w-full h-full object-cover object-center" />
+                    <img src={src} alt="" onError={(e) => { if (v.imgFallback && e.currentTarget.src !== v.imgFallback) e.currentTarget.src = v.imgFallback; }} className="w-full h-full object-cover object-center" />
                   </button>
                 ))}
               </div>
             )}
+
+            {v.detail && <p className="mt-4 text-[14px] text-text-secondary leading-relaxed">{v.detail}</p>}
 
             {/* Features */}
             {v.features?.length > 0 && (
@@ -298,9 +319,10 @@ function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
             <div className="bg-[#f8f9fc] rounded-[14px] p-4 grid grid-cols-2 gap-3">
               {[
                 ["Seats", `${v.seats} Passengers`],
-                ["Luggage", `${v.bags} Bags`],
+                ["Luggage", v.bags || "—"],
                 ["A/C", v.ac ? "Yes" : "No"],
-                ["Category", v.category.charAt(0).toUpperCase() + v.category.slice(1)],
+                ["Fuel", v.fuel || "—"],
+                ["Transmission", v.transmission || "—"],
               ].map(([label, val]) => (
                 <div key={label}>
                   <div className="text-[11px] text-text-secondary font-semibold uppercase tracking-wide">{label}</div>
@@ -315,22 +337,26 @@ function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
               <div className="space-y-3">
                 <div>
                   <div className="text-[11.5px] text-text-secondary font-semibold uppercase tracking-wide mb-1">Local Package</div>
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-[13.5px] text-text-secondary">8 hrs / 80 km base</span>
-                    <span className="text-[18px] font-extrabold text-primary">{fmtINR(v.local.base8hr80km)}</span>
-                  </div>
-                  <div className="text-[12px] text-text-secondary mt-0.5">Extra km: {fmtINR(v.local.extraKm)}/km</div>
+                  {v.rate ? (
+                    <>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[13.5px] text-text-secondary">{v.rate.hours} hrs / {v.rate.km} km</span>
+                        <span className="text-[18px] font-extrabold text-primary">{fmtINR(v.rate.packageFare)}</span>
+                      </div>
+                      <div className="text-[12px] text-text-secondary mt-0.5">
+                        Extra km: {fmtINR(v.rate.extraPerKm)}/km · Extra hr: {fmtINR(v.rate.extraPerHour)}/hr
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[13.5px] text-text-secondary">Fare on request for this vehicle.</div>
+                  )}
                 </div>
                 <div className="border-t border-border pt-3">
                   <div className="text-[11.5px] text-text-secondary font-semibold uppercase tracking-wide mb-1">Outstation / One Way</div>
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-[13.5px] text-text-secondary">Per km rate</span>
-                    <span className="text-[18px] font-extrabold text-success">{fmtINR(v.outstation.perKm)}<span className="text-[12px] font-normal">/km</span></span>
-                  </div>
-                  <div className="text-[12px] text-text-secondary mt-0.5">Driver bhata: {fmtINR(v.outstation.driverBhata)}/day</div>
+                  <div className="text-[13.5px] text-text-secondary">Priced live for your exact route — enter pickup and drop to see the fare.</div>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-[8px] px-3 py-2 text-[12px] text-amber-700">
-                  Immediate bookings (within 30 min) carry a 5% surge fee
+                  The exact fare, including any applicable surcharge, is confirmed before you pay.
                 </div>
               </div>
             </div>

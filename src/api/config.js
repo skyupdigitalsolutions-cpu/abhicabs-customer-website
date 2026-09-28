@@ -19,8 +19,5 @@ export const TOKEN_KEYS = {
 
 export const REQUEST_TIMEOUT = 15000;
 
-export const RAZORPAY_KEY_ID =
-  import.meta.env.VITE_RAZORPAY_KEY_ID ?? '';
-
 export const GOOGLE_MAPS_API_KEY =
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';

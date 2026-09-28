@@ -4,8 +4,8 @@ import { usePageContext } from "vike-react/usePageContext";
 import { navigate } from "vike/client/router";
 import { selectJourney, createJourney } from "../../src/store/slices/journeySlice";
 import { setSelectedCab } from "../../src/store/slices/selectionSlice";
-import { VEHICLE_RATES, fmtINR, shortAddress, toBackendVehicleClass, localVehicleForKey } from "../../src/data/mockData";
-import { getVehicleCatalogue } from "../../src/api/services/vehicles";
+import { fmtINR, shortAddress, toBackendVehicleClass } from "../../src/data/mockData";
+import useVehicleCatalogue from "../../src/hooks/useVehicleCatalogue";
 import { faresApi, bookingsApi } from "../../src/api";
 import StateBlock, { Spinner } from "../../src/components/StateBlock";
 import { IconPin, IconZap } from "../../src/components/Icons";
@@ -48,10 +48,19 @@ function getVehicleType(v) {
 // selecting a vehicle into Redux before navigating to checkout.
 export default function Page() {
   const pageContext = usePageContext();
-  const journeyId = pageContext.urlParsed?.search?.j || null;
-  const browseType = pageContext.urlParsed?.search?.type || null; // e.g. "group"
-  const urlSeater  = pageContext.urlParsed?.search?.seater  || null; // e.g. "13" from group section
-  const urlVehicle = pageContext.urlParsed?.search?.vehicle || null; // e.g. "swift-desire" from fleet card
+  // Read the query from the REAL address bar in the browser. This page updates
+  // the URL in place (history.replaceState) when a trip is entered inline, and
+  // Vike's pageContext for that history entry keeps the ORIGINAL URL — so on
+  // Back from checkout pageContext said "no ?j=" and the page reopened in
+  // browse mode with every location/date/time blank, even though the trip was
+  // still saved. On the server (first render) both sources are the same URL.
+  const search = typeof window !== "undefined"
+    ? Object.fromEntries(new URLSearchParams(window.location.search))
+    : (pageContext.urlParsed?.search || {});
+  const journeyId  = search.j || null;
+  const browseType = search.type || null;    // e.g. "group"
+  const urlSeater  = search.seater || null;  // e.g. "13" from group section
+  const urlVehicle = search.vehicle || null; // e.g. "swift-dzire" from fleet card
   const dispatch = useDispatch();
   const toast = useToast();
 
@@ -120,6 +129,25 @@ export default function Page() {
     tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km",
     airport: "", airportTerminal: "", airportDirection: "drop", stops: [],
   });
+  // Pre-fill the trip panel from the saved trip whenever one is loaded (e.g.
+  // coming back from checkout), so any edit starts from what the customer
+  // already chose instead of blank fields.
+  useEffect(() => {
+    if (!journey || !effectiveJourneyId) return;
+    setInlineTrip((f) => ({
+      ...f,
+      tripType:   journey.tripType   || f.tripType,
+      pickup:     journey.pickup     || "",
+      drop:       journey.drop       || "",
+      date:       journey.date       || f.date,
+      time:       journey.time       || "",
+      returnDate: journey.returnDate || "",
+      returnTime: journey.returnTime || "",
+      package:    journey.package    || f.package,
+      stops:      Array.isArray(journey.stops) ? journey.stops : [],
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journey?.id, effectiveJourneyId]);
   const [inlineMapField, setInlineMapField] = useState(null);
   // Coordinates for the inline pickup/drop, used by the same-city radius test.
   const [inlinePoints, setInlinePoints] = useState({ pickup: null, drop: null });
@@ -206,40 +234,13 @@ export default function Page() {
   // catalogue. Used for browse mode, so the vehicles shown before a trip is
   // priced are the same ones the backend will actually quote, not a bundled
   // list that can drift from it.
-  const [catalogue, setCatalogue] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    getVehicleCatalogue()
-      .then((rows) => {
-        if (cancelled || !Array.isArray(rows) || !rows.length) return;
-        setCatalogue(
-          rows
-            .filter((r) => r && r.isActive !== false)
-            .map((r) => {
-              const local = localVehicleForKey(r.key);
-              return {
-                id: r.key,
-                vehicleClass: r.key,
-                name: r.name,
-                seats: r.seats,
-                bags: r.luggage || local?.bags,
-                ac: local?.ac ?? true,
-                img: r.heroUrl || local?.img,
-                imgFallback: local?.img,
-                gallery: (r.images || []).map((i) => i.url).filter(Boolean),
-                tagline: r.blurb || local?.tagline,
-                features: local?.features,
-                category: local?.category,
-                local: local?.local,
-                outstation: local?.outstation,
-                rating: r.rating ?? null,
-              };
-            })
-        );
-      })
-      .catch(() => { /* keep the bundled fallback */ });
-    return () => { cancelled = true; };
-  }, []);
+  const {
+    vehicles: catalogueList,
+    loading: catalogueLoading,
+    error: catalogueError,
+    retry: retryCatalogue,
+  } = useVehicleCatalogue();
+  const catalogue = catalogueList.length ? catalogueList : null;
   const [sameCityAsked, setSameCityAsked] = useState(false);
 
   // Real surge, straight from the backend's quote — every option in
@@ -314,29 +315,6 @@ export default function Page() {
   const isLocal = !browseMode && journey?.tripType === "local";
   const isRound = !browseMode && journey?.tripType === "round-trip";
 
-  /**
-   * Indicative rate-card number for BROWSE mode only (no trip entered yet).
-   * Never used once a real quote exists — /fares/options is the only thing
-   * that prices a booking.
-   *
-   * Returns null when there is no bundled rate data: vehicles that come from
-   * the backend catalogue but aren't in the local list (fortuner, mercedes-e)
-   * have no `local`/`outstation` block, and reading through it used to throw.
-   */
-  function calcFare(v) {
-    let base;
-    if (isLocal) {
-      base = v.local?.base8hr80km;
-    } else {
-      const perKm = v.outstation?.perKm;
-      if (perKm == null) return null;
-      const km = 200;
-      base = Math.round(perKm * (isRound ? km * 1.9 : km));
-    }
-    if (base == null) return null;
-    return Math.round(base * surgeMultiplier);
-  }
-
   const GROUP_TYPES = ["Coach"];
 
   // ── Direct vehicle selection ──────────────────────────────────────────────
@@ -358,12 +336,7 @@ export default function Page() {
   const chosenVehicle = useMemo(() => {
     if (!urlVehicle) return null;
     const key = toBackendVehicleClass(urlVehicle) || urlVehicle;
-    return (
-      (catalogue || []).find((v) => v.id === key) ||
-      VEHICLE_RATES.find((v) => v.id === urlVehicle) ||
-      localVehicleForKey(key) ||
-      null
-    );
+    return (catalogue || []).find((v) => v.id === key) || null;
   }, [urlVehicle, catalogue]);
 
   // Real quotes are on screen.
@@ -381,8 +354,7 @@ export default function Page() {
   // second opinion on what is bookable.
   const allSource = useMemo(() => {
     if (pricedMode) return apiVehicles;
-    if (catalogue?.length) return catalogue;
-    return VEHICLE_RATES.filter((v) => Number(v.seats) <= 33);
+    return catalogue || [];
   }, [pricedMode, apiVehicles, catalogue]);
 
   // The chosen vehicle is the priced row whose class matches its backend key.
@@ -433,7 +405,8 @@ export default function Page() {
     list = list.map((v) => ({
       ...v,
       id: v.id || v.vehicleId,
-      fare: v.fare != null ? v.fare : calcFare(v),
+      // Browse mode has no trip, so no fare — never an invented one.
+      fare: v.fare != null ? v.fare : null,
     }));
     // Unpriced vehicles (no bundled rate card, no quote yet) sort last in
     // both directions rather than NaN-ing the comparator.
@@ -483,7 +456,7 @@ export default function Page() {
       if (urlVehicle) qs.set("vehicle", urlVehicle);
       if (browseType) qs.set("type", browseType);
       const q = qs.toString();
-      window.history.replaceState({}, "", `/booking-search${q ? `?${q}` : ""}`);
+      window.history.replaceState(window.history.state, "", `/booking-search${q ? `?${q}` : ""}`);
     } catch { /* SSR guard */ }
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* SSR guard */ }
   }
@@ -585,7 +558,7 @@ export default function Page() {
       const qs = new URLSearchParams();
       qs.set("j", newId);
       if (urlVehicle) qs.set("vehicle", urlVehicle);
-      window.history.replaceState({}, "", `/booking-search?${qs.toString()}`);
+      window.history.replaceState(window.history.state, "", `/booking-search?${qs.toString()}`);
     } catch { /* non-browser / SSR guard */ }
 
     // ── Direct-vehicle fast path ──────────────────────────────────────────
@@ -617,7 +590,7 @@ export default function Page() {
             vehicleId: chosenVehicle.id,
             name: chosenVehicle.name,
             img: chosenVehicle.img,
-            imgFallback: chosenVehicle.img,
+            imgFallback: chosenVehicle.imgFallback,
             gallery: chosenVehicle.gallery,
             seats: chosenVehicle.seats,
             bags: chosenVehicle.bags,
@@ -689,6 +662,8 @@ export default function Page() {
       vehicleAc: v.ac,
       vehicleImg: v.img,
       vehicleImgFallback: v.imgFallback || v.img,
+      vehicleBags: v.bags || null,
+      vehicleCategory: v.category || null,
       // Real backend fields — carried through so checkout can render the
       // actual fare breakdown (driver allowance, night allowance, surge,
       // minimum-fare top-up, rounding) without re-quoting.
@@ -718,6 +693,8 @@ export default function Page() {
         img: v.img,
         vehicleImg: v.img,
         vehicleImgFallback: v.imgFallback || v.img,
+        vehicleBags: v.bags || null,
+        vehicleCategory: v.category || null,
       }));
       navigate("/cab-details");
       return;
@@ -729,6 +706,8 @@ export default function Page() {
       img: v.img,
       vehicleImg: v.img,
       vehicleImgFallback: v.imgFallback || v.img,
+      vehicleBags: v.bags || null,
+      vehicleCategory: v.category || null,
     }));
     navigate("/cab-details");
   }
@@ -839,6 +818,16 @@ export default function Page() {
         />
       ) : loading ? (
         <StateBlock icon={<Spinner />} title="Finding available cabs…" description="Matching vehicles to your journey." />
+      ) : (browseMode && catalogueLoading) ? (
+        <StateBlock icon={<Spinner />} title="Loading our fleet…" description="Fetching available vehicles." />
+      ) : (browseMode && catalogueError) ? (
+        <StateBlock
+          tone="empty"
+          icon={<IconPin className="w-6.5 h-6.5" />}
+          title="We couldn't load the fleet"
+          description={catalogueError}
+          action={<button onClick={retryCatalogue} style={{ height: 44, padding: "0 24px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 700, border: "none", cursor: "pointer" }}>Try again</button>}
+        />
       ) : (serviceAreaError || fareError) ? (
         <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
           <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
@@ -889,7 +878,7 @@ export default function Page() {
               </p>
             </div>
             <button
-              onClick={() => { setSeatFilters([]); window.history.replaceState({}, "", "/booking-search?type=group"); }}
+              onClick={() => { setSeatFilters([]); window.history.replaceState(window.history.state, "", "/booking-search?type=group"); }}
               style={{ background: "none", border: "none", color: "#B8860B", fontWeight: 600, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
             >
               Clear
@@ -1263,7 +1252,7 @@ export default function Page() {
                   // two cards as "Your Selection" for a single choice.
                   // Each card is now a real catalogue vehicle with its own
                   // unique id, so identity is unambiguous again.
-                  const isPinned = Boolean(urlVehicle && v.id === urlVehicle);
+                  const isPinned = Boolean(chosenKey && (v.id === chosenKey || String(v.vehicleClass || "").toLowerCase() === chosenKey));
                   // Key on the priced class so two options can't collide.
                   const cardKey = `${v.vehicleClass || v.id || "v"}-${idx}`;
                   return (
@@ -1274,7 +1263,7 @@ export default function Page() {
                         </div>
                       )}
                       <div className="vehicle-card-image" style={{ flex: "1 1 320px", minWidth: "min(100%, 280px)", minHeight: 200, position: "relative" }}>
-                        <img src={v.img || v.imgFallback} alt={v.name} onError={(e) => { const fb = v.imgFallback || "/images/sedan-studio.jpg"; if (e.currentTarget.src.indexOf(fb) === -1) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
+                        <img src={v.img || v.imgFallback} alt={v.name} onError={(e) => { const fb = v.imgFallback; if (fb && e.currentTarget.src !== fb) { e.currentTarget.src = fb; } }} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", position: "absolute", inset: 0 }} />
                       </div>
                       <div style={{ flex: "2 1 320px", padding: "20px 22px", display: "flex", flexDirection: "column" }}>
                         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -1284,7 +1273,7 @@ export default function Page() {
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 14, margin: "10px 0 14px", fontSize: 12.5, color: "#666", fontWeight: 500 }}>
                           <span>{v.seats} Seater</span>
                           <span>{v.ac ? "A/C" : "Non-A/C"}</span>
-                          <span>{v.bags} Bags</span>
+                          {v.bags && <span>{v.bags}</span>}
                         </div>
                         {!browseMode && v.vehicleClass ? (
                           // Real quote for THIS journey, straight from the backend —
@@ -1306,21 +1295,13 @@ export default function Page() {
                           </div>
                         ) : (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
-                            {v.outstation?.perKm != null || v.local?.base8hr80km != null ? (
+                            {v.rate ? (
                               <>
-                                {v.local?.base8hr80km != null && (
-                                  <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Local (8/12 hr · 80 km)</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.local.base8hr80km)}</div></div>
-                                )}
-                                {v.outstation?.perKm != null && (
-                                  <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Outstation per km</div><div style={{ fontWeight: 700, fontSize: 15, color: "#B8860B" }}>₹{v.outstation.perKm}/km</div></div>
-                                )}
-                                {v.local?.extraKm != null && (
-                                  <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Extra KM</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>₹{v.local.extraKm}/km</div></div>
-                                )}
+                                <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Local ({v.rate.hours} hr · {v.rate.km} km)</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.rate.packageFare)}</div></div>
+                                <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Extra KM</div><div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>{fmtINR(v.rate.extraPerKm)}/km</div></div>
+                                <div><div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>Outstation</div><div style={{ fontWeight: 700, fontSize: 15, color: "#B8860B" }}>Live quote</div></div>
                               </>
                             ) : (
-                              // No bundled rate card for this vehicle. Showing ₹0 would
-                              // read as a real price, so say what actually gets a number.
                               <div style={{ fontSize: 12.5, color: "#888" }}>
                                 Enter your trip details above for a live fare.
                               </div>
