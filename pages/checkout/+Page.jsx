@@ -1,3 +1,4 @@
+import { realEmailOrEmpty } from "../../src/lib/guestContact";
 import { formatDate, formatTime } from "../../src/lib/dateTime";
 import React, { useState, useRef, useEffect } from "react";
 import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../../src/lib/googleMaps";
@@ -224,7 +225,7 @@ export default function Page() {
         if (!user) return;
         const name = user.name || user.fullName || "";
         const phone = user.phone || user.mobile ? String(user.phone || user.mobile).replace(/[^\d]/g, "").slice(-10) : "";
-        const mail = user.email && !user.email.includes("@placeholder.local") ? user.email : "";
+        const mail = realEmailOrEmpty(user.email);
         if (name) setFullName((v) => v || name);
         if (phone) setMobile((v) => v || phone);
         if (mail) setEmail((v) => v || mail);

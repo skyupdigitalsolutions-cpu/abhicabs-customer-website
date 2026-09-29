@@ -1,3 +1,4 @@
+import { isGuestAccountEmail, realEmailOrEmpty } from "../lib/guestContact";
 import { toISODate } from "../lib/dateTime";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
@@ -25,6 +26,11 @@ import { getBooking, getBookingByNumber } from "../api/services/bookings";
  */
 export function normaliseRealBooking(b) {
   const isCorporate = (b.customer?.accountType || "").toUpperCase() === "CORPORATE";
+  // A guest checkout's account is a throwaway named "Guest" with a generated
+  // guest-....@guest.invalid email and no phone. What the customer typed lives on
+  // the booking itself (guestName / guestPhone / guestEmail).
+  const isGuestAccount =
+    b.customer?.isGuest === true || isGuestAccountEmail(b.customer?.user?.email);
   const fare = Number(b.finalFare ?? b.estimatedFare ?? 0);
   const balance = Number(b.balanceDue ?? 0);
   const advance = Number(b.advancePaid ?? 0);
@@ -49,7 +55,7 @@ export function normaliseRealBooking(b) {
     passengerCount: null, // not exposed on the real booking record either — shown as "—" rather than a fabricated number
     customerType: isCorporate ? "corporate" : "retail",
     companyName: b.corporate?.companyName || "",
-    passengerName: b.customer?.user?.name || "",
+    passengerName: (isGuestAccount && b.guestName) || b.customer?.user?.name || "",
     status: b.status || "",
     paymentStatus,
     baseFare: fare,
@@ -64,8 +70,8 @@ export function normaliseRealBooking(b) {
     surgeFee: 0, // real backend bakes surge into the single fare total, not a separate line here
     cgst: 0,
     sgst: 0,
-    email: b.customer?.user?.email || "",
-    mobile: b.customer?.user?.phone || "",
+    email: isGuestAccount ? realEmailOrEmpty(b.guestEmail) : realEmailOrEmpty(b.customer?.user?.email),
+    mobile: isGuestAccount ? (b.guestPhone || "") : (b.customer?.user?.phone || ""),
   };
 }
 

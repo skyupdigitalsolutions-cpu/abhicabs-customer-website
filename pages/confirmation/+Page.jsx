@@ -1,3 +1,4 @@
+import { realEmailOrEmpty } from "../../src/lib/guestContact";
 import VehicleHero from "../../src/components/VehicleHero";
 import { formatDateTime } from "../../src/lib/dateTime";
 import React from "react";
@@ -127,9 +128,11 @@ export default function Page() {
         </div>
       </div>
 
-      <p style={{ textAlign: "center", marginTop: 20, fontSize: 12.5, color: "#666" }}>
-        A confirmation has been sent to <b>{booking.email || booking.mobile}</b>
-      </p>
+      {(realEmailOrEmpty(booking.email) || booking.mobile) && (
+        <p style={{ textAlign: "center", marginTop: 20, fontSize: 12.5, color: "#666" }}>
+          A confirmation has been sent to <b>{realEmailOrEmpty(booking.email) || booking.mobile}</b>
+        </p>
+      )}
     </main>
   );
 }
