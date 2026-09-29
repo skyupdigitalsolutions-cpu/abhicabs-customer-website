@@ -1,3 +1,4 @@
+import { isIndianMobile, cleanPhoneInput } from "../../src/lib/phone";
 import React, { useState } from "react";
 import { navigate } from "vike/client/router";
 import { useToast } from "../../src/hooks/useToast";
@@ -30,7 +31,7 @@ export default function Page() {
     e.preventDefault();
     const errs = {};
     if (!name.trim()) errs.name = true;
-    if (!/^\d{10}$/.test(mobile.trim())) errs.mobile = true;
+    if (!isIndianMobile(mobile)) errs.mobile = true;
     // Backend's createContactSchema requires a valid email — validate it here
     // too so the user gets an inline error instead of a generic API failure.
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = true;
@@ -121,7 +122,7 @@ export default function Page() {
                 <input className={FIELD_INPUT} value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
               <Field label="Mobile Number" required error={errors.mobile && "Enter a valid 10-digit mobile number"}>
-                <input className={FIELD_INPUT} type="tel" value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))} maxLength={10} />
+                <input className={FIELD_INPUT} type="tel" value={mobile} onChange={(e) => setMobile(cleanPhoneInput(e.target.value))} />
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Email" required error={errors.email && "Please enter a valid email address"}>

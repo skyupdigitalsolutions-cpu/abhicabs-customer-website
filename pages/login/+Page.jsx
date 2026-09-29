@@ -1,3 +1,4 @@
+import { isIndianMobile, cleanPhoneInput } from "../../src/lib/phone";
 import React, { useRef, useState, useEffect } from "react";
 import { useToast } from "../../src/hooks/useToast";
 import Button from "../../src/components/ui/Button";
@@ -72,7 +73,7 @@ export default function Page() {
   async function submitRegister() {
     if (!name.trim())                        { setFormError("Enter your name."); return; }
     if (!/\S+@\S+\.\S+/.test(email.trim()))  { setFormError("Enter a valid email."); return; }
-    if (!/^[6-9]\d{9}$/.test(normalisePhone(phone))) { setFormError("Enter a valid 10-digit mobile number."); return; }
+    if (!isIndianMobile(phone)) { setFormError("Enter a valid 10-digit mobile number."); return; }
     setFormError("");
     setSubmitting(true);
     try {
@@ -89,7 +90,7 @@ export default function Page() {
   // ── Login: request OTP by MOBILE NUMBER ──────────────────────────────────
   // POST /auth/otp/request { phone }
   async function submitLogin() {
-    if (!/^[6-9]\d{9}$/.test(normalisePhone(phone))) {
+    if (!isIndianMobile(phone)) {
       setFormError("Enter a valid 10-digit mobile number."); return;
     }
     setFormError("");
@@ -200,10 +201,9 @@ export default function Page() {
                   <input
                     type="tel"
                     inputMode="numeric"
-                    maxLength={10}
-                    placeholder="10-digit mobile number"
+                                        placeholder="10-digit mobile number"
                     value={phone}
-                    onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setFormError(""); }}
+                    onChange={(e) => { setPhone(cleanPhoneInput(e.target.value)); setFormError(""); }}
                     onKeyDown={(e) => e.key === "Enter" && (authMode === "register" ? submitRegister() : submitLogin())}
                     className="border-none bg-transparent outline-none text-base md:text-[14.5px] w-full"
                   />

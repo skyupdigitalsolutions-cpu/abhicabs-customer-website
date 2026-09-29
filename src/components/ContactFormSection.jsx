@@ -1,3 +1,4 @@
+import { isIndianMobile, cleanPhoneInput } from "../lib/phone";
 import React, { useEffect, useId, useState } from "react";
 import { LazyMotion, domMax, m, MotionConfig, AnimatePresence, LayoutGroup, useAnimate, useReducedMotion } from "framer-motion";
 import { useToast } from "../hooks/useToast";
@@ -49,7 +50,7 @@ export default function ContactFormSection({ id = "contact-form" }) {
     e.preventDefault();
     const errs = {};
     if (!name.trim()) errs.name = true;
-    if (!/^\d{10}$/.test(mobile.trim())) errs.mobile = true;
+    if (!isIndianMobile(mobile)) errs.mobile = true;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = true;
     if (!message.trim()) errs.message = true;
     setErrors(errs);
@@ -180,7 +181,7 @@ export default function ContactFormSection({ id = "contact-form" }) {
                   </m.div>
                   <m.div variants={item}>
                     <FormField label="Mobile Number" required error={errors.mobile && "Enter a valid 10-digit mobile number"} attempt={attempt}>
-                      {(p) => <input {...p} type="tel" inputMode="numeric" value={mobile} onChange={(e) => { setMobile(e.target.value.replace(/\D/g, "")); clearErr("mobile"); }} maxLength={10} placeholder="10-digit mobile" autoComplete="tel-national" />}
+                      {(p) => <input {...p} type="tel" inputMode="numeric" value={mobile} onChange={(e) => { setMobile(cleanPhoneInput(e.target.value)); clearErr("mobile"); }} placeholder="10-digit mobile" autoComplete="tel-national" />}
                     </FormField>
                   </m.div>
                   <m.div variants={item} className="sm:col-span-2">

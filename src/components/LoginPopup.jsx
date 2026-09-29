@@ -1,3 +1,4 @@
+import { isIndianMobile, cleanPhoneInput } from "../lib/phone";
 import { useEffect, useRef, useState } from "react";
 import { OPEN_LOGIN, notifyAuthChanged } from "../lib/authEvents";
 import Button from "./ui/Button";
@@ -89,7 +90,7 @@ export default function LoginPopup() {
   async function submitRegister() {
     if (!name.trim())                        { setFormError("Enter your name."); return; }
     if (!/\S+@\S+\.\S+/.test(email.trim()))  { setFormError("Enter a valid email."); return; }
-    if (!/^[6-9]\d{9}$/.test(normalisePhone(phone))) { setFormError("Enter a valid 10-digit mobile number."); return; }
+    if (!isIndianMobile(phone)) { setFormError("Enter a valid 10-digit mobile number."); return; }
     setFormError("");
     setSubmitting(true);
     try {
@@ -105,7 +106,7 @@ export default function LoginPopup() {
 
   // ── Login — POST /auth/otp/request { phone } (mobile number based) ────────
   async function submitLogin() {
-    if (!/^[6-9]\d{9}$/.test(normalisePhone(phone))) {
+    if (!isIndianMobile(phone)) {
       setFormError("Enter a valid 10-digit mobile number."); return;
     }
     setFormError("");
@@ -234,10 +235,9 @@ export default function LoginPopup() {
                 <input
                   type="tel"
                   inputMode="numeric"
-                  maxLength={10}
-                  placeholder="10-digit mobile number"
+                                    placeholder="10-digit mobile number"
                   value={phone}
-                  onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setFormError(""); }}
+                  onChange={(e) => { setPhone(cleanPhoneInput(e.target.value)); setFormError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && (authMode === "register" ? submitRegister() : submitLogin())}
                   className="border-none bg-transparent outline-none text-[14.5px] w-full"
                 />

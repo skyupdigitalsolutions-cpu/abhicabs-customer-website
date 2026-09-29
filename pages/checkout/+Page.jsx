@@ -1,3 +1,4 @@
+import { isIndianMobile, parseIndianMobile, cleanPhoneInput } from "../../src/lib/phone";
 import { realEmailOrEmpty } from "../../src/lib/guestContact";
 import { formatDate, formatTime } from "../../src/lib/dateTime";
 import React, { useState, useRef, useEffect } from "react";
@@ -224,7 +225,7 @@ export default function Page() {
         const user = data?.user || data;
         if (!user) return;
         const name = user.name || user.fullName || "";
-        const phone = user.phone || user.mobile ? String(user.phone || user.mobile).replace(/[^\d]/g, "").slice(-10) : "";
+        const phone = parseIndianMobile(user.phone || user.mobile) || "";
         const mail = realEmailOrEmpty(user.email);
         if (name) setFullName((v) => v || name);
         if (phone) setMobile((v) => v || phone);
@@ -338,11 +339,18 @@ export default function Page() {
     function trySendAbandonment() {
       if (bookingCompletedRef.current || abandonmentSentRef.current) return;
       const nameOk = fullName.trim().length >= 2;
-      const phoneOk = /^\d{10}$/.test(mobile.trim());
-      // Email is NOT required here. Requiring it meant a guest who gave a name
-      // and a valid phone — everything needed to call them back — was never
-      // reported at all, because email is an optional field.
-      if (!nameOk || !phoneOk) return;
+      // Send whenever the backend's contact endpoint will ACCEPT the message
+      // (validators/contact.schemas.js): a name of 2+ characters, a mobile of 7+
+      // digits and a VALID email. Anything else is refused as a whole, and a beacon
+      // cannot see the refusal, so it used to be marked "sent" and the customer was
+      // never recorded. Checking the endpoint's own rule here means:
+      //  - a number typed wrongly or only part-way is still reported (7+ digits),
+      //    where the strict 10-digit check used to drop it;
+      //  - with no valid email yet, nothing is sent AND the one-shot is kept, so
+      //    the report still goes out if the customer types an email later.
+      const phoneOk = mobile.replace(/[^\d]/g, "").length >= 7;
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+      if (!nameOk || !phoneOk || !emailOk) return;
       abandonmentSentRef.current = true;
 
       /*
@@ -424,7 +432,7 @@ export default function Page() {
   function validate() {
     const e = {};
     if (!fullName.trim()) e.fullName = "Please enter your full name";
-    if (!/^\d{10}$/.test(mobile.trim())) e.mobile = "Enter a valid 10-digit mobile number";
+    if (!isIndianMobile(mobile)) e.mobile = "Enter a valid 10-digit mobile number (starts with 6, 7, 8 or 9)";
     if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) e.email = "Enter a valid email address";
     if (isCorporate && !companyName.trim()) e.companyName = "Company name is required for corporate invoices";
     setErrors(e);
@@ -539,7 +547,7 @@ export default function Page() {
 
                 {/* Mobile + Email — side by side */}
                 <FormField label="Mobile" required error={errors.mobile}>
-                  <input className={FIELD_INPUT} type="tel" maxLength={10} placeholder="10-digit mobile" value={mobile} onChange={(e) => setMobile(e.target.value)} />
+                  <input className={FIELD_INPUT} type="tel" inputMode="numeric" placeholder="10-digit mobile" value={mobile} onChange={(e) => setMobile(cleanPhoneInput(e.target.value))} />
                 </FormField>
                 <FormField label="Email" error={errors.email}>
                   <input className={FIELD_INPUT} type="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />

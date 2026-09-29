@@ -31,6 +31,7 @@ import {
   ChevronIcon,
 } from "./DateTimePickers";
 import { toISODate, pickupTimeError, returnTimeError } from "../lib/dateTime";
+import { isIndianMobile, cleanPhoneInput } from "../lib/phone";
 
 // States this business actually operates in (Karnataka, Telangana, Andhra
 // Pradesh, Maharashtra). ANY location inside these four states is serviceable
@@ -247,7 +248,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const [requestEmail, setRequestEmail] = useState("");
 
   async function submitOutOfAreaRequest() {
-    if (!requestName.trim() || !/^\d{10}$/.test(requestPhone.trim())) {
+    if (!requestName.trim() || !isIndianMobile(requestPhone)) {
       toast("Please enter your name and a valid 10-digit mobile number", "error");
       return;
     }
@@ -976,7 +977,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                           <Input placeholder="Full name" value={requestName} onChange={(e) => setRequestName(e.target.value)} />
                         </Field>
                         <Field label="Mobile Number">
-                          <Input type="tel" inputMode="numeric" placeholder="10-digit mobile number" value={requestPhone} onChange={(e) => setRequestPhone(e.target.value.replace(/\D/g, ""))} maxLength={10} />
+                          <Input type="tel" inputMode="numeric" placeholder="10-digit mobile number" value={requestPhone} onChange={(e) => setRequestPhone(cleanPhoneInput(e.target.value))} />
                         </Field>
                         <Field label="Email">
                           <Input type="email" inputMode="email" placeholder="you@example.com" value={requestEmail} onChange={(e) => setRequestEmail(e.target.value)} />
