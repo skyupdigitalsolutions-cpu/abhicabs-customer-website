@@ -1,3 +1,4 @@
+import { formatDate, formatDateTime } from "../../src/lib/dateTime";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { navigate } from "vike/client/router";
@@ -460,7 +461,7 @@ export default function Page() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 13 }}>
             <SummaryRow label="Route"        value={`${shortAddress(journey.pickup)} → ${shortAddress(journey.drop)}`} />
-            <SummaryRow label="Date · Time"  value={`${journey.date} · ${journey.time}`} />
+            <SummaryRow label="Date · Time"  value={formatDateTime(journey.date, journey.time)} />
             {journey.tripType === "local" && journey.package && (
               <SummaryRow label="Package" value={journey.package} />
             )}
@@ -552,7 +553,7 @@ function SummaryRow({ label, value }) {
 function InvoiceModal({ journey, vehicle, details, fareLines, tripTotal, cgst, sgst, discountCode, discountAmount, totalPayable, onClose, onConfirm }) {
   const isCorporate  = details.customerType === "corporate";
   const invoiceNumber = "INV-" + Date.now().toString().slice(-9);
-  const billedOn     = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const billedOn     = formatDate(new Date());
   const bookingId    = rid("ABHI");
   const invoiceRef   = useRef(null);
 
@@ -684,7 +685,7 @@ function InvoiceModal({ journey, vehicle, details, fareLines, tripTotal, cgst, s
               <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Vehicle</span><span className="ml-2 font-semibold">{vehicle.name}</span></td></tr>
               <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Pick Up</span><span className="ml-2">{journey.pickup}</span></td></tr>
               <tr><td className="px-3 py-1"><span className="text-gray-500 text-[11.5px]">Drop</span><span className="ml-2">{journey.drop}</span></td></tr>
-              <tr><td className="px-3 py-1.5"><span className="text-gray-500 text-[11.5px]">Date</span><span className="ml-2">{journey.date}</span></td></tr>
+              <tr><td className="px-3 py-1.5"><span className="text-gray-500 text-[11.5px]">Date</span><span className="ml-2">{formatDate(journey.date)}</span></td></tr>
             </tbody>
           </table>
 

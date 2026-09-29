@@ -1,3 +1,4 @@
+import { formatDateTime } from "../../src/lib/dateTime";
 import React from "react";
 import { usePageContext } from "vike-react/usePageContext";
 import { fmtINR, shortAddress } from "../../src/data/mockData";
@@ -95,7 +96,7 @@ export default function Page() {
               value={`${shortAddress(booking.pickup)} → ${shortAddress(booking.drop)}`}
               title={`${booking.pickup} → ${booking.drop}`}
             />
-            <DetailCell label="Date & Time" value={`${booking.date} · ${booking.time}`} />
+            <DetailCell label="Date & Time" value={formatDateTime(booking.date, booking.time)} />
             <DetailCell label="Seats · AC" value={booking.vehicleSeats ? `${booking.vehicleSeats} Seater · A/C` : "—"} />
             <DetailCell label="Passengers" value={booking.passengerCount || "—"} />
             <DetailCell label="Driver" value="Assigned 2 hrs before pickup" />

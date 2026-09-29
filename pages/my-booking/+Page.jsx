@@ -1,3 +1,5 @@
+import { DatePicker, PickerScope } from "../../src/components/DateTimePickers";
+import { formatDateTime } from "../../src/lib/dateTime";
 import { IconList, IconAlert } from "../../src/components/Icons";
 import React, { useEffect, useState } from "react";
 import { navigate } from "vike/client/router";
@@ -295,11 +297,19 @@ export default function Page() {
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginBottom: 22, background: "#fff", border: "1px solid #EFEFEF", borderRadius: 16, padding: 16 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label style={{ fontSize: 12.5, fontWeight: 700, color: "#666" }}>From</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ border: "1px solid #E5E5E5", borderRadius: 10, padding: "8px 12px", fontSize: 13.5 }} />
+              <div style={{ minWidth: 190 }}>
+                <PickerScope compact>
+                  <DatePicker ariaLabel="From date" placeholder="From date" showQuickPicks={false} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                </PickerScope>
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label style={{ fontSize: 12.5, fontWeight: 700, color: "#666" }}>To</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ border: "1px solid #E5E5E5", borderRadius: 10, padding: "8px 12px", fontSize: 13.5 }} />
+              <div style={{ minWidth: 190 }}>
+                <PickerScope compact>
+                  <DatePicker ariaLabel="To date" placeholder="To date" showQuickPicks={false} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                </PickerScope>
+              </div>
             </div>
             <button onClick={() => loadBookings(1, false)} className="hover:!bg-[#FFB300]" style={{ padding: "10px 18px", borderRadius: 9999, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 13, border: "none", cursor: "pointer" }}>
               Search
@@ -335,7 +345,7 @@ export default function Page() {
                     Closed:      { bg: "#F9FAFB", fg: "#6B7280", dot: "#9CA3AF" },
                   };
                   const sc = statusColors[t.status] || statusColors.Open;
-                  const date = t.submittedAt ? new Date(t.submittedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+                  const date = t.submittedAt ? formatDateTime(t.submittedAt) : "—";
                   return (
                     <div key={t.id} style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 18, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -413,7 +423,7 @@ export default function Page() {
                           </span>
                         </div>
                         <div style={{ fontSize: 12.5, color: "#666", fontWeight: 500, marginTop: 4 }}>
-                          {[vehicleName, b.pickupAt ? new Date(b.pickupAt).toLocaleString("en-IN") : null, b.bookingNumber].filter(Boolean).join(" · ")}
+                          {[vehicleName, b.pickupAt ? formatDateTime(b.pickupAt) : null, b.bookingNumber].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>

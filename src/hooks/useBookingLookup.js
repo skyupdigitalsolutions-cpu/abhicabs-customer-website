@@ -1,3 +1,4 @@
+import { toISODate } from "../lib/dateTime";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { selectBooking } from "../store/slices/bookingSlice";
@@ -37,8 +38,8 @@ function normaliseRealBooking(b) {
     bookingId: b.bookingNumber || b.id,
     pickup: b.pickupAddress,
     drop: b.dropAddress,
-    date: b.pickupAt ? new Date(b.pickupAt).toLocaleDateString("en-IN") : "",
-    time: b.pickupAt ? new Date(b.pickupAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "",
+    date: b.pickupAt ? toISODate(new Date(b.pickupAt)) : "",
+    time: b.pickupAt ? `${String(new Date(b.pickupAt).getHours()).padStart(2, "0")}:${String(new Date(b.pickupAt).getMinutes()).padStart(2, "0")}` : "",
     tripType: b.tripType || "",
     vehicle: b.vehicleClass ? b.vehicleClass.charAt(0).toUpperCase() + b.vehicleClass.slice(1) : "",
     vehicleSeats: null, // not exposed on the real booking record

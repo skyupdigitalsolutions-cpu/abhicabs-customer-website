@@ -1,3 +1,4 @@
+import { formatDateTime } from "../../src/lib/dateTime";
 import React from "react";
 import { usePageContext } from "vike-react/usePageContext";
 import { fmtINR } from "../../src/data/mockData";
@@ -92,7 +93,7 @@ export default function Page() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "18px 16px", fontSize: 13.5, paddingBottom: 18, borderBottom: "1px dashed #EFEFEF" }}>
             <DetailCell label="Vehicle" value={booking.vehicle || "—"} />
-            <DetailCell label="Date & Time" value={`${booking.date} · ${booking.time}`} />
+            <DetailCell label="Date & Time" value={formatDateTime(booking.date, booking.time)} />
             <DetailCell label="Passengers" value={booking.passengerCount || "—"} />
           </div>
 

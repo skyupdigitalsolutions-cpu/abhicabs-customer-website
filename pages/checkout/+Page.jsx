@@ -1,3 +1,4 @@
+import { formatDate, formatTime } from "../../src/lib/dateTime";
 import React, { useState, useRef, useEffect } from "react";
 import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../../src/lib/googleMaps";
 import { useSelector, useDispatch } from "react-redux";
@@ -372,8 +373,8 @@ export default function Page() {
         line("Drop", journey.drop) +
         line("Stops", (journey.stops || []).join(" | ")) +
         line("Package", journey.package) +
-        line("Date / time", `${journey.date || "—"} ${journey.time || ""}`.trim()) +
-        line("Return", journey.returnDate ? `${journey.returnDate} ${journey.returnTime || ""}`.trim() : "") +
+        line("Date / time", `${journey.date ? formatDate(journey.date) : "—"} ${formatTime(journey.time)}`.trim()) +
+        line("Return", journey.returnDate ? `${formatDate(journey.returnDate)} ${formatTime(journey.returnTime)}`.trim() : "") +
         `\n— QUOTE —\n` +
         line("Vehicle", selected.vehicleName || vehicle?.name) +
         line("Vehicle class", selected.vehicleClass) +
@@ -685,24 +686,13 @@ export default function Page() {
                     <SummaryRow key={i} label={`Stop ${i + 1}`} value={s} />
                   ))}
                   <SummaryRow label="To" value={journey.drop || "—"} />
-                  <SummaryRow label="Pickup Date" value={journey.date} />
-                  <SummaryRow label="Pickup Time" value={(() => {
-                    if (!journey.time) return "—";
-                    const [hh, mm] = journey.time.split(":").map(Number);
-                    const ap = hh < 12 ? "AM" : "PM";
-                    const h = hh % 12 || 12;
-                    return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
-                  })()} />
+                  <SummaryRow label="Pickup Date" value={formatDate(journey.date)} />
+                  <SummaryRow label="Pickup Time" value={journey.time ? formatTime(journey.time) : "—"} />
                   {journey.tripType === "round-trip" && journey.returnDate && (
-                    <SummaryRow label="Return Date" value={journey.returnDate} />
+                    <SummaryRow label="Return Date" value={formatDate(journey.returnDate)} />
                   )}
                   {journey.tripType === "round-trip" && journey.returnTime && (
-                    <SummaryRow label="Return Time" value={(() => {
-                      const [hh, mm] = journey.returnTime.split(":").map(Number);
-                      const ap = hh < 12 ? "AM" : "PM";
-                      const h = hh % 12 || 12;
-                      return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
-                    })()} />
+                    <SummaryRow label="Return Time" value={formatTime(journey.returnTime)} />
                   )}
                   {journey.tripType === "local" && journey.package && (
                     <SummaryRow label="Package" value={journey.package} />

@@ -1,3 +1,5 @@
+import { DatePicker, TimePicker12hr, PickerScope } from "../../src/components/DateTimePickers";
+import { formatDate, formatTime } from "../../src/lib/dateTime";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../../src/lib/googleMaps";
 import { useSelector, useDispatch } from "react-redux";
@@ -148,6 +150,13 @@ export default function Page() {
   // wrong (past) date and let it slip through as the min selectable date.
   // BookingWidget.jsx already had this exact fix; porting it here too.
   const today = toLocalISODate(new Date());
+  // Same rule as the home booking widget: for a same-day pickup, times earlier
+  // than "now + 30 min" are greyed out (submit already rejects them).
+  const inlineMinTime = (selectedDate) => {
+    if (selectedDate !== today) return undefined;
+    const t = new Date(Date.now() + 30 * 60 * 1000);
+    return `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+  };
   const [inlineTrip, setInlineTrip] = useState({
     tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km",
     airport: "", airportTerminal: "", airportDirection: "drop", stops: [],
@@ -1015,27 +1024,43 @@ export default function Page() {
                   {/* Date + Time — stacked */}
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Date</label>
-                    <input type="date" min={today} value={inlineTrip.date} onChange={setInline("date")}
-                      style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                    <PickerScope compact>
+                      <DatePicker ariaLabel="Pickup date" min={today} value={inlineTrip.date} onChange={setInline("date")} />
+                    </PickerScope>
                   </div>
 
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Time</label>
-                    <InlineTimeField value={inlineTrip.time} onChange={setInline("time")} />
+                    <PickerScope compact>
+                      <TimePicker12hr
+                        value={inlineTrip.time}
+                        min={inlineMinTime(inlineTrip.date)}
+                        onChange={setInline("time")}
+                      />
+                    </PickerScope>
                   </div>
 
                   {inlineTrip.tripType === "round-trip" && (
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Return Date</label>
-                      <input type="date" min={inlineTrip.date || today} value={inlineTrip.returnDate} onChange={setInline("returnDate")}
-                        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none" }} />
+                      <PickerScope compact>
+                        <DatePicker ariaLabel="Return date" placeholder="Add return" min={inlineTrip.date || today} value={inlineTrip.returnDate} onChange={setInline("returnDate")} />
+                      </PickerScope>
                     </div>
                   )}
 
                   {inlineTrip.tripType === "round-trip" && (
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Return Time</label>
-                      <InlineTimeField value={inlineTrip.returnTime} onChange={setInline("returnTime")} placeholder="Select return time" />
+                      <PickerScope compact>
+                        <TimePicker12hr
+                          value={inlineTrip.returnTime}
+                          min={inlineTrip.returnDate && inlineTrip.returnDate === inlineTrip.date ? inlineTrip.time || undefined : undefined}
+                          placeholder="Select return time"
+                          ariaLabel="Choose return time"
+                          onChange={setInline("returnTime")}
+                        />
+                      </PickerScope>
                     </div>
                   )}
 
@@ -1085,14 +1110,8 @@ export default function Page() {
           </div>
           <span style={{ width: 1, height: 22, background: "rgba(255,255,255,.2)" }} className="hidden sm:block" />
           <div className="summary-bar-meta" style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 14, color: "rgba(255,255,255,.75)", fontWeight: 500 }}>
-            <span>{journey.date}</span>
-            <span>{(() => {
-              if (!journey.time) return "";
-              const [hh, mm] = journey.time.split(":").map(Number);
-              const ap = hh < 12 ? "AM" : "PM";
-              const h  = hh % 12 || 12;
-              return `${h}:${String(mm).padStart(2,"0")} ${ap}`;
-            })()}</span>
+            <span>{formatDate(journey.date, { weekday: true })}</span>
+            <span>{formatTime(journey.time)}</span>
             <span style={{ textTransform: "capitalize" }}>{journey.tripType?.replace("-", " ")}</span>
             {journey.passengers && <span>{journey.passengers} passenger(s)</span>}
           </div>
@@ -1556,67 +1575,6 @@ export default function Page() {
         }}
       />
     </main>
-  );
-}
-
-function fmtTime12(hhmm) {
-  if (!hhmm) return "";
-  const [h, m] = String(hhmm).split(":").map(Number);
-  if (Number.isNaN(h)) return "";
-  const ampm = h < 12 ? "AM" : "PM";
-  const h12 = h % 12 || 12;
-  return `${h12}:${String(m || 0).padStart(2, "0")} ${ampm}`;
-}
-
-// Custom time dropdown — replaces the browser's native <input type="time"> so
-// the inline filter form matches the main booking card's picker (no native
-// spinner). Emits the same "HH:MM" value via an event-shaped onChange so it
-// drops straight into setInline("time").
-function InlineTimeField({ value, onChange, placeholder = "Select time" }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
-  const slots = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 15) {
-      slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-    }
-  }
-
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{ width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left", color: value ? "#111" : "#999" }}
-      >
-        <span>{value ? fmtTime12(value) : placeholder}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <circle cx="12" cy="12" r="9" stroke="#B8860B" strokeWidth="2" />
-          <path d="M12 7v5l3 2" stroke="#B8860B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {open && (
-        <div style={{ position: "absolute", top: 46, left: 0, right: 0, zIndex: 60, maxHeight: 220, overflowY: "auto", background: "#fff", border: "1px solid #E5E5E5", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }}>
-          {slots.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => { onChange({ target: { value: v } }); setOpen(false); }}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, border: "none", background: v === value ? "#FFF7E0" : "#fff", color: "#111", cursor: "pointer", fontWeight: v === value ? 700 : 400 }}
-            >
-              {fmtTime12(v)}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

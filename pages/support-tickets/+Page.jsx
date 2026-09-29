@@ -1,3 +1,4 @@
+import { formatDateTime } from "../../src/lib/dateTime";
 import React, { useState, useEffect } from "react";
 import { navigate } from "vike/client/router";
 import { isAuthenticated } from "../../src/api/tokens";
@@ -23,7 +24,7 @@ function StatusBadge({ status }) {
 function TicketCard({ ticket, onRefresh }) {
   const [refreshing, setRefreshing] = useState(false);
   const date = ticket.submittedAt
-    ? new Date(ticket.submittedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    ? formatDateTime(ticket.submittedAt)
     : "—";
 
   async function tryRefresh() {

@@ -14,6 +14,7 @@
  *
  * Falls back to a 15s REST poll if socket is unavailable.
  */
+import { formatDateTime, formatTime } from "../../src/lib/dateTime";
 import React, { useEffect, useState, useRef } from "react";
 import { useSelector } from "react-redux";
 import { usePageContext } from "vike-react/usePageContext";
@@ -321,7 +322,7 @@ export default function Page() {
                 />
                 <p className="text-[12px] text-text-secondary mt-2">
                   {liveLocation
-                    ? `Live GPS fix received${liveLocation.at ? " at " + new Date(liveLocation.at).toLocaleTimeString("en-IN") : ""}.`
+                    ? `Live GPS fix received${liveLocation.at ? " at " + formatTime(liveLocation.at) : ""}.`
                     : "Live status updates are active. The driver marker appears once a GPS fix is received."}
                 </p>
               </>
@@ -365,7 +366,7 @@ export default function Page() {
             <Card className="p-5">
               <h4 className="text-[15px] font-bold mb-2.5">Trip</h4>
               <Row label="Route"       value={pickup && drop ? `${pickup} → ${drop}` : (pickup || "—")} />
-              {pickupAt && <Row label="Pickup Time" value={new Date(pickupAt).toLocaleString("en-IN")} />}
+              {pickupAt && <Row label="Pickup Time" value={formatDateTime(pickupAt)} />}
               <Row label="Booking ID" value={bookingNumber || "—"} />
               {fare != null && <Row label="Fare" value={fmtINR(fare)} />}
               <Row label="Status" value={realBooking?.status || "—"} />

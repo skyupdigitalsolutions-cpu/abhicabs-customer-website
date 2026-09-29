@@ -1,3 +1,4 @@
+import { formatDate, formatTime } from "../lib/dateTime";
 import React from "react";
 import { IconPin, IconStar } from "./Icons";
 import Button from "./ui/Button";
@@ -59,8 +60,8 @@ export function JourneyBar({ journey, showModify = true }) {
       </div>
       <div className="flex gap-5.5 flex-wrap">
         <MetaItem label="Trip Type" value={modeLabel} />
-        <MetaItem label="Date" value={journey.date || "-"} />
-        <MetaItem label="Time" value={journey.time || "-"} />
+        <MetaItem label="Date" value={journey.date ? formatDate(journey.date) : "-"} />
+        <MetaItem label="Time" value={journey.time ? formatTime(journey.time) : "-"} />
         {journey.passengers && <MetaItem label="Passengers" value={journey.passengers} />}
       </div>
       {showModify && <Button href={`/?j=${encodeURIComponent(journey.id)}#booking`} variant="outline" size="sm">Modify Search</Button>}

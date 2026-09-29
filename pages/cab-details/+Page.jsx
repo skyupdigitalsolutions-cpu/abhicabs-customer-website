@@ -1,3 +1,4 @@
+import { formatDate, formatTime } from "../../src/lib/dateTime";
 import React from "react";
 import { useSelector } from "react-redux";
 import { selectSelectedCab } from "../../src/store/slices/selectionSlice";
@@ -158,8 +159,8 @@ function JourneyMini({ journey }) {
         {journey.pickup} → {journey.drop}
       </div>
       <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#666" }}>
-        <div>Date<b style={{ display: "block", fontSize: 14, color: "#111" }}>{journey.date}</b></div>
-        <div>Time<b style={{ display: "block", fontSize: 14, color: "#111" }}>{journey.time}</b></div>
+        <div>Date<b style={{ display: "block", fontSize: 14, color: "#111" }}>{formatDate(journey.date)}</b></div>
+        <div>Time<b style={{ display: "block", fontSize: 14, color: "#111" }}>{formatTime(journey.time)}</b></div>
       </div>
     </div>
   );
