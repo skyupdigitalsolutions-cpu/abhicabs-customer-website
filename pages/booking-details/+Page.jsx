@@ -1,3 +1,4 @@
+import VehicleHero from "../../src/components/VehicleHero";
 import { formatDateTime } from "../../src/lib/dateTime";
 import React from "react";
 import { usePageContext } from "vike-react/usePageContext";
@@ -70,15 +71,7 @@ export default function Page() {
 
       <div style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden" }}>
         <div style={{ aspectRatio: "16/9", overflow: "hidden", background: "#F7F7F7", position: "relative" }}>
-          {(() => {
-            const img = booking.vehicleImg ||
-              lookupVehicle(booking.vehicleClass || booking.vehicleId)?.img;
-            return img
-              ? <img className="vehicle-photo" src={img} alt={booking.vehicle} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#FFF7DE,#F7F7F7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="72" height="72" viewBox="0 0 24 24" fill="none"><path d="M4 16l1.5-5A2 2 0 017.4 9.5h9.2a2 2 0 011.9 1.5L20 16" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /><rect x="2.5" y="16" width="19" height="4" rx="1.5" stroke="#B8860B" strokeWidth="1.5" /><circle cx="7" cy="20" r="1.6" fill="#B8860B" /><circle cx="17" cy="20" r="1.6" fill="#B8860B" /><path d="M8 9.5l1-3.5h6l1 3.5" stroke="#B8860B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </div>;
-          })()}
+          <VehicleHero booking={booking} lookupVehicle={lookupVehicle} />
         </div>
         <div style={{ padding: 26 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>

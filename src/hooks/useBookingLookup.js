@@ -23,7 +23,7 @@ import { getBooking, getBookingByNumber } from "../api/services/bookings";
  * The local-first fast path is kept exactly as before — right after
  * checkout, this still shows instantly with no network round-trip.
  */
-function normaliseRealBooking(b) {
+export function normaliseRealBooking(b) {
   const isCorporate = (b.customer?.accountType || "").toUpperCase() === "CORPORATE";
   const fare = Number(b.finalFare ?? b.estimatedFare ?? 0);
   const balance = Number(b.balanceDue ?? 0);
@@ -42,6 +42,9 @@ function normaliseRealBooking(b) {
     time: b.pickupAt ? `${String(new Date(b.pickupAt).getHours()).padStart(2, "0")}:${String(new Date(b.pickupAt).getMinutes()).padStart(2, "0")}` : "",
     tripType: b.tripType || "",
     vehicle: b.vehicleClass ? b.vehicleClass.charAt(0).toUpperCase() + b.vehicleClass.slice(1) : "",
+    // Kept so screens can look up the catalogue photo for this class. Dropping
+    // it is why a booking opened from its link/refresh showed no vehicle image.
+    vehicleClass: b.vehicleClass || "",
     vehicleSeats: null, // not exposed on the real booking record
     passengerCount: null, // not exposed on the real booking record either — shown as "—" rather than a fabricated number
     customerType: isCorporate ? "corporate" : "retail",

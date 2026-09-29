@@ -31,7 +31,7 @@ const SLIM_FIELDS = [
   "id", "bookingId", "bookingNumber", "status",
   "pickup", "pickupAddress", "drop", "dropAddress",
   "date", "time", "tripType", "returnDate", "returnTime",
-  "vehicleCategory", "vehicle", "vehicleSeats", "vehicleImg",
+  "vehicleCategory", "vehicleClass", "vehicle", "vehicleSeats", "vehicleImg",
   "fare", "estimatedFare", "finalFare",
   "paymentMode", "paymentStatus", "paymentStatusReal",
   "passengerName", "mobile", "email",
