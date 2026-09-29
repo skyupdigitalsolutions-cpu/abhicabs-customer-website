@@ -30,7 +30,7 @@ import {
   TimePicker12hr,
   ChevronIcon,
 } from "./DateTimePickers";
-import { toISODate } from "../lib/dateTime";
+import { toISODate, pickupTimeError, returnTimeError } from "../lib/dateTime";
 
 // States this business actually operates in (Karnataka, Telangana, Andhra
 // Pradesh, Maharashtra). ANY location inside these four states is serviceable
@@ -106,15 +106,6 @@ const PILL_SPRING = { type: "spring", stiffness: 500, damping: 38 };
 /* ═══════════════════════════════════════════════════════════════════════ */
 
 const today = toISODate(new Date());
-
-function getMinTime(selectedDate) {
-  if (selectedDate !== today) return undefined;
-  const now = new Date(Date.now() + 30 * 60 * 1000);
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
 
 const AIRPORT_OPTIONS = AIRPORTS.map((a) => ({
   value: a.code,
@@ -582,7 +573,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const timeField = (withErr = false) => (
     <Field label="Time">
       <TimePicker12hr
-        value={fields.time} min={getMinTime(fields.date)}
+        value={fields.time} error={pickupTimeError(fields.date, fields.time)}
         onChange={(e) => { set("time")(e); if (withErr) touch("time")(); }}
       />
       {withErr && fieldErr("time", !fields.time, "Please select a time")}
@@ -600,15 +591,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
    * /booking-search has had this field; the two forms must accept exactly the
    * same trip, since either can produce the same booking.
    *
-   * min: when the return is on the pickup DAY, it cannot be earlier than the
-   * pickup time — the cross-day case is caught by the date+time comparison in
-   * handleSubmit.
+   * error: the return must come after the pickup (same-day or cross-day);
+   * shown inline, and handleSubmit still blocks it.
    */
   const returnTimeField = (
     <Field label="Return Time">
       <TimePicker12hr
         value={fields.returnTime}
-        min={fields.returnDate && fields.returnDate === fields.date ? fields.time || undefined : undefined}
+        error={returnTimeError(fields.date, fields.time, fields.returnDate, fields.returnTime)}
         onChange={set("returnTime")}
       />
     </Field>

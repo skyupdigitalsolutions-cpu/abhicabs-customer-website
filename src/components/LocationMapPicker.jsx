@@ -38,6 +38,9 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
   const [locating,  setLocating]    = useState(false);
   const [pinned,    setPinned]      = useState(false); // true once user has placed a pin
   const [notice,    setNotice]      = useState("");
+  // Whether the search box has text — drives the clear (x) button. The input is
+  // uncontrolled (Google Autocomplete owns it), so this only mirrors its value.
+  const [hasText,   setHasText]     = useState(false);
 
   const mapDivRef       = useRef(null);
   const mapRef          = useRef(null);
@@ -170,6 +173,28 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
     });
   }, [mapsReady, open]); // re-attach when map reopens // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Every programmatic write to the input is paired with setAddress(), so this
+  // keeps the clear button accurate after picking a suggestion, tapping the
+  // map, "use my location", or reopening with a prefilled address.
+  useEffect(() => {
+    setHasText(!!searchRef.current?.value);
+  }, [address, open]);
+
+  // Clear the search text and dismiss Google's suggestion list. Only the text
+  // box is cleared — an already-selected location (map pin + preview card)
+  // stays as it was, so nothing about Confirm changes.
+  function clearSearch() {
+    const el = searchRef.current;
+    if (!el) return;
+    el.value = "";
+    setHasText(false);
+    // Fire a real input event so Autocomplete drops its prediction dropdown.
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    // Without a Maps key the typed text IS the address, so mirror that.
+    if (!GOOGLE_MAPS_API_KEY) setAddress("");
+    el.focus();
+  }
+
   // ── Place pin on map ──────────────────────────────────────────────────────
   function placePin(lat, lng, doGeocode = true) {
     pointRef.current = { lat, lng };
@@ -270,15 +295,29 @@ export default function LocationMapPicker({ open, title, initialAddress, onConfi
 
           {/* Search row */}
           <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex" }}>
             <input
               ref={attachSearch}
               defaultValue={initialAddress || ""}
               placeholder={noKey ? "Type your location here…" : "Search city, area or landmark…"}
-              style={{ flex: 1, border: "1.5px solid #E0E0E0", borderRadius: 10, padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", transition: "border-color .2s" }}
+              style={{ flex: 1, minWidth: 0, border: "1.5px solid #E0E0E0", borderRadius: 10, padding: hasText ? "10px 40px 10px 14px" : "10px 14px", fontSize: 14, outline: "none", fontFamily: "inherit", transition: "border-color .2s" }}
               onFocus={e => e.target.style.borderColor = "#111"}
               onBlur={e => e.target.style.borderColor = "#E0E0E0"}
               onChange={e => { if (noKey) setAddress(e.target.value); }}
+              onInput={e => setHasText(!!e.target.value)}
             />
+            {hasText && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label="Clear search"
+                title="Clear"
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 26, height: 26, borderRadius: "50%", border: "none", background: "#F0F0F0", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="#555" strokeWidth="2.6" strokeLinecap="round"/></svg>
+              </button>
+            )}
+            </div>
             {!noKey && (
               <button
                 type="button"

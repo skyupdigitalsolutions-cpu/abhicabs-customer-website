@@ -1,5 +1,5 @@
 import { DatePicker, TimePicker12hr, PickerScope } from "../../src/components/DateTimePickers";
-import { formatDate, formatTime } from "../../src/lib/dateTime";
+import { formatDate, formatTime, pickupTimeError, returnTimeError } from "../../src/lib/dateTime";
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useGoogleMapsReady, bindPlacesAutocomplete, pointFromPlace as mapsPointFromPlace } from "../../src/lib/googleMaps";
 import { useSelector, useDispatch } from "react-redux";
@@ -150,13 +150,6 @@ export default function Page() {
   // wrong (past) date and let it slip through as the min selectable date.
   // BookingWidget.jsx already had this exact fix; porting it here too.
   const today = toLocalISODate(new Date());
-  // Same rule as the home booking widget: for a same-day pickup, times earlier
-  // than "now + 30 min" are greyed out (submit already rejects them).
-  const inlineMinTime = (selectedDate) => {
-    if (selectedDate !== today) return undefined;
-    const t = new Date(Date.now() + 30 * 60 * 1000);
-    return `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
-  };
   const [inlineTrip, setInlineTrip] = useState({
     tripType: "one-way", pickup: "", drop: "", date: today, time: "", returnDate: "", returnTime: "", package: "8 hrs / 80 km",
     airport: "", airportTerminal: "", airportDirection: "drop", stops: [],
@@ -1034,7 +1027,7 @@ export default function Page() {
                     <PickerScope compact>
                       <TimePicker12hr
                         value={inlineTrip.time}
-                        min={inlineMinTime(inlineTrip.date)}
+                        error={pickupTimeError(inlineTrip.date, inlineTrip.time)}
                         onChange={setInline("time")}
                       />
                     </PickerScope>
@@ -1055,7 +1048,7 @@ export default function Page() {
                       <PickerScope compact>
                         <TimePicker12hr
                           value={inlineTrip.returnTime}
-                          min={inlineTrip.returnDate && inlineTrip.returnDate === inlineTrip.date ? inlineTrip.time || undefined : undefined}
+                          error={returnTimeError(inlineTrip.date, inlineTrip.time, inlineTrip.returnDate, inlineTrip.returnTime)}
                           placeholder="Select return time"
                           ariaLabel="Choose return time"
                           onChange={setInline("returnTime")}

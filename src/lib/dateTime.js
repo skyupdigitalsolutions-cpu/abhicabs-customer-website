@@ -103,3 +103,40 @@ export function formatDateTime(dateValue, timeValue, opts = {}) {
   const tPart = formatTime(timeValue);
   return [dPart, tPart].filter(Boolean).join(", ") || fallback;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation messages for the time pickers.
+// The pickers never grey out slots; instead the caller asks these helpers for
+// a message and passes it to <TimePicker12hr error={...} />. They only READ
+// values — submit handlers keep their own checks as the final gate.
+// ─────────────────────────────────────────────────────────────────────────────
+export const MIN_LEAD_MINUTES = 30;
+
+function toLocalDateTime(date, time) {
+  if (!date || !time) return null;
+  const d = new Date(`${date}T${String(time).slice(0, 5)}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * pickupTimeError("2026-09-30", "09:00") → "" | "This time is in the past"
+ *                                             | "Pickup must be at least 30 minutes from now"
+ * Empty string means OK (or nothing chosen yet).
+ */
+export function pickupTimeError(date, time, now = Date.now()) {
+  const dt = toLocalDateTime(date, time);
+  if (!dt) return "";
+  if (dt.getTime() < now) return "This time is in the past";
+  if (dt.getTime() < now + MIN_LEAD_MINUTES * 60 * 1000) {
+    return `Pickup must be at least ${MIN_LEAD_MINUTES} minutes from now`;
+  }
+  return "";
+}
+
+/** Return leg must come after the pickup. Empty string means OK / incomplete. */
+export function returnTimeError(pickupDate, pickupTime, returnDate, returnTime) {
+  const pickup = toLocalDateTime(pickupDate, pickupTime);
+  const ret = toLocalDateTime(returnDate, returnTime);
+  if (!pickup || !ret) return "";
+  return ret <= pickup ? "Return time must be after the pickup time" : "";
+}

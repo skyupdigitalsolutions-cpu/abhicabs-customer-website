@@ -163,6 +163,9 @@ export const BW_CSS = `
   font-size: 14px; font-weight: 500; color: var(--bw-text); background: #F6F5F1;
   transition: background-color .15s, color .15s;
 }
+.bw-field.has-error, .bw-field.has-error:hover { border-color: #E0662A; background: #FFF8F4; }
+.bw-field.has-error:focus-within, .bw-field.has-error.is-open { border-color: #E0662A; box-shadow: 0 0 0 4px rgba(224,102,42,.16); background: #fff; }
+.bw-time-error { color: #C2410C; font-size: 12px; font-weight: 500; line-height: 1.3; }
 .bw-tcell:hover:not(:disabled):not(.is-active) { background: #FFF1C2; }
 .bw-tcell:disabled { color: #CBC7BE; cursor: not-allowed; background: #FAFAF8; }
 .bw-tcell.is-active { background: ${GRADIENT.active}; color: var(--bw-ink); font-weight: 700; box-shadow: ${GRADIENT.activeShadow}; }
@@ -510,7 +513,10 @@ export function DatePicker({ value, onChange, min, placeholder = "Select date", 
 // ── 12-hour Time Picker ─────────────────────────────────────────────────
 // Picking AM/PM or an hour keeps the panel open; picking minutes commits
 // and closes — one open, two taps, instead of reopening between choices.
-export function TimePicker12hr({ value, onChange, min, placeholder = "Select time", ariaLabel = "Choose pickup time" }) {
+// Every hour/minute is always selectable. If the chosen time is not acceptable
+// (e.g. in the past) the caller passes `error`; it is shown in red on the field
+// and inside the panel, and the submit handlers still block the booking.
+export function TimePicker12hr({ value, onChange, error = "", placeholder = "Select time", ariaLabel = "Choose pickup time" }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -531,13 +537,7 @@ export function TimePicker12hr({ value, onChange, min, placeholder = "Select tim
 
   const { h12, minute, ampm } = parse(value);
 
-  function isDisabled(h12c, minutec, ampmc) {
-    if (!min) return false;
-    return toHHMM(h12c, minutec, ampmc) < min;
-  }
-
   function select(h12c, minutec, ampmc, close = false) {
-    if (isDisabled(h12c, minutec, ampmc)) return;
     onChange({ target: { value: toHHMM(h12c, minutec, ampmc) } });
     if (close) setOpen(false);
   }
@@ -628,7 +628,6 @@ export function TimePicker12hr({ value, onChange, min, placeholder = "Select tim
                   key={ap}
                   type="button"
                   onClick={() => select(h12, minute, ap)}
-                  disabled={isDisabled(h12, minute, ap)}
                   className={`bw-tcell ${ampm === ap ? "is-active" : ""}`}
                   style={{ padding: "5px 12px", borderRadius: 999, fontSize: 12.5, background: ampm === ap ? undefined : "transparent" }}
                 >
@@ -638,13 +637,16 @@ export function TimePicker12hr({ value, onChange, min, placeholder = "Select tim
             </div>
           </div>
 
+          {error && (
+            <p role="alert" className="bw-time-error" style={{ margin: "-4px 0 10px 2px" }}>{error}</p>
+          )}
+
           <p className="bw-pop-title">Hour</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginBottom: 12 }}>
             {hours.map((hr) => (
               <button
                 key={hr} type="button"
                 onClick={() => select(hr, minute, ampm)}
-                disabled={isDisabled(hr, minute, ampm)}
                 className={`bw-tcell ${hr === h12 && value ? "is-active" : ""}`}
               >
                 {hr}
@@ -658,7 +660,6 @@ export function TimePicker12hr({ value, onChange, min, placeholder = "Select tim
               <button
                 key={mn} type="button"
                 onClick={() => select(h12, mn, ampm, true)}
-                disabled={isDisabled(h12, mn, ampm)}
                 className={`bw-tcell ${mn === minute && value ? "is-active" : ""}`}
               >
                 :{String(mn).padStart(2, "0")}
@@ -672,15 +673,17 @@ export function TimePicker12hr({ value, onChange, min, placeholder = "Select tim
   ) : null;
 
   return (
+    <>
     <div ref={triggerRef} className="relative w-full">
       <div
         role="button"
         tabIndex={0}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-invalid={error ? true : undefined}
         onClick={togglePicker}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); togglePicker(); } }}
-        className={`bw-field bw-field--button ${open ? "is-open" : ""}`}
+        className={`bw-field bw-field--button ${open ? "is-open" : ""} ${error ? "has-error" : ""}`}
       >
         <span className="bw-chip"><IconClock className="w-4 h-4" /></span>
         <span className={`bw-input ${displayTime ? "" : "is-placeholder"}`}>{displayTime || placeholder}</span>
@@ -690,6 +693,10 @@ export function TimePicker12hr({ value, onChange, min, placeholder = "Select tim
       </div>
       {dropdown}
     </div>
+    {error && !open && (
+      <p role="alert" className="bw-time-error" style={{ marginTop: 4, paddingLeft: 2 }}>{error}</p>
+    )}
+    </>
   );
 }
 
