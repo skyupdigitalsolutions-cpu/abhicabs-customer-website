@@ -552,7 +552,6 @@ export default function Page() {
     if (!inlineTrip.date) { toast("Please select a date", "error"); return; }
     if (!inlineTrip.time) { toast("Please select a time", "error"); return; }
     if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnDate) { toast("Please select a return date", "error"); return; }
-    if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnTime) { toast("Please select a return time", "error"); return; }
     if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate && inlineTrip.returnDate < inlineTrip.date) {
       toast("Return date cannot be before the pickup date", "error"); return;
     }
@@ -564,10 +563,10 @@ export default function Page() {
       toast("Pickup time must be at least 30 minutes from now — please update it", "error");
       return;
     }
-    if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate && inlineTrip.returnTime) {
-      const returnDt = new Date(inlineTrip.returnDate + "T" + inlineTrip.returnTime);
+    if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate) {
+      const returnDt = new Date(inlineTrip.returnDate + "T23:59:00");
       if (returnDt <= pickupDt) {
-        toast("Return date & time must be after the pickup time", "error");
+        toast("Return date must be after the pickup date", "error");
         return;
       }
     }
@@ -608,7 +607,7 @@ export default function Page() {
       date: inlineTrip.date,
       time: inlineTrip.time,
       returnDate: effType === "local" ? "" : inlineTrip.returnDate,
-      returnTime: effType === "local" ? "" : inlineTrip.returnTime,
+      returnTime: "",  // Return time removed — only return date is used
       package: effType === "local" ? (localPackage || inlineTrip.package) : "",
       stops: effType === "local" || effType === "airport"
         ? []
@@ -1058,20 +1057,7 @@ export default function Page() {
                     </div>
                   )}
 
-                  {inlineTrip.tripType === "round-trip" && (
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Return Time</label>
-                      <PickerScope compact>
-                        <TimePicker12hr
-                          value={inlineTrip.returnTime}
-                          error={returnTimeError(inlineTrip.date, inlineTrip.time, inlineTrip.returnDate, inlineTrip.returnTime)}
-                          placeholder="Select return time"
-                          ariaLabel="Choose return time"
-                          onChange={setInline("returnTime")}
-                        />
-                      </PickerScope>
-                    </div>
-                  )}
+                  {/* Return time removed — only return date is needed for round trips */}
 
                   <button onClick={submitInlineTrip}
                     style={{ height: 46, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 800, fontSize: 14, cursor: "pointer", marginTop: 4 }}>

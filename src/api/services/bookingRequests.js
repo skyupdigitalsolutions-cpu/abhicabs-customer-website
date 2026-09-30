@@ -42,9 +42,6 @@ export async function createBookingRequest(journey, contact, vehicleClass) {
     contactPhone: String(contact.phone || "").trim(),
   };
   if (vehicleClass) body.vehicleClass = vehicleClass;
-  if (tripType === "ROUND_TRIP") {
-    body.returnAt = toIso(journey?.returnDate || journey?.date, journey?.returnTime, "23:59");
-  }
   if (contact.email) body.contactEmail = String(contact.email).trim();
   const pax = Number(contact.passengers);
   if (pax >= 1) body.passengers = Math.min(pax, 60);

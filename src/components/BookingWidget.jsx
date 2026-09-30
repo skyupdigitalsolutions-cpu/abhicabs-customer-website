@@ -430,9 +430,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
     // ── 6. TIME
     if (!fields.time) { toast("Please select a pickup time", "error"); return; }
-    if (mode === "round-trip" && !fields.returnTime) {
-      toast("Please select a return time", "error"); return;
-    }
 
     // ── 7. PAST DATE/TIME CHECK
     if (fields.date && fields.time) {
@@ -441,11 +438,11 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         toast("Pickup time must be at least 30 minutes from now", "error"); return;
       }
     }
-    if (mode === "round-trip" && fields.returnDate && fields.returnTime) {
-      const returnDt = new Date(fields.returnDate + "T" + fields.returnTime);
+    if (mode === "round-trip" && fields.returnDate) {
+      const returnDt = new Date(fields.returnDate + "T23:59:00");
       const pickupDt = new Date(fields.date + "T" + (fields.time || "00:00"));
       if (returnDt <= pickupDt) {
-        toast("Return date & time must be after the pickup time", "error"); return;
+        toast("Return date must be after the pickup date", "error"); return;
       }
     }
 
@@ -503,7 +500,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       date: fields.date,
       time: fields.time,
       returnDate: effMode === "local" ? "" : fields.returnDate,
-      returnTime: effMode === "local" ? "" : fields.returnTime,
+      returnTime: "",  // Return time removed — only return date is used
       package: effMode === "local" ? (localPackage || fields.package) : "",
       stops: effMode === "local" || effMode === "airport" ? [] : filledStops,
       surge,
@@ -625,9 +622,8 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
             <div>{timeField(!withReturn)}</div>
           </div>
           {withReturn && (
-            <div className="w-full sm:w-auto sm:flex-[2_1_340px] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="w-full sm:w-auto sm:flex-[1_1_170px]">
               <div>{returnDateField}</div>
-              <div>{returnTimeField}</div>
             </div>
           )}
         </div>
@@ -655,9 +651,8 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           <div>{timeField()}</div>
         </m.div>
         {withReturn && (
-          <m.div layout="position" className="w-full sm:w-auto sm:flex-[2_1_340px] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <m.div layout="position" className="w-full sm:w-auto sm:flex-[1_1_170px]">
             <div>{returnDateField}</div>
-            <div>{returnTimeField}</div>
           </m.div>
         )}
       </div>
