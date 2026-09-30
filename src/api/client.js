@@ -14,12 +14,15 @@ import { getAccessToken, getRefreshToken, setTokens, setGuestToken, clearTokens 
 
 // Thrown for any non-successful API response. Carries the backend error object.
 export class ApiError extends Error {
-  constructor(message, { code, status, fields } = {}) {
+  constructor(message, { code, status, fields, details } = {}) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
     this.fields = fields;
+    // Structured data the backend attaches for the client to act on, e.g.
+    // OUTSIDE_SERVICE_STATES → { offending, allowedStates, canRequest }.
+    this.details = details;
   }
 }
 
@@ -188,7 +191,7 @@ async function request(method, path, { body, headers = {}, auth = true, idempote
   if (!res.ok || json.success === false) {
     const e = json.error || {};
     throw new ApiError(e.message || `Request failed (${res.status})`, {
-      code: e.code, status: res.status, fields: e.fields
+      code: e.code, status: res.status, fields: e.fields, details: e.details
     });
   }
 

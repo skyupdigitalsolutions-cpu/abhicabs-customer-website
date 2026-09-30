@@ -245,6 +245,15 @@ export default function Page() {
           // generic error. Send them back to change the route.
           const code = String(err?.code || "").toUpperCase();
           const msg  = String(err?.message || "").toLowerCase();
+          // Route touches a state we don't serve: booking-search re-quotes the
+          // trip and shows the "send a booking request" form for it.
+          if (code === "OUTSIDE_SERVICE_STATES") {
+            setProcessing(false);
+            bookingFiredRef.current = false;
+            toast(err.message || "We don't operate on this route yet — you can send a booking request instead.", "error");
+            navigate("/booking-search");
+            return;
+          }
           if (
             code === "OUTSIDE_SERVICE_AREA" || code === "CITY_NOT_SERVICED" ||
             code === "NO_SERVICE_AREA" || msg.includes("service area") ||

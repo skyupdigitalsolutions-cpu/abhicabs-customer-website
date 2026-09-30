@@ -8,3 +8,4 @@ export * as authApi from "./services/auth";
 export * as paymentsApi from "./services/payments";
 export * as vehiclesApi from "./services/vehicles";
 export * as discountsApi from "./services/discounts";
+export * as bookingRequestsApi from "./services/bookingRequests";

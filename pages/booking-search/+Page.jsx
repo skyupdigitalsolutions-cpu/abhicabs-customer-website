@@ -18,6 +18,8 @@ import { isSameCityTrip, ensureCitiesLoaded, cityFromAddress } from "../../src/a
 import { AIRPORTS } from "../../src/data/airports";
 import BackLink, { recordNavStep } from "../../src/components/BackLink";
 import LocationMapPicker from "../../src/components/LocationMapPicker";
+import BookingRequestForm from "../../src/components/BookingRequestForm";
+import { isOutsideServiceStates } from "../../src/api/services/bookingRequests";
 
 
 // Derives a customer-facing "type" from the vehicle's real name, since the
@@ -115,6 +117,10 @@ export default function Page() {
   const [loading, setLoading] = useState(!browseMode);
   const [apiVehicles, setApiVehicles] = useState(null);
   const [serviceAreaError, setServiceAreaError] = useState(null);
+  // Set when the trip touches a state we don't operate in
+  // (OUTSIDE_SERVICE_STATES, canRequest). Instead of a dead end, the rider is
+  // offered a booking request — see BookingRequestForm.
+  const [requestOffer, setRequestOffer] = useState(null);
   // Any OTHER reason the backend couldn't price this trip (no rate card for
   // the city, validation, backend down). Previously an unrecognised failure
   // left both errors null and the page quietly fell back to VEHICLE_RATES
@@ -275,6 +281,7 @@ export default function Page() {
     let cancelled = false;
     setLoading(true);
     setServiceAreaError(null);
+    setRequestOffer(null);
     setFareError(null);
     faresApi.getFareOptions(journey)
       .then((options) => {
@@ -311,6 +318,14 @@ export default function Page() {
         // Broadened: the backend signals this under several codes/wordings,
         // and matching only "OUTSIDE_SERVICE_AREA" meant the others fell
         // through to the silent sample-price path below.
+        // Different state → offer a booking request rather than a dead end.
+        if (isOutsideServiceStates(err) && err?.details?.canRequest !== false) {
+          setRequestOffer({
+            message: err.message,
+            allowedStates: err.details?.allowedStates || [],
+          });
+          return;
+        }
         const code = String(err?.code || "").toUpperCase();
         const msg  = String(err?.message || "").toLowerCase();
         const isServiceArea =
@@ -496,6 +511,7 @@ export default function Page() {
     setCreatedJourneyId(null);
     setApiVehicles(null);
     setServiceAreaError(null);
+    setRequestOffer(null);
     setFareError(null);
     setAutoPricing(false);
     setSameCityAsked(false);
@@ -692,7 +708,7 @@ export default function Page() {
     // This is a belt-and-braces guard: the list is already hidden in these
     // states, but nothing else in the flow re-checks serviceability before
     // /checkout → /payment.
-    if (serviceAreaError || fareError) {
+    if (serviceAreaError || fareError || requestOffer) {
       toast(
         serviceAreaError || "We couldn't price this trip — please request a custom booking.",
         "error"
@@ -1159,6 +1175,13 @@ export default function Page() {
           description={catalogueError}
           action={<button onClick={retryCatalogue} style={{ height: 44, padding: "0 24px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 700, border: "none", cursor: "pointer" }}>Try again</button>}
         />
+      ) : requestOffer ? (
+        <BookingRequestForm
+          journey={journey}
+          message={requestOffer.message}
+          allowedStates={requestOffer.allowedStates}
+          onChangeTrip={clearLocations}
+        />
       ) : (serviceAreaError || fareError) ? (
         <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
           <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
@@ -1175,7 +1198,7 @@ export default function Page() {
           </p>
           <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 22px" }}>
             {serviceAreaError
-              ? "We currently operate within a service radius around specific cities, not every address in a state — please enter a pickup closer to one of our serviced cities and try again."
+              ? "We currently serve specific cities and their surrounding areas — please enter a pickup closer to one of our serviced cities and try again."
               : "This trip can't be booked online until we can quote it. Change the pickup or drop and try again, or send us a request and our team will confirm availability and price for you."}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
