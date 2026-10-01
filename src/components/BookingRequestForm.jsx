@@ -22,24 +22,24 @@ const label = { display: "block", fontSize: 12, fontWeight: 600, color: "#555", 
 const err = { fontSize: 12, color: "#DC2626", margin: "4px 0 0", textAlign: "left" };
 
 const VEHICLES = [
-  { value: "swift-dzire",       label: "Swift Dzire",        seats: "4",   tag: "Popular" },
-  { value: "ertiga",            label: "Ertiga",             seats: "6",   tag: "" },
-  { value: "innova",            label: "Innova",             seats: "7",   tag: "" },
-  { value: "innova-crysta",     label: "Innova Crysta",      seats: "7",   tag: "Premium" },
-  { value: "innova-hycross",    label: "Innova Hycross",     seats: "7",   tag: "" },
-  { value: "fortuner",          label: "Fortuner",           seats: "7",   tag: "SUV" },
-  { value: "mercedes-e",        label: "Mercedes E-Class",   seats: "4",   tag: "Luxury" },
-  { value: "tempo-12",          label: "Tempo (12-seat)",    seats: "12",  tag: "" },
-  { value: "tempo-17",          label: "Tempo (17-seat)",    seats: "17",  tag: "" },
-  { value: "urbania-13",        label: "Urbania 13",         seats: "13",  tag: "" },
-  { value: "urbania-16",        label: "Urbania 16",         seats: "16",  tag: "" },
-  { value: "urbania-maharaja",  label: "Urbania Maharaja",   seats: "16",  tag: "Premium" },
-  { value: "bus",               label: "Bus",                seats: "20+", tag: "" },
+  { value: "swift-dzire",       label: "Swift Dzire",        seats: "4 Seater",   tag: "Popular" },
+  { value: "ertiga",            label: "Ertiga",             seats: "6 Seater" },
+  { value: "innova",            label: "Innova",             seats: "7 Seater" },
+  { value: "innova-crysta",     label: "Innova Crysta",      seats: "7 Seater",   tag: "Premium" },
+  { value: "innova-hycross",    label: "Innova Hycross",     seats: "7 Seater" },
+  { value: "fortuner",          label: "Fortuner",           seats: "7 Seater",   tag: "SUV" },
+  { value: "mercedes-e",        label: "Mercedes E-Class",   seats: "4 Seater",   tag: "Luxury" },
+  { value: "tempo-12",          label: "Tempo Traveller",    seats: "12 Seater" },
+  { value: "tempo-17",          label: "Tempo Traveller",    seats: "17 Seater" },
+  { value: "urbania-13",        label: "Urbania",            seats: "13 Seater" },
+  { value: "urbania-16",        label: "Urbania",            seats: "16 Seater" },
+  { value: "urbania-maharaja",  label: "Urbania Maharaja",   seats: "16 Seater",  tag: "Premium" },
+  { value: "bus",               label: "Bus",                seats: "20+ Seater" },
 ];
 
 export default function BookingRequestForm({ journey, message, allowedStates = [], onChangeTrip }) {
   const saved = useSelector((s) => s.checkout?.details) || {};
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // 1 = vehicle, 2 = contact
   const [name, setName] = useState(saved.fullName || "");
   const [phone, setPhone] = useState(cleanPhoneInput(saved.mobile || ""));
   const [email, setEmail] = useState(saved.email || "");
@@ -51,21 +51,14 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
   const [submitError, setSubmitError] = useState("");
   const [done, setDone] = useState(null);
 
-  function validateStep1() {
-    const e = {};
-    if (name.trim().length < 2) e.name = "Please enter your name.";
-    if (!parseIndianMobile(phone)) e.phone = "Enter a valid 10-digit mobile number.";
-    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) e.email = "Enter a valid email or leave it blank.";
-    return e;
-  }
-
   function goToStep2(ev) {
-    ev.preventDefault();
-    const e = validateStep1();
-    setErrors(e);
-    if (Object.keys(e).length) return;
+    ev?.preventDefault?.();
+    if (!vehicleClass) {
+      setErrors({ vehicle: "Please select a vehicle to continue." });
+      return;
+    }
+    setErrors({});
     setStep(2);
-    // Scroll to top of the card
     const card = document.getElementById("br-card");
     if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -73,10 +66,11 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
   async function submit(ev) {
     ev.preventDefault();
     if (busy) return;
-    if (!vehicleClass) {
-      setErrors({ vehicle: "Please select a vehicle to continue." });
-      return;
-    }
+    const e = {};
+    if (name.trim().length < 2) e.name = "Please enter your name.";
+    if (!parseIndianMobile(phone)) e.phone = "Enter a valid 10-digit mobile number.";
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) e.email = "Enter a valid email or leave it blank.";
+    if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
     setSubmitError("");
     setBusy(true);
@@ -130,7 +124,7 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
             {s < step ? "✓" : s}
           </div>
           <span style={{ fontSize: 12, fontWeight: 600, color: s <= step ? "#111" : "#999" }}>
-            {s === 1 ? "Your details" : "Select vehicle"}
+            {s === 1 ? "Select vehicle" : "Your details"}
           </span>
           {s < 2 && <div style={{ width: 28, height: 2, borderRadius: 1, background: step > 1 ? "#FFC107" : "#E5E5E5" }} />}
         </React.Fragment>
@@ -162,9 +156,118 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
 
       {stepBar}
 
-      {/* ── STEP 1: Contact details ─────────────────────────────────── */}
+      {/* ── STEP 1: Vehicle selection (like normal booking, no price) ── */}
       {step === 1 && (
-        <form onSubmit={goToStep2} noValidate style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 4px", textAlign: "left" }}>
+            Choose your ride
+          </p>
+          <p style={{ fontSize: 13, color: "#888", margin: "0 0 14px", textAlign: "left" }}>
+            Select a vehicle for this trip. You'll add your contact details next.
+          </p>
+
+          {errors.vehicle && (
+            <p style={{ ...err, textAlign: "center", fontSize: 13, margin: "0 0 12px",
+              padding: "8px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px solid #FECACA" }}>
+              {errors.vehicle}
+            </p>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+            {VEHICLES.map((v) => {
+              const active = vehicleClass === v.value;
+              return (
+                <button
+                  key={v.value}
+                  type="button"
+                  onClick={() => { setVehicleClass(v.value); setErrors({}); }}
+                  style={{
+                    position: "relative", display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 14px", borderRadius: 14, textAlign: "left",
+                    border: active ? "2px solid #FFC107" : "1.5px solid #E5E5E5",
+                    background: active ? "#FFFBEB" : "#fff",
+                    cursor: "pointer", transition: "all .15s",
+                    width: "100%",
+                  }}
+                >
+                  <div style={{
+                    width: 42, height: 42, borderRadius: 11, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: active ? "#FFC107" : "#F3F4F6",
+                  }}>
+                    <span style={{ fontSize: 18 }}>🚗</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{v.label}</div>
+                    <div style={{ fontSize: 12, color: "#888", marginTop: 1 }}>{v.seats}</div>
+                  </div>
+                  {v.tag && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 5,
+                      background: active ? "#FFC107" : "#F3F4F6",
+                      color: active ? "#111" : "#888",
+                    }}>
+                      {v.tag}
+                    </span>
+                  )}
+                  {active && (
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                      background: "#FFC107", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 800 }}>✓</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={goToStep2}
+            disabled={!vehicleClass}
+            style={{
+              width: "100%", padding: "13px 0", borderRadius: 12,
+              background: vehicleClass ? "#FFC107" : "#E5E5E5",
+              color: vehicleClass ? "#111" : "#999",
+              fontWeight: 700, fontSize: 15, border: "none",
+              cursor: vehicleClass ? "pointer" : "default",
+              transition: "all .2s",
+            }}
+          >
+            Next →
+          </button>
+          {onChangeTrip && (
+            <button type="button" onClick={onChangeTrip}
+                    style={{ width: "100%", marginTop: 8, padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", color: "#555", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+              ← Change trip
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── STEP 2: Contact details + submit ───────────────────────── */}
+      {step === 2 && (
+        <form onSubmit={submit} noValidate style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Selected vehicle summary */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 12, background: "#FFFBEB", border: "1.5px solid #FFC107", marginBottom: 4 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 9, background: "#FFC107", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 16 }}>🚗</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 13.5, color: "#111" }}>
+                {VEHICLES.find(v => v.value === vehicleClass)?.label}
+              </div>
+              <div style={{ fontSize: 12, color: "#888" }}>
+                {VEHICLES.find(v => v.value === vehicleClass)?.seats}
+              </div>
+            </div>
+            <button type="button" onClick={() => setStep(1)} style={{ fontSize: 12, fontWeight: 700, color: "#B08800", background: "none", border: "none", cursor: "pointer" }}>
+              Change
+            </button>
+          </div>
+
           <div>
             <label style={label} htmlFor="br-name">Your name</label>
             <input id="br-name" style={field} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
@@ -192,96 +295,17 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
                       value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <button type="submit"
-                  style={{ padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer" }}>
-            Next — Select vehicle →
-          </button>
-          {onChangeTrip && (
-            <button type="button" onClick={onChangeTrip}
-                    style={{ padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", color: "#555", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
-              ← Change trip
-            </button>
-          )}
-        </form>
-      )}
-
-      {/* ── STEP 2: Vehicle selection ───────────────────────────────── */}
-      {step === 2 && (
-        <div>
-          <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 4px", textAlign: "left" }}>
-            Choose a vehicle
-          </p>
-          <p style={{ fontSize: 13, color: "#888", margin: "0 0 14px", textAlign: "left" }}>
-            Select the vehicle you'd like for this trip, then send your request.
-          </p>
-
-          {errors.vehicle && (
-            <p style={{ ...err, textAlign: "center", fontSize: 13, margin: "0 0 12px",
-              padding: "8px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px solid #FECACA" }}>
-              {errors.vehicle}
-            </p>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-            {VEHICLES.map((v) => {
-              const active = vehicleClass === v.value;
-              return (
-                <button
-                  key={v.value}
-                  type="button"
-                  onClick={() => { setVehicleClass(v.value); setErrors({}); }}
-                  style={{
-                    position: "relative",
-                    padding: "12px 14px", borderRadius: 12, textAlign: "left",
-                    border: active ? "2px solid #FFC107" : "1.5px solid #E5E5E5",
-                    background: active ? "#FFFBEB" : "#fff",
-                    cursor: "pointer", transition: "all .15s",
-                  }}
-                >
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: active ? "#111" : "#333" }}>{v.label}</div>
-                  <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{v.seats} seats</div>
-                  {v.tag && (
-                    <span style={{
-                      position: "absolute", top: 6, right: 6,
-                      fontSize: 9.5, fontWeight: 800, padding: "2px 6px", borderRadius: 4,
-                      background: active ? "#FFC107" : "#F3F4F6",
-                      color: active ? "#111" : "#888",
-                    }}>
-                      {v.tag}
-                    </span>
-                  )}
-                  {active && <span style={{ position: "absolute", top: 6, left: 10, fontSize: 14 }}>✓</span>}
-                </button>
-              );
-            })}
-          </div>
-
           {submitError && <p style={{ ...err, textAlign: "center", fontSize: 13 }}>{submitError}</p>}
 
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy || !vehicleClass}
-            style={{
-              width: "100%", padding: "13px 0", borderRadius: 12,
-              background: vehicleClass ? "#FFC107" : "#E5E5E5",
-              color: vehicleClass ? "#111" : "#999",
-              fontWeight: 700, fontSize: 15, border: "none",
-              cursor: busy || !vehicleClass ? "default" : "pointer",
-              opacity: busy ? 0.7 : 1,
-              transition: "all .2s",
-            }}
-          >
+          <button type="submit" disabled={busy}
+                  style={{ padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, border: "none", cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
             {busy ? "Sending…" : "Send booking request"}
           </button>
-          <button
-            type="button"
-            onClick={() => setStep(1)}
-            style={{ width: "100%", marginTop: 8, padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", color: "#555", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
-          >
-            ← Back to your details
+          <button type="button" onClick={() => setStep(1)}
+                  style={{ padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", color: "#555", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+            ← Back
           </button>
-        </div>
+        </form>
       )}
     </div>
   );

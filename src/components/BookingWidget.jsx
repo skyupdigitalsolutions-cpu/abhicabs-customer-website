@@ -244,39 +244,39 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const [requestPhone, setRequestPhone] = useState("");
   const [requestEmail, setRequestEmail] = useState("");
   const [requestVehicle, setRequestVehicle] = useState("");
-  const [ooaStep, setOoaStep] = useState(1); // 1 = contact, 2 = vehicle
+  const [ooaStep, setOoaStep] = useState(1); // 1 = vehicle, 2 = contact
 
   const OOA_VEHICLES = [
-    { value: "swift-dzire",      label: "Swift Dzire",      seats: "4",   tag: "Popular" },
-    { value: "ertiga",           label: "Ertiga",           seats: "6" },
-    { value: "innova",           label: "Innova",           seats: "7" },
-    { value: "innova-crysta",    label: "Innova Crysta",    seats: "7",   tag: "Premium" },
-    { value: "innova-hycross",   label: "Innova Hycross",   seats: "7" },
-    { value: "fortuner",         label: "Fortuner",         seats: "7",   tag: "SUV" },
-    { value: "mercedes-e",       label: "Mercedes E-Class", seats: "4",   tag: "Luxury" },
-    { value: "tempo-12",         label: "Tempo (12-seat)",  seats: "12" },
-    { value: "tempo-17",         label: "Tempo (17-seat)",  seats: "17" },
-    { value: "urbania-13",       label: "Urbania 13",       seats: "13" },
-    { value: "urbania-16",       label: "Urbania 16",       seats: "16" },
-    { value: "urbania-maharaja", label: "Urbania Maharaja", seats: "16",  tag: "Premium" },
-    { value: "bus",              label: "Bus",              seats: "20+" },
+    { value: "swift-dzire",      label: "Swift Dzire",      seats: "4 Seater",  tag: "Popular" },
+    { value: "ertiga",           label: "Ertiga",           seats: "6 Seater" },
+    { value: "innova",           label: "Innova",           seats: "7 Seater" },
+    { value: "innova-crysta",    label: "Innova Crysta",    seats: "7 Seater",  tag: "Premium" },
+    { value: "innova-hycross",   label: "Innova Hycross",   seats: "7 Seater" },
+    { value: "fortuner",         label: "Fortuner",         seats: "7 Seater",  tag: "SUV" },
+    { value: "mercedes-e",       label: "Mercedes E-Class", seats: "4 Seater",  tag: "Luxury" },
+    { value: "tempo-12",         label: "Tempo Traveller",  seats: "12 Seater" },
+    { value: "tempo-17",         label: "Tempo Traveller",  seats: "17 Seater" },
+    { value: "urbania-13",       label: "Urbania",          seats: "13 Seater" },
+    { value: "urbania-16",       label: "Urbania",          seats: "16 Seater" },
+    { value: "urbania-maharaja", label: "Urbania Maharaja", seats: "16 Seater", tag: "Premium" },
+    { value: "bus",              label: "Bus",              seats: "20+ Seater" },
   ];
 
   function ooaGoToStep2() {
-    if (!requestName.trim() || !isIndianMobile(requestPhone)) {
-      toast("Please enter your name and a valid 10-digit mobile number", "error");
-      return;
-    }
-    if (requestEmail.trim() && !/^\S+@\S+\.\S+$/.test(requestEmail.trim())) {
-      toast("Please enter a valid email or leave it blank", "error");
+    if (!requestVehicle) {
+      toast("Please select a vehicle to continue", "error");
       return;
     }
     setOoaStep(2);
   }
 
   async function submitOutOfAreaRequest() {
-    if (!requestVehicle) {
-      toast("Please select a vehicle to continue", "error");
+    if (!requestName.trim() || !isIndianMobile(requestPhone)) {
+      toast("Please enter your name and a valid 10-digit mobile number", "error");
+      return;
+    }
+    if (requestEmail.trim() && !/^\S+@\S+\.\S+$/.test(requestEmail.trim())) {
+      toast("Please enter a valid email or leave it blank", "error");
       return;
     }
     setRequestSubmitting(true);
@@ -1007,16 +1007,134 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                               {s < ooaStep ? "✓" : s}
                             </div>
                             <span style={{ fontSize: 12, fontWeight: 600, color: s <= ooaStep ? "#141414" : "#9CA3AF" }}>
-                              {s === 1 ? "Your details" : "Select vehicle"}
+                              {s === 1 ? "Select vehicle" : "Your details"}
                             </span>
                             {s < 2 && <div style={{ width: 20, height: 2, borderRadius: 1, background: ooaStep > 1 ? "#FFC107" : "#E5E5E5" }} />}
                           </div>
                         ))}
                       </div>
 
-                      {/* ── Step 1: Contact details ── */}
+                      {/* ── Step 1: Vehicle selection (like normal booking) ── */}
                       {ooaStep === 1 && (
                         <>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: "#141414", margin: "0 0 12px" }}>
+                            Choose your ride
+                          </p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                            {OOA_VEHICLES.map((v) => {
+                              const active = requestVehicle === v.value;
+                              return (
+                                <button
+                                  key={v.value}
+                                  type="button"
+                                  onClick={() => setRequestVehicle(v.value)}
+                                  className="flex items-center gap-3 w-full text-left"
+                                  style={{
+                                    position: "relative",
+                                    padding: "12px 14px", borderRadius: 14,
+                                    border: active ? "2px solid #FFC107" : "1.5px solid #E8E5DE",
+                                    background: active ? "#FFFBEB" : "#fff",
+                                    cursor: "pointer", transition: "all .15s",
+                                  }}
+                                >
+                                  {/* Vehicle icon circle */}
+                                  <div style={{
+                                    width: 42, height: 42, borderRadius: 11, flexShrink: 0,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    background: active ? "#FFC107" : "#F5F4F0",
+                                    transition: "background .15s",
+                                  }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? "#141414" : "#77736A"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M5 17h14M5 17a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2M5 17l-1 3h2l1-3m12 0l1 3h-2l-1-3" />
+                                      <circle cx="7.5" cy="14.5" r="1.5" /><circle cx="16.5" cy="14.5" r="1.5" />
+                                    </svg>
+                                  </div>
+                                  {/* Name + seats */}
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 14, color: "#141414" }}>{v.label}</div>
+                                    <div style={{ fontSize: 12, color: "#77736A", marginTop: 1 }}>{v.seats}</div>
+                                  </div>
+                                  {/* Tag */}
+                                  {v.tag && (
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 6,
+                                      background: active ? "#FFC107" : "#F5F4F0",
+                                      color: active ? "#141414" : "#77736A",
+                                    }}>
+                                      {v.tag}
+                                    </span>
+                                  )}
+                                  {/* Check */}
+                                  {active && (
+                                    <div style={{
+                                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                                      background: "#FFC107", display: "flex", alignItems: "center", justifyContent: "center",
+                                    }}>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#141414" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex gap-3">
+                            <m.button
+                              type="button" whileTap={{ scale: 0.97 }}
+                              onClick={() => { setOutOfAreaOpen(false); setOoaStep(1); setRequestVehicle(""); }}
+                              className="flex-1"
+                              style={{ height: 48, borderRadius: 13, border: "1px solid #E8E5DE", background: "linear-gradient(180deg, #FFFFFF 0%, #F4F2EC 100%)", fontWeight: 600, fontSize: 14, color: "#2B2925", cursor: "pointer" }}
+                            >
+                              Cancel
+                            </m.button>
+                            <m.button
+                              type="button" whileTap={{ scale: 0.97 }}
+                              onClick={ooaGoToStep2}
+                              disabled={!requestVehicle}
+                              className="flex-1 disabled:opacity-50"
+                              style={{
+                                height: 48, borderRadius: 13, border: 0,
+                                background: requestVehicle ? GRADIENT.active : "#E5E5E5",
+                                boxShadow: requestVehicle ? GRADIENT.activeShadow : "none",
+                                fontWeight: 700, fontSize: 14,
+                                color: requestVehicle ? "#141414" : "#999",
+                                cursor: requestVehicle ? "pointer" : "default",
+                              }}
+                            >
+                              Next →
+                            </m.button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* ── Step 2: Contact details + submit ── */}
+                      {ooaStep === 2 && (
+                        <>
+                          {/* Selected vehicle summary */}
+                          <div className="flex items-center gap-3 mb-4" style={{ padding: "10px 14px", borderRadius: 12, background: "#FFFBEB", border: "1.5px solid #FFC107" }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 9, background: "#FFC107", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#141414" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 17h14M5 17a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2M5 17l-1 3h2l1-3m12 0l1 3h-2l-1-3" />
+                                <circle cx="7.5" cy="14.5" r="1.5" /><circle cx="16.5" cy="14.5" r="1.5" />
+                              </svg>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, fontSize: 13.5, color: "#141414" }}>
+                                {OOA_VEHICLES.find(v => v.value === requestVehicle)?.label}
+                              </div>
+                              <div style={{ fontSize: 12, color: "#77736A" }}>
+                                {OOA_VEHICLES.find(v => v.value === requestVehicle)?.seats}
+                              </div>
+                            </div>
+                            <button type="button" onClick={() => setOoaStep(1)} style={{ fontSize: 12, fontWeight: 700, color: "#B08800", background: "none", border: "none", cursor: "pointer" }}>
+                              Change
+                            </button>
+                          </div>
+
+                          <p style={{ fontSize: 14, fontWeight: 700, color: "#141414", margin: "0 0 12px" }}>
+                            Your details
+                          </p>
                           <div className="flex flex-col gap-3">
                             <Field label="Your Name">
                               <Input placeholder="Full name" value={requestName} onChange={(e) => setRequestName(e.target.value)} />
@@ -1031,66 +1149,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                           <div className="flex gap-3 mt-6">
                             <m.button
                               type="button" whileTap={{ scale: 0.97 }}
-                              onClick={() => { setOutOfAreaOpen(false); setOoaStep(1); }}
-                              className="flex-1"
-                              style={{ height: 48, borderRadius: 13, border: "1px solid #E8E5DE", background: "linear-gradient(180deg, #FFFFFF 0%, #F4F2EC 100%)", fontWeight: 600, fontSize: 14, color: "#2B2925", cursor: "pointer" }}
-                            >
-                              Cancel
-                            </m.button>
-                            <m.button
-                              type="button" whileTap={{ scale: 0.97 }}
-                              onClick={ooaGoToStep2}
-                              className="flex-1"
-                              style={{ height: 48, borderRadius: 13, border: 0, background: GRADIENT.active, boxShadow: GRADIENT.activeShadow, fontWeight: 700, fontSize: 14, color: "#141414", cursor: "pointer" }}
-                            >
-                              Next — Select vehicle →
-                            </m.button>
-                          </div>
-                        </>
-                      )}
-
-                      {/* ── Step 2: Vehicle selection ── */}
-                      {ooaStep === 2 && (
-                        <>
-                          <p style={{ fontSize: 13.5, fontWeight: 700, color: "#141414", margin: "0 0 10px" }}>
-                            Choose a vehicle for this trip
-                          </p>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-                            {OOA_VEHICLES.map((v) => {
-                              const active = requestVehicle === v.value;
-                              return (
-                                <button
-                                  key={v.value}
-                                  type="button"
-                                  onClick={() => setRequestVehicle(v.value)}
-                                  style={{
-                                    position: "relative", textAlign: "left",
-                                    padding: "11px 12px", borderRadius: 12,
-                                    border: active ? "2px solid #FFC107" : "1.5px solid #E8E5DE",
-                                    background: active ? "#FFFBEB" : "#fff",
-                                    cursor: "pointer", transition: "all .15s",
-                                  }}
-                                >
-                                  <div style={{ fontWeight: 700, fontSize: 13, color: active ? "#141414" : "#333" }}>{v.label}</div>
-                                  <div style={{ fontSize: 11.5, color: "#999", marginTop: 1 }}>{v.seats} seats</div>
-                                  {v.tag && (
-                                    <span style={{
-                                      position: "absolute", top: 5, right: 5,
-                                      fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
-                                      background: active ? "#FFC107" : "#F3F4F6",
-                                      color: active ? "#141414" : "#999",
-                                    }}>
-                                      {v.tag}
-                                    </span>
-                                  )}
-                                  {active && <span style={{ position: "absolute", bottom: 6, right: 8, fontSize: 13 }}>✓</span>}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="flex gap-3">
-                            <m.button
-                              type="button" whileTap={{ scale: 0.97 }}
                               onClick={() => setOoaStep(1)}
                               className="flex-1"
                               style={{ height: 48, borderRadius: 13, border: "1px solid #E8E5DE", background: "linear-gradient(180deg, #FFFFFF 0%, #F4F2EC 100%)", fontWeight: 600, fontSize: 14, color: "#2B2925", cursor: "pointer" }}
@@ -1100,16 +1158,9 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                             <m.button
                               type="button" whileTap={{ scale: 0.97 }}
                               onClick={submitOutOfAreaRequest}
-                              disabled={requestSubmitting || !requestVehicle}
-                              className="flex-1 disabled:opacity-50"
-                              style={{
-                                height: 48, borderRadius: 13, border: 0,
-                                background: requestVehicle ? GRADIENT.active : "#E5E5E5",
-                                boxShadow: requestVehicle ? GRADIENT.activeShadow : "none",
-                                fontWeight: 700, fontSize: 14,
-                                color: requestVehicle ? "#141414" : "#999",
-                                cursor: requestVehicle ? "pointer" : "default",
-                              }}
+                              disabled={requestSubmitting}
+                              className="flex-1 disabled:opacity-60"
+                              style={{ height: 48, borderRadius: 13, border: 0, background: GRADIENT.active, boxShadow: GRADIENT.activeShadow, fontWeight: 700, fontSize: 14, color: "#141414", cursor: "pointer" }}
                             >
                               {requestSubmitting ? "Sending…" : "Request Booking"}
                             </m.button>
