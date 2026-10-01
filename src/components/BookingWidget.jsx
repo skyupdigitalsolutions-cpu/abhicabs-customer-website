@@ -242,18 +242,41 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [requestName, setRequestName] = useState("");
   const [requestPhone, setRequestPhone] = useState("");
-  // The contact endpoint requires an email, and this form used to satisfy
-  // that by inventing `phone_<number>@placeholder.local` — which reached the
-  // admin inbox looking like a real address. Ask for it instead.
   const [requestEmail, setRequestEmail] = useState("");
+  const [requestVehicle, setRequestVehicle] = useState("");
+  const [ooaStep, setOoaStep] = useState(1); // 1 = contact, 2 = vehicle
 
-  async function submitOutOfAreaRequest() {
+  const OOA_VEHICLES = [
+    { value: "swift-dzire",      label: "Swift Dzire",      seats: "4",   tag: "Popular" },
+    { value: "ertiga",           label: "Ertiga",           seats: "6" },
+    { value: "innova",           label: "Innova",           seats: "7" },
+    { value: "innova-crysta",    label: "Innova Crysta",    seats: "7",   tag: "Premium" },
+    { value: "innova-hycross",   label: "Innova Hycross",   seats: "7" },
+    { value: "fortuner",         label: "Fortuner",         seats: "7",   tag: "SUV" },
+    { value: "mercedes-e",       label: "Mercedes E-Class", seats: "4",   tag: "Luxury" },
+    { value: "tempo-12",         label: "Tempo (12-seat)",  seats: "12" },
+    { value: "tempo-17",         label: "Tempo (17-seat)",  seats: "17" },
+    { value: "urbania-13",       label: "Urbania 13",       seats: "13" },
+    { value: "urbania-16",       label: "Urbania 16",       seats: "16" },
+    { value: "urbania-maharaja", label: "Urbania Maharaja", seats: "16",  tag: "Premium" },
+    { value: "bus",              label: "Bus",              seats: "20+" },
+  ];
+
+  function ooaGoToStep2() {
     if (!requestName.trim() || !isIndianMobile(requestPhone)) {
       toast("Please enter your name and a valid 10-digit mobile number", "error");
       return;
     }
-    if (!/^\S+@\S+\.\S+$/.test(requestEmail.trim())) {
-      toast("Please enter a valid email address so we can send you the quote", "error");
+    if (requestEmail.trim() && !/^\S+@\S+\.\S+$/.test(requestEmail.trim())) {
+      toast("Please enter a valid email or leave it blank", "error");
+      return;
+    }
+    setOoaStep(2);
+  }
+
+  async function submitOutOfAreaRequest() {
+    if (!requestVehicle) {
+      toast("Please select a vehicle to continue", "error");
       return;
     }
     setRequestSubmitting(true);
@@ -261,17 +284,19 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       await createSupportTicket({
         name: requestName.trim(),
         phone: requestPhone.trim(),
-        email: requestEmail.trim(),
+        email: requestEmail.trim() || `${requestPhone.trim()}@noemail.local`,
         topic: "Out-of-Area Booking Request",
         message:
           `Route: ${fields.pickup || "—"} → ${fields.drop || "—"}\n` +
           `Trip type: ${mode}\n` +
           `Date: ${fields.date || "—"} · Time: ${fields.time || "—"}\n` +
+          `Vehicle: ${OOA_VEHICLES.find(v => v.value === requestVehicle)?.label || requestVehicle}\n` +
           `(Requested from outside our regular service states — Karnataka, Telangana, Andhra Pradesh, Maharashtra.)`,
       });
       toast("Request sent! Our team will reach out to confirm availability.", "success");
       setOutOfAreaOpen(false);
-      setRequestName(""); setRequestPhone("");
+      setRequestName(""); setRequestPhone(""); setRequestEmail("");
+      setRequestVehicle(""); setOoaStep(1);
     } catch (err) {
       toast(err.message || "Couldn't send your request — please try again.", "error");
     } finally {
@@ -944,14 +969,14 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    onClick={() => setOutOfAreaOpen(false)}
+                    onClick={() => { setOutOfAreaOpen(false); setOoaStep(1); }}
                   >
                     <m.div
                       role="dialog"
                       aria-modal="true"
                       aria-labelledby="bw-ooa-title"
-                      className="bw-pop w-full max-w-[440px]"
-                      style={{ padding: 26, borderRadius: 22 }}
+                      className="bw-pop w-full max-w-[480px]"
+                      style={{ padding: 26, borderRadius: 22, maxHeight: "90vh", overflowY: "auto" }}
                       initial={{ opacity: 0, scale: 0.95, y: 16 }}
                       animate={{ opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 420, damping: 32 } }}
                       exit={{ opacity: 0, scale: 0.97, y: 8, transition: { duration: 0.15 } }}
@@ -963,40 +988,134 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                       <h3 id="bw-ooa-title" style={{ fontWeight: 700, fontSize: 18, margin: "0 0 6px", color: "#141414" }}>
                         Outside our regular service area
                       </h3>
-                      <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "#77736A", margin: "0 0 18px" }}>
+                      <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "#77736A", margin: "0 0 14px" }}>
                         We operate directly in Karnataka, Telangana, Andhra Pradesh and Maharashtra. Leave your
                         details and our team will confirm availability and pricing for this trip.
                       </p>
-                      <div className="flex flex-col gap-3">
-                        <Field label="Your Name">
-                          <Input placeholder="Full name" value={requestName} onChange={(e) => setRequestName(e.target.value)} />
-                        </Field>
-                        <Field label="Mobile Number">
-                          <Input type="tel" inputMode="numeric" placeholder="10-digit mobile number" value={requestPhone} onChange={(e) => setRequestPhone(cleanPhoneInput(e.target.value))} />
-                        </Field>
-                        <Field label="Email">
-                          <Input type="email" inputMode="email" placeholder="you@example.com" value={requestEmail} onChange={(e) => setRequestEmail(e.target.value)} />
-                        </Field>
+
+                      {/* Step indicator */}
+                      <div className="flex items-center gap-2 mb-5">
+                        {[1, 2].map((s) => (
+                          <div key={s} className="flex items-center gap-2">
+                            <div style={{
+                              width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 11.5, fontWeight: 800,
+                              background: s <= ooaStep ? "#FFC107" : "#F3F4F6",
+                              color: s <= ooaStep ? "#141414" : "#9CA3AF",
+                              transition: "all .25s",
+                            }}>
+                              {s < ooaStep ? "✓" : s}
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: s <= ooaStep ? "#141414" : "#9CA3AF" }}>
+                              {s === 1 ? "Your details" : "Select vehicle"}
+                            </span>
+                            {s < 2 && <div style={{ width: 20, height: 2, borderRadius: 1, background: ooaStep > 1 ? "#FFC107" : "#E5E5E5" }} />}
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex gap-3 mt-6">
-                        <m.button
-                          type="button" whileTap={{ scale: 0.97 }}
-                          onClick={() => setOutOfAreaOpen(false)}
-                          className="flex-1"
-                          style={{ height: 48, borderRadius: 13, border: "1px solid #E8E5DE", background: "linear-gradient(180deg, #FFFFFF 0%, #F4F2EC 100%)", fontWeight: 600, fontSize: 14, color: "#2B2925", cursor: "pointer" }}
-                        >
-                          Cancel
-                        </m.button>
-                        <m.button
-                          type="button" whileTap={{ scale: 0.97 }}
-                          onClick={submitOutOfAreaRequest}
-                          disabled={requestSubmitting}
-                          className="flex-1 disabled:opacity-60"
-                          style={{ height: 48, borderRadius: 13, border: 0, background: GRADIENT.active, boxShadow: GRADIENT.activeShadow, fontWeight: 700, fontSize: 14, color: "#141414", cursor: "pointer" }}
-                        >
-                          {requestSubmitting ? "Sending…" : "Request Booking"}
-                        </m.button>
-                      </div>
+
+                      {/* ── Step 1: Contact details ── */}
+                      {ooaStep === 1 && (
+                        <>
+                          <div className="flex flex-col gap-3">
+                            <Field label="Your Name">
+                              <Input placeholder="Full name" value={requestName} onChange={(e) => setRequestName(e.target.value)} />
+                            </Field>
+                            <Field label="Mobile Number">
+                              <Input type="tel" inputMode="numeric" placeholder="10-digit mobile number" value={requestPhone} onChange={(e) => setRequestPhone(cleanPhoneInput(e.target.value))} />
+                            </Field>
+                            <Field label="Email (optional)">
+                              <Input type="email" inputMode="email" placeholder="you@example.com" value={requestEmail} onChange={(e) => setRequestEmail(e.target.value)} />
+                            </Field>
+                          </div>
+                          <div className="flex gap-3 mt-6">
+                            <m.button
+                              type="button" whileTap={{ scale: 0.97 }}
+                              onClick={() => { setOutOfAreaOpen(false); setOoaStep(1); }}
+                              className="flex-1"
+                              style={{ height: 48, borderRadius: 13, border: "1px solid #E8E5DE", background: "linear-gradient(180deg, #FFFFFF 0%, #F4F2EC 100%)", fontWeight: 600, fontSize: 14, color: "#2B2925", cursor: "pointer" }}
+                            >
+                              Cancel
+                            </m.button>
+                            <m.button
+                              type="button" whileTap={{ scale: 0.97 }}
+                              onClick={ooaGoToStep2}
+                              className="flex-1"
+                              style={{ height: 48, borderRadius: 13, border: 0, background: GRADIENT.active, boxShadow: GRADIENT.activeShadow, fontWeight: 700, fontSize: 14, color: "#141414", cursor: "pointer" }}
+                            >
+                              Next — Select vehicle →
+                            </m.button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* ── Step 2: Vehicle selection ── */}
+                      {ooaStep === 2 && (
+                        <>
+                          <p style={{ fontSize: 13.5, fontWeight: 700, color: "#141414", margin: "0 0 10px" }}>
+                            Choose a vehicle for this trip
+                          </p>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+                            {OOA_VEHICLES.map((v) => {
+                              const active = requestVehicle === v.value;
+                              return (
+                                <button
+                                  key={v.value}
+                                  type="button"
+                                  onClick={() => setRequestVehicle(v.value)}
+                                  style={{
+                                    position: "relative", textAlign: "left",
+                                    padding: "11px 12px", borderRadius: 12,
+                                    border: active ? "2px solid #FFC107" : "1.5px solid #E8E5DE",
+                                    background: active ? "#FFFBEB" : "#fff",
+                                    cursor: "pointer", transition: "all .15s",
+                                  }}
+                                >
+                                  <div style={{ fontWeight: 700, fontSize: 13, color: active ? "#141414" : "#333" }}>{v.label}</div>
+                                  <div style={{ fontSize: 11.5, color: "#999", marginTop: 1 }}>{v.seats} seats</div>
+                                  {v.tag && (
+                                    <span style={{
+                                      position: "absolute", top: 5, right: 5,
+                                      fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
+                                      background: active ? "#FFC107" : "#F3F4F6",
+                                      color: active ? "#141414" : "#999",
+                                    }}>
+                                      {v.tag}
+                                    </span>
+                                  )}
+                                  {active && <span style={{ position: "absolute", bottom: 6, right: 8, fontSize: 13 }}>✓</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex gap-3">
+                            <m.button
+                              type="button" whileTap={{ scale: 0.97 }}
+                              onClick={() => setOoaStep(1)}
+                              className="flex-1"
+                              style={{ height: 48, borderRadius: 13, border: "1px solid #E8E5DE", background: "linear-gradient(180deg, #FFFFFF 0%, #F4F2EC 100%)", fontWeight: 600, fontSize: 14, color: "#2B2925", cursor: "pointer" }}
+                            >
+                              ← Back
+                            </m.button>
+                            <m.button
+                              type="button" whileTap={{ scale: 0.97 }}
+                              onClick={submitOutOfAreaRequest}
+                              disabled={requestSubmitting || !requestVehicle}
+                              className="flex-1 disabled:opacity-50"
+                              style={{
+                                height: 48, borderRadius: 13, border: 0,
+                                background: requestVehicle ? GRADIENT.active : "#E5E5E5",
+                                boxShadow: requestVehicle ? GRADIENT.activeShadow : "none",
+                                fontWeight: 700, fontSize: 14,
+                                color: requestVehicle ? "#141414" : "#999",
+                                cursor: requestVehicle ? "pointer" : "default",
+                              }}
+                            >
+                              {requestSubmitting ? "Sending…" : "Request Booking"}
+                            </m.button>
+                          </div>
+                        </>
+                      )}
                     </m.div>
                   </m.div>
                 )}
