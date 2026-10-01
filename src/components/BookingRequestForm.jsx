@@ -37,9 +37,10 @@ const VEHICLES = [
   { value: "bus",               label: "Bus",                seats: "20+ Seater" },
 ];
 
-export default function BookingRequestForm({ journey, message, allowedStates = [], onChangeTrip }) {
+export default function BookingRequestForm({ journey, message, allowedStates = [], onChangeTrip, selectedVehicleName, selectedVehicleSeats }) {
   const saved = useSelector((s) => s.checkout?.details) || {};
-  const [step, setStep] = useState(1); // 1 = vehicle, 2 = contact
+  const preSelected = !!selectedVehicleName;
+  const [step, setStep] = useState(preSelected ? 2 : 1); // 1 = vehicle, 2 = contact
   const [name, setName] = useState(saved.fullName || "");
   const [phone, setPhone] = useState(cleanPhoneInput(saved.mobile || ""));
   const [email, setEmail] = useState(saved.email || "");
@@ -134,27 +135,35 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
 
   return (
     <div style={card} id="br-card">
-      <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>We don't operate on this route yet</h3>
-      <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
-        {message || "This trip goes outside the states we currently serve."}
-      </p>
-      {allowedStates.length > 0 && (
-        <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6, margin: "0 0 6px" }}>
-          We currently serve: {allowedStates.join(", ")}.
-        </p>
+      {!preSelected && (
+        <>
+          <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 10px", color: "#111" }}>We don't operate on this route yet</h3>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 6px" }}>
+            {message || "This trip goes outside the states we currently serve."}
+          </p>
+          {allowedStates.length > 0 && (
+            <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6, margin: "0 0 6px" }}>
+              We currently serve: {allowedStates.join(", ")}.
+            </p>
+          )}
+          <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 20px" }}>
+            Send us a booking request instead. Our team will confirm availability and price by phone.
+          </p>
+
+          {/* Trip summary */}
+          <div style={{ background: "#FAFAFA", border: "1px solid #EFEFEF", borderRadius: 12, padding: "10px 14px", margin: "0 0 18px", textAlign: "left", fontSize: 13, color: "#333", lineHeight: 1.6 }}>
+            <div><strong>From:</strong> {journey?.pickup || "—"}</div>
+            {journey?.drop ? <div><strong>To:</strong> {journey.drop}</div> : null}
+            <div><strong>When:</strong> {[journey?.date, journey?.time].filter(Boolean).join(" ") || "—"}</div>
+          </div>
+
+          {stepBar}
+        </>
       )}
-      <p style={{ fontSize: 13.5, color: "#888", lineHeight: 1.6, margin: "0 0 20px" }}>
-        Send us a booking request instead. Our team will confirm availability and price by phone.
-      </p>
 
-      {/* Trip summary */}
-      <div style={{ background: "#FAFAFA", border: "1px solid #EFEFEF", borderRadius: 12, padding: "10px 14px", margin: "0 0 18px", textAlign: "left", fontSize: 13, color: "#333", lineHeight: 1.6 }}>
-        <div><strong>From:</strong> {journey?.pickup || "—"}</div>
-        {journey?.drop ? <div><strong>To:</strong> {journey.drop}</div> : null}
-        <div><strong>When:</strong> {[journey?.date, journey?.time].filter(Boolean).join(" ") || "—"}</div>
-      </div>
-
-      {stepBar}
+      {preSelected && (
+        <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 16px", color: "#111" }}>Complete your booking request</h3>
+      )}
 
       {/* ── STEP 1: Vehicle selection (like normal booking, no price) ── */}
       {step === 1 && (
@@ -257,14 +266,14 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 13.5, color: "#111" }}>
-                {VEHICLES.find(v => v.value === vehicleClass)?.label}
+                {preSelected ? selectedVehicleName : VEHICLES.find(v => v.value === vehicleClass)?.label}
               </div>
               <div style={{ fontSize: 12, color: "#888" }}>
-                {VEHICLES.find(v => v.value === vehicleClass)?.seats}
+                {preSelected ? (selectedVehicleSeats || "") : VEHICLES.find(v => v.value === vehicleClass)?.seats}
               </div>
             </div>
-            <button type="button" onClick={() => setStep(1)} style={{ fontSize: 12, fontWeight: 700, color: "#B08800", background: "none", border: "none", cursor: "pointer" }}>
-              Change
+            <button type="button" onClick={preSelected ? onChangeTrip : () => setStep(1)} style={{ fontSize: 12, fontWeight: 700, color: "#B08800", background: "none", border: "none", cursor: "pointer" }}>
+              Change vehicle
             </button>
           </div>
 
@@ -301,9 +310,9 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
                   style={{ padding: "13px 0", borderRadius: 12, background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, border: "none", cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>
             {busy ? "Sending…" : "Send booking request"}
           </button>
-          <button type="button" onClick={() => setStep(1)}
+          <button type="button" onClick={preSelected ? onChangeTrip : () => setStep(1)}
                   style={{ padding: "13px 0", borderRadius: 12, border: "1.5px solid #E5E5E5", background: "#fff", color: "#555", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
-            ← Back
+            ← {preSelected ? "Back to vehicles" : "Back"}
           </button>
         </form>
       )}

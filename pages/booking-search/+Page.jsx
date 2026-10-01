@@ -1178,7 +1178,7 @@ export default function Page() {
           selectedVehicleName={requestVehicle.name}
           selectedVehicleSeats={requestVehicle.seats}
         />
-      ) : (serviceAreaError || fareError) ? (
+      ) : (!requestOffer && (serviceAreaError || fareError)) ? (
         <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
           <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
