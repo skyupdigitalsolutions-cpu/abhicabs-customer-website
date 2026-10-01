@@ -477,14 +477,9 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       toast("Please fill in all stop fields or remove empty ones", "error"); return;
     }
 
-    const outOfAreaField =
-      (pickupState && !isAllowedState(pickupState)) ? "pickup" :
-      (mode !== "local" && dropState && !isAllowedState(dropState)) ? "drop" :
-      null;
-    if (outOfAreaField) {
-      setOutOfAreaOpen(true);
-      return;
-    }
+    // Out-of-area trips are no longer blocked here. The booking-search page
+    // shows normal vehicle cards (with no prices) and a "Request Booking"
+    // button that opens the contact form. So we let the navigation happen.
 
     // Same-city pickup and drop = an hourly hire, not an outstation run.
     // Charging intercity per-km for a trip that never leaves the city
