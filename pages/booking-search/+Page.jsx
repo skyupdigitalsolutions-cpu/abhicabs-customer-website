@@ -121,6 +121,9 @@ export default function Page() {
   // (OUTSIDE_SERVICE_STATES, canRequest). Instead of a dead end, the rider is
   // offered a booking request — see BookingRequestForm.
   const [requestOffer, setRequestOffer] = useState(null);
+  // When requestOffer is active and a vehicle is selected, this holds the
+  // chosen vehicle so we show the contact form instead of going to checkout.
+  const [requestVehicle, setRequestVehicle] = useState(null);
   // Any OTHER reason the backend couldn't price this trip (no rate card for
   // the city, validation, backend down). Previously an unrecognised failure
   // left both errors null and the page quietly fell back to VEHICLE_RATES
@@ -704,14 +707,19 @@ export default function Page() {
     // HARD STOP — the backend refused to price this trip (outside service
     // area, no rate card, etc.). The fare on this card is then only a
     // rate-sheet sample, never a real quote, so it must not become a booking.
-    // This is a belt-and-braces guard: the list is already hidden in these
-    // states, but nothing else in the flow re-checks serviceability before
-    // /checkout → /payment.
-    if (serviceAreaError || fareError || requestOffer) {
+    // When requestOffer is active, the vehicle list is still shown (without
+    // prices) and tapping "Continue" opens the booking request contact form
+    // instead of checkout — so we let requestOffer through here.
+    if (serviceAreaError || fareError) {
       toast(
         serviceAreaError || "We couldn't price this trip — please request a custom booking.",
         "error"
       );
+      return;
+    }
+    // Out-of-area trip: instead of checkout, show booking request contact form
+    if (requestOffer) {
+      setRequestVehicle(v);
       return;
     }
     // A vehicle without a real backend quote (no vehicleClass = it came from
@@ -1161,12 +1169,14 @@ export default function Page() {
           description={catalogueError}
           action={<button onClick={retryCatalogue} style={{ height: 44, padding: "0 24px", borderRadius: 9999, background: "#111", color: "#fff", fontWeight: 700, border: "none", cursor: "pointer" }}>Try again</button>}
         />
-      ) : requestOffer ? (
+      ) : requestOffer && requestVehicle ? (
         <BookingRequestForm
-          journey={journey}
+          journey={{ ...journey, vehicleClass: requestVehicle.vehicleClass || requestVehicle.category || requestVehicle.name }}
           message={requestOffer.message}
           allowedStates={requestOffer.allowedStates}
-          onChangeTrip={clearLocations}
+          onChangeTrip={() => setRequestVehicle(null)}
+          selectedVehicleName={requestVehicle.name}
+          selectedVehicleSeats={requestVehicle.seats}
         />
       ) : (serviceAreaError || fareError) ? (
         <div style={{ maxWidth: 520, margin: "40px auto", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 32, textAlign: "center" }}>
@@ -1375,6 +1385,20 @@ export default function Page() {
               </div>
             )}
 
+            {requestOffer && (
+              <div style={{ background: "#FFFBEB", border: "1.5px solid #FDE68A", borderRadius: 16, padding: "14px 18px", marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "#FFC107", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#111" strokeWidth="2" strokeLinejoin="round"/><circle cx="12" cy="10" r="2" fill="#111"/></svg>
+                </div>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 14, color: "#111", margin: "0 0 2px" }}>Outside our regular service area</p>
+                  <p style={{ fontSize: 13, color: "#77736A", margin: 0, lineHeight: 1.5 }}>
+                    Select a vehicle below and we'll send your request to our team. They'll call you back with a confirmed price.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {vehicles.length === 0 ? (
               <div style={{ background: "#fff", border: "1px dashed #E5E5E5", borderRadius: 20, padding: 48, textAlign: "center" }}>
                 <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>No vehicles match these filters</div>
@@ -1425,7 +1449,14 @@ export default function Page() {
                           <span>{v.ac ? "A/C" : "Non-A/C"}</span>
                           {v.bags && <span>{v.bags}</span>}
                         </div>
-                        {!browseMode && v.vehicleClass && v.fare != null && Number(v.fare) > 0 ? (
+                        {requestOffer ? (
+                          /* Out-of-area: hide prices, show info note instead */
+                          <div style={{ padding: "10px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
+                            <p style={{ fontSize: 12.5, color: "#B08800", fontWeight: 600, margin: 0 }}>
+                              Pricing on request — our team will call with a quote
+                            </p>
+                          </div>
+                        ) : !browseMode && v.vehicleClass && v.fare != null && Number(v.fare) > 0 ? (
                           // Real quote for THIS journey, straight from the backend —
                           // not a rate-card reference number.
                           <div style={{ padding: "12px 0", borderTop: "1px dashed #EFEFEF", borderBottom: "1px dashed #EFEFEF", marginBottom: 14 }}>
@@ -1470,9 +1501,11 @@ export default function Page() {
                             className="hover:!bg-[#FFB300]"
                             style={{ flex: "1 1 140px", height: 48, borderRadius: 9999, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
                           >
-                            {browseMode
-                              ? (isPinned ? "Selected ✓" : chosenKey ? "Select This Instead" : "Book Now")
-                              : (isPinned ? "Continue Booking →" : chosenKey ? "Select This Instead" : "Select Vehicle")}
+                            {requestOffer
+                              ? "Request Booking →"
+                              : browseMode
+                                ? (isPinned ? "Selected ✓" : chosenKey ? "Select This Instead" : "Book Now")
+                                : (isPinned ? "Continue Booking →" : chosenKey ? "Select This Instead" : "Select Vehicle")}
                           </button>
                         </div>
                       </div>
