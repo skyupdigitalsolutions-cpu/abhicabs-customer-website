@@ -436,3 +436,67 @@ img.vehicle-photo--thumb { padding: 3px; }
 /* The fleet card zooms its photo on hover; with the whole car visible that
    pushes the ends back out of frame, so keep it still. */
 .group:hover img.vehicle-photo { transform: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Universal device adaptation
+   Appended last (additive) after a full cross-device audit. Everything above
+   was already strongly responsive — fluid clamp() type, intrinsic flex
+   (flex:1 1 Npx + min-width:min(100%,…)), auto-fit/minmax grids, bottom-sheet
+   modals, table-scroll wrappers and the safety net. This block only closes
+   the gaps that remained at the edges of the device range: the hero headline
+   on very small phones, foldables / ultra-narrow widths, and phones held
+   sideways (short landscape viewports). It never overrides the tuned rules
+   above — it only fills in widths and orientations they didn't reach.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hero headline ────────────────────────────────────────────────────────────
+   The accent line ("Travel Comfortably.") was white-space:nowrap with a 38px
+   floor from clamp(38px,6vw,74px). On phones under ~400px that single line is
+   wider than the screen, and because html/body hide horizontal overflow it was
+   silently clipped on the right instead of scrolling. Scale the whole headline
+   down fluidly below 400px and let the accent wrap only as a last resort, so it
+   is never cut off; at 400px and up the designed look is kept exactly. */
+.hero-h1 { font-size: clamp(27px, 7.4vw, 74px) !important; }
+.hero-h1-accent { white-space: normal !important; }
+@media (min-width: 400px) {
+  .hero-h1 { font-size: clamp(38px, 6vw, 74px) !important; }
+  .hero-h1-accent { white-space: nowrap !important; }
+}
+
+/* ── Booking-request form ─────────────────────────────────────────────────────
+   Passengers + Special-requests sit in a fixed 1fr 1fr grid inside a dialog.
+   On the narrowest phones two inputs side by side get cramped — stack them. */
+@media (max-width: 380px) {
+  .brf-mini-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* ── Foldables / ultra-narrow widths (≤360px, e.g. Galaxy Fold cover, split
+   screen) ─────────────────────────────────────────────────────────────────────
+   The safety net already prevents overflow; here we just buy back a little
+   breathing room so dense cards and the standard page gutter aren't wasteful
+   on a ~300px canvas. */
+@media (max-width: 360px) {
+  .page-main { padding-left: 12px; padding-right: 12px; }
+  .summary-bar { padding: 12px !important; }
+  .fleet-card { min-width: 220px !important; max-width: 100% !important; }
+}
+
+/* ── Short / landscape viewports (phones held sideways) ───────────────────────
+   Tall modals and bottom sheets are capped in vh, so on a ~375px-tall landscape
+   screen they can leave almost nothing visible. Let them use the full height
+   (their own overflow still scrolls the body), and keep the embedded maps from
+   eating the whole sheet. Width-based rules above are untouched. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .map-picker-card,
+  .lmp-card { max-height: 98vh !important; }
+  .map-picker-map { height: 200px !important; }
+  .fleet-modal-header { height: 150px !important; }
+  /* The booking engine overlaps the hero by -110px; on a short landscape hero
+     that pulled it over the headline. Reduce the overlap when there's no room. */
+  #booking { margin-top: -40px !important; }
+}
+
+/* ── Very wide screens (≥1536px) ──────────────────────────────────────────────
+   Content is intentionally capped at ~1280px and centred, which is correct for
+   readability. Nothing to change — this note just records that the top of the
+   range was checked and is handled by the existing max-width caps. */

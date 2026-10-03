@@ -132,10 +132,16 @@ export default function ContactFormSection({ id = "contact-form" }) {
 
               <div className="flex flex-col gap-2">
                 <ContactMethod
-                  href="tel:+910000000000"
+                  href="tel:+918096000182"
                   icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a13 13 0 006.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .5 1 1V20c0 .6-.4 1-1 1A17 17 0 013 4c0-.6.5-1 1-1h3.4c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.3 1L6.6 10.8z" fill="currentColor" /></svg>}
                   title="Phone"
-                  sub="+91 00000 00000 · 24×7"
+                  sub="+91 80960 00182 · 24×7"
+                />
+                <ContactMethod
+                  href="tel:+918096000183"
+                  icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a13 13 0 006.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .5 1 1V20c0 .6-.4 1-1 1A17 17 0 013 4c0-.6.5-1 1-1h3.4c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.3 1L6.6 10.8z" fill="currentColor" /></svg>}
+                  title="Phone (Alternate)"
+                  sub="+91 80960 00183 · 24×7"
                 />
                 <ContactMethod
                   href="mailto:support@abhicabs.com"

@@ -135,6 +135,7 @@ export default function HeroSection({ widgetKey, widgetProps, onModeChange }) {
               </m.span>
 
               <h1
+                className="hero-h1"
                 style={{
                   fontWeight: 800,
                   fontSize: "clamp(38px,6vw,74px)",
@@ -154,6 +155,7 @@ export default function HeroSection({ widgetKey, widgetProps, onModeChange }) {
                 <span style={{ display: "block", overflow: "hidden", paddingBottom: "0.06em" }}>
                   <m.span
                     variants={headlineLine}
+                    className="hero-h1-accent"
                     style={{ display: "block", color: "#FFC107", whiteSpace: "nowrap" }}
                   >
                     Travel Comfortably.

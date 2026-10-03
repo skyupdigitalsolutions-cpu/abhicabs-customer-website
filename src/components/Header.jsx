@@ -24,8 +24,10 @@ const NAV_LINKS = [
   { href: "/#blogs",    label: "Blogs" },
 ];
 
-const HELPLINE_HREF    = "tel:+910000000000";
-const HELPLINE_DISPLAY = "+91 00000 00000";
+const HELPLINES = [
+  { href: "tel:+918096000182", display: "+91 80960 00182" },
+  { href: "tel:+918096000183", display: "+91 80960 00183" },
+];
 
 /* ── Motion (styles are unchanged — these only animate existing elements) ── */
 const EASE_OUT = [0.22, 1, 0.36, 1];
@@ -128,12 +130,17 @@ export default function Header() {
                 </svg>
                 Support
               </a>
-              <a href={HELPLINE_HREF} className="inline-flex items-center gap-1.5 text-white/70 hover:!text-primary">
+              <span className="inline-flex items-center gap-2 text-white/70">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M6.6 10.8a13 13 0 006.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .5 1 1V20c0 .6-.4 1-1 1A17 17 0 013 4c0-.6.5-1 1-1h3.4c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.3 1L6.6 10.8z" fill="currentColor" />
                 </svg>
-                {HELPLINE_DISPLAY}
-              </a>
+                {HELPLINES.map((h, i) => (
+                  <React.Fragment key={h.href}>
+                    {i > 0 && <span className="text-white/30" aria-hidden>/</span>}
+                    <a href={h.href} className="hover:!text-primary">{h.display}</a>
+                  </React.Fragment>
+                ))}
+              </span>
               <span className="inline-flex items-center gap-1.5 text-primary font-semibold">
                 {/* Same dot and ring as before — the ring now gently pulses */}
                 <m.span

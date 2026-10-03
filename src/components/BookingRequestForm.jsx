@@ -140,7 +140,7 @@ export default function BookingRequestForm({ journey, message, allowedStates = [
           {errors.email && <p style={errStyle}>{errors.email}</p>}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="brf-mini-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <label style={lbl}>Passengers <span style={{ color: "#999", fontWeight: 400 }}>(optional)</span></label>
             <input style={inp} value={passengers} onChange={(e) => setPassengers(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="e.g. 4" inputMode="numeric" />
