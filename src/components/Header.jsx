@@ -163,7 +163,7 @@ export default function Header() {
               <m.img
                 src="/images/abhi-cabs-icon.svg"
                 alt="Abhi Cabs"
-                className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
+                className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-[9px]"
                 whileHover={{ rotate: -6, scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 400, damping: 15 }}
               />

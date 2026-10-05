@@ -147,8 +147,7 @@ export default function Footer() {
                 <img
                   src="/images/abhi-cabs-logo-footer.png"
                   alt="Abhi Cabs"
-                  className="mb-4 w-[160px] object-contain"
-                  style={{ mixBlendMode: "screen" }}
+                  className="mb-4 w-[210px] object-contain"
                 />
                 <p className="m-0 text-[13.5px] font-normal leading-relaxed text-white/55">
                   Reliable chauffeur-driven transportation across Karnataka and Hyderabad. From city cabs to 49-seat coaches.
@@ -235,7 +234,10 @@ export default function Footer() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="mt-14 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 py-6"
             >
-              <span className="text-[13px] text-white/45">© 2026 Abhi Cabs. All Rights Reserved.</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-[13px] text-white/45">© 2026 Abhi Cabs. All Rights Reserved.</span>
+                <span className="text-[12px] text-white/35">Designed &amp; Developed by SkyUp Digital Solutions</span>
+              </div>
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 {[["Privacy Policy", "/privacy"], ["Terms", "/terms"], ["Cancellation Policy", "/cancellation"]].map(([l, h]) => (
                   <a key={l} href={h} className="text-[13px] text-white/45 no-underline transition-colors duration-200 hover:text-[#FFC107]">{l}</a>
