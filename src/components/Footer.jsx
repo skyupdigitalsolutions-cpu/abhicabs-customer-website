@@ -145,9 +145,9 @@ export default function Footer() {
               {/* Brand */}
               <m.div variants={col} className="col-span-2 max-w-[360px] md:col-span-3 lg:col-span-1">
                 <img
-                  src="/images/abhi-cabs-logo-footer.png?v=3"
+                  src="/images/abhi-cabs-logo-footer.png?v=4"
                   alt="Abhi Cabs"
-                  className="mb-4 w-[210px] object-contain"
+                  className="mb-4 w-[240px] object-contain"
                 />
                 <p className="m-0 text-[13.5px] font-normal leading-relaxed text-white/55">
                   Reliable chauffeur-driven transportation across Karnataka and Hyderabad. From city cabs to 49-seat coaches.
