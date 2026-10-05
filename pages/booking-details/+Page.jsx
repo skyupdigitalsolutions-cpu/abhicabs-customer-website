@@ -83,13 +83,13 @@ export default function Page() {
         <div style={{ aspectRatio: "16/9", overflow: "hidden", background: "#F7F7F7", position: "relative" }}>
           <VehicleHero booking={booking} lookupVehicle={lookupVehicle} />
         </div>
-        <div style={{ padding: 26 }}>
+        <div style={{ padding: "clamp(18px,4vw,26px)" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-            <h1 style={{ display: "flex", alignItems: "flex-start", gap: 8, fontWeight: 700, fontSize: "clamp(20px,2.6vw,26px)", margin: 0, letterSpacing: "-.01em" }}>
+            <h1 style={{ display: "flex", alignItems: "flex-start", gap: 8, fontWeight: 700, fontSize: "clamp(18px,2.6vw,26px)", margin: 0, letterSpacing: "-.01em", flex: 1, minWidth: 0 }}>
               <span style={{ color: "#B8860B", flexShrink: 0, marginTop: 3, display: "inline-flex" }}><IconMapPin className="w-5 h-5" /></span>
-              <span>{booking.pickup} → {booking.drop}</span>
+              <span style={{ minWidth: 0, wordBreak: "break-word" }}>{booking.pickup} → {booking.drop}</span>
             </h1>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 9999, background: sc.bg, color: sc.fg, flexShrink: 0 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 9999, background: sc.bg, color: sc.fg, flexShrink: 0, whiteSpace: "nowrap" }}>
               <StatusIcon className="w-3.5 h-3.5" />
               {STATUS_LABEL[displayStatus]}
             </span>

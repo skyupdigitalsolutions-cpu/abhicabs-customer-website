@@ -140,6 +140,28 @@ export default function Page() {
 
   return (
     <main className="page-main" style={{ maxWidth: 880, margin: "0 auto", padding: "24px 22px 70px" }}>
+      {/* Authored CSS with real media queries — layout-critical, so not left to
+          utility classes (JIT has been unreliable for this in the codebase). */}
+      <style>{`
+        .mbk-card { display:flex; flex-direction:column; background:#fff; border:1px solid #EFEFEF;
+          border-radius:18px; overflow:hidden; text-decoration:none; color:inherit;
+          transition:border-color .15s, box-shadow .15s; }
+        .mbk-card:hover { border-color:#FFC107; }
+        .mbk-thumb { position:relative; width:100%; aspect-ratio:16/10; background:#F7F7F7; flex:none; }
+        .mbk-body { padding:15px 16px; display:flex; flex-direction:column; min-width:0; flex:1; }
+        .mbk-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+        .mbk-route { display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
+        .mbk-loc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:100%; font-weight:700; font-size:15.5px; }
+        .mbk-drop { display:flex; align-items:center; gap:5px; color:#555; font-weight:600; font-size:13.5px; }
+        .mbk-drop span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+        .mbk-foot { display:flex; align-items:center; justify-content:space-between; margin-top:auto; gap:10px; flex-wrap:wrap; }
+        @media (min-width:600px) {
+          .mbk-thumb { width:190px; flex:0 0 190px; aspect-ratio:auto; min-height:150px; align-self:stretch; }
+          .mbk-card { flex-direction:row; }
+          .mbk-body { padding:16px 18px; }
+          .mbk-loc { font-size:16px; }
+        }
+      `}</style>
       <BackLink to="/" label="Back" />
 
       <div style={{ marginBottom: 22 }}>
@@ -232,27 +254,24 @@ function BookingCard({ booking, lookupVehicle }) {
         e.preventDefault();
         navigate(href);
       }}
-      className="hover:!border-[#FFC107]"
-      style={{
-        display: "flex", flexWrap: "wrap", background: "#fff", border: "1px solid #EFEFEF",
-        borderRadius: 18, overflow: "hidden", textDecoration: "none", color: "inherit",
-        transition: "border-color .15s, box-shadow .15s",
-      }}
+      className="mbk-card"
     >
-      {/* Thumbnail */}
-      <div style={{ flex: "0 0 180px", maxWidth: 180, minWidth: 140, minHeight: 130, background: "#F7F7F7", position: "relative" }}>
+      {/* Thumbnail — full-width on mobile, fixed side panel on larger screens */}
+      <div className="mbk-thumb">
         <VehicleHero booking={booking} lookupVehicle={lookupVehicle} />
       </div>
 
       {/* Body */}
-      <div style={{ flex: "1 1 320px", padding: "16px 18px", display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 16, minWidth: 0 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={booking.pickup}>{booking.pickup || "—"}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={booking.drop}>{booking.drop || "—"}</span>
+      <div className="mbk-body">
+        <div className="mbk-head">
+          <div className="mbk-route">
+            <span className="mbk-loc" title={booking.pickup}>{booking.pickup || "—"}</span>
+            <span className="mbk-drop" title={booking.drop}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><path d="M5 12h14M13 6l6 6-6 6" stroke="#FFC107" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <span>{booking.drop || "—"}</span>
+            </span>
           </div>
-          <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 9999, background: sc.bg, color: sc.fg, flexShrink: 0 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, padding: "4px 11px", borderRadius: 9999, background: sc.bg, color: sc.fg, flexShrink: 0, whiteSpace: "nowrap" }}>
             {STATUS_LABEL[displayStatus]}
           </span>
         </div>
@@ -264,9 +283,9 @@ function BookingCard({ booking, lookupVehicle }) {
           {booking.vehicle && <span>{booking.vehicle}</span>}
         </div>
 
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: "auto", gap: 10 }}>
-          <span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 800, fontSize: 19 }}>{fmtINR(booking.fare)}</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 700, fontSize: 13, color: "#B8860B" }}>
+        <div className="mbk-foot">
+          <span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 700, fontSize: 19 }}>{fmtINR(booking.fare)}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 600, fontSize: 13, color: "#B8860B" }}>
             View details
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </span>
