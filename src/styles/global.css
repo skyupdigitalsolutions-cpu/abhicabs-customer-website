@@ -89,10 +89,48 @@ button { cursor: pointer; }
 }
 
 /* ── Header ───────────────────────────────────────────────────────────────────*/
+/* Layout-critical responsive behaviour is authored here (real media queries)
+   rather than via Tailwind utilities, which have had JIT class-generation
+   gaps in this codebase and could silently drop breakpoint show/hide or
+   alignment classes. The mobile overrides below use !important so they win
+   regardless of source order against the base rules. */
+.ac-util-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; max-width: 1280px; margin: 0 auto; padding: 0 16px; height: 38px;
+}
+.ac-util-hide { display: flex; align-items: center; gap: 22px; }
+
+.ac-nav-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; position: relative; max-width: 1280px; margin: 0 auto;
+  padding: 0 16px; height: 72px;
+}
+.ac-logo-link  { display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-width: 0; }
+.ac-logo-img   { width: 40px; height: 40px; object-fit: contain; border-radius: 9px; flex: none; }
+.ac-nav-links  { display: flex; align-items: center; }
+.ac-nav-actions{ display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.ac-user-menu  { position: relative; display: block; }
+.ac-signin     { display: flex; align-items: center; gap: 8px; }
+.ac-download   { display: inline-flex; align-items: center; gap: 6px; }
+.ac-hamburger  { display: none; align-items: center; justify-content: center; flex: none; }
+
+@media (min-width: 640px) {
+  .ac-util-bar, .ac-nav-row { padding: 0 22px; }
+}
 @media (max-width: 1023px) {
-  .ac-header-h { height: 60px !important; }
+  .ac-header-h  { height: 60px !important; }
+  .ac-nav-row   { height: 60px; }
   .ac-logo-text { font-size: 17px !important; }
   .ac-logo-tag  { display: none !important; }
+  /* Desktop-only clusters off, hamburger on */
+  .ac-nav-links, .ac-user-menu, .ac-signin, .ac-download { display: none !important; }
+  .ac-hamburger { display: inline-flex !important; }
+}
+@media (max-width: 639px) {
+  .ac-logo-img { width: 32px; height: 32px; }
+}
+@media (min-width: 1024px) {
+  .ac-hide-desktop { display: none !important; }
 }
 
 /* ── Mobile drawer ────────────────────────────────────────────────────────────*/

@@ -114,7 +114,7 @@ export default function Header() {
       <MotionConfig reducedMotion="user">
         {/* ── Utility bar ─────────────────────────────────────────────── */}
         <div className="bg-brand-black text-white">
-          <div className="ac-util-bar max-w-[1280px] mx-auto px-4 sm:px-[22px] h-[38px] flex items-center justify-between gap-4 text-[12.5px] font-medium">
+          <div className="ac-util-bar text-[12.5px] font-medium">
             <span className="inline-flex items-center gap-1.5 text-white/85">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#FFC107" strokeWidth="2" strokeLinejoin="round" />
@@ -122,7 +122,7 @@ export default function Header() {
               </svg>
               Serving Karnataka &amp; Hyderabad
             </span>
-            <div className="ac-util-hide flex items-center gap-[22px]">
+            <div className="ac-util-hide">
               <a href="/#contact-form" className="inline-flex items-center gap-1.5 text-white/70 hover:!text-primary">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" strokeWidth="2" />
@@ -156,14 +156,14 @@ export default function Header() {
 
         {/* ── Main nav ─────────────────────────────────────────────────── */}
         <header className="sticky top-0 z-50 bg-white border-b border-black/5">
-          <div className="max-w-[1280px] mx-auto px-4 sm:px-[22px] h-[60px] sm:h-[72px] flex items-center justify-between gap-4 relative">
+          <div className="ac-nav-row">
 
             {/* Logo */}
-            <m.a href="/" whileTap={{ scale: 0.97 }} className="flex items-center gap-2.5 shrink-0">
+            <m.a href="/" whileTap={{ scale: 0.97 }} className="ac-logo-link">
               <m.img
                 src="/images/abhi-cabs-icon.svg?v=2"
                 alt="Abhi Cabs"
-                className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-[9px]"
+                className="ac-logo-img"
                 whileHover={{ rotate: -6, scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 400, damping: 15 }}
               />
@@ -178,7 +178,7 @@ export default function Header() {
             </m.a>
 
             {/* Desktop nav links — the same #F7F7F7 hover background, now gliding between links */}
-            <nav className="hidden lg:flex items-center" aria-label="Primary" onMouseLeave={() => setHoveredLink(null)}>
+            <nav className="ac-nav-links" aria-label="Primary" onMouseLeave={() => setHoveredLink(null)}>
               {NAV_LINKS.map((l) => (
                 <a
                   key={l.label}
@@ -203,10 +203,10 @@ export default function Header() {
             </nav>
 
             {/* Desktop right actions */}
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="ac-nav-actions">
               {loggedIn ? (
                 /* ── Logged in: Hi [Name] dropdown ── */
-                <div className="relative hidden lg:block">
+                <div className="ac-user-menu">
                   <button
                     onClick={(e) => { e.stopPropagation(); setDropdown((v) => !v); }}
                     aria-expanded={dropdownOpen}
@@ -268,7 +268,7 @@ export default function Header() {
                 </div>
               ) : (
                 /* ── Not logged in: Sign In + Book as Guest ── */
-                <div className="hidden lg:flex items-center gap-2">
+                <div className="ac-signin">
                   <a
                     href="/login"
                     data-vike="false"
@@ -293,7 +293,7 @@ export default function Header() {
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                className="hidden lg:inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-primary text-brand-black font-semibold text-[14px] shadow-[0_6px_18px_rgba(255,193,7,.4)] border-none cursor-pointer hover:!bg-[#FFB300]"
+                className="ac-download px-5 py-2.5 rounded-full bg-primary text-brand-black font-semibold text-[14px] shadow-[0_6px_18px_rgba(255,193,7,.4)] border-none cursor-pointer hover:!bg-[#FFB300]"
               >
                 Download App
               </m.button>
@@ -301,7 +301,7 @@ export default function Header() {
               {/* Mobile hamburger — icon morphs between menu and close */}
               <m.button
                 whileTap={{ scale: 0.92 }}
-                className="lg:hidden w-[44px] h-[44px] rounded-[12px] border-[1.5px] border-[#E5E5E5] bg-white flex items-center justify-center cursor-pointer touch-manipulation"
+                className="ac-hamburger w-[44px] h-[44px] rounded-[12px] border-[1.5px] border-[#E5E5E5] bg-white cursor-pointer touch-manipulation"
                 onClick={() => dispatch(setMobileNavOpen(!open))}
                 aria-label="Menu"
                 aria-expanded={open}
@@ -347,7 +347,7 @@ export default function Header() {
               animate={{ x: 0, transition: { duration: 0.35, ease: EASE_OUT } }}
               exit={{ x: "100%", transition: { duration: 0.25, ease: "easeIn" } }}
               style={{ transition: "none" }} /* stop any CSS transform transition on .ac-drawer fighting framer */
-              className="ac-drawer lg:hidden fixed inset-x-0 top-[92px] sm:top-[110px] bottom-0 bg-white z-40 overflow-y-auto px-5 py-4"
+              className="ac-drawer ac-hide-desktop fixed inset-x-0 top-[92px] sm:top-[110px] bottom-0 bg-white z-40 overflow-y-auto px-5 py-4"
             >
               <m.div variants={drawerList} initial="hidden" animate="show">
                 {NAV_LINKS.map((l) => (
