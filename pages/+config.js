@@ -20,7 +20,7 @@ export default {
   // time, in public/favicon.ico) avoids that entirely. See pages/+Head.jsx
   // for the additional apple-touch-icon and larger PNG sizes this basic
   // config option doesn't cover.
-  favicon: "/favicon.ico?v=2",
+  favicon: "/favicon.ico?v=3",
   // Tailwind utility classes applied straight to <html>/<body> via Vike's
   // own config, instead of a hand-written `html { scroll-behavior: smooth }`
   // / `body { @apply ... }` rule in global.css.
