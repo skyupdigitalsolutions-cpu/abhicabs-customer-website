@@ -156,15 +156,46 @@ button { cursor: pointer; }
     gap: 10px !important;
   }
 
-  /* Airport toggles full width */
-  .bw-airport-toggles { width: 100% !important; }
-  .bw-airport-toggles button { flex: 1 !important; justify-content: center !important; }
+  /* Airport direction toggle (Drop to Airport / Pickup from Airport).
+     The .bw-segment container is inline-flex and its two nowrap pills
+     (px-5 + icon + long labels) overflow the card on narrow screens —
+     "Pickup from Airport" was getting clipped. Make it a full-width,
+     equal-halves control with tighter padding and hide the direction
+     icon (same approach as the mode tabs) so both labels fit on one row. */
+  .bw-air-dir { display: flex !important; width: 100% !important; }
+  .bw-air-dir > button {
+    flex: 1 1 0 !important; min-width: 0 !important;
+    padding-left: 10px !important; padding-right: 10px !important;
+    font-size: 12.5px !important; justify-content: center !important;
+  }
+  .bw-air-dir > button svg { display: none !important; }
 
   /* Search button */
   .bw-search-btn { font-size: 15px !important; padding: 14px !important; }
 
   /* Add stops counter */
   .bw-stops-counter { min-width: 100px !important; }
+}
+
+/* Very small phones: the two airport-direction labels can't sit side by side,
+   so stack them full-width to guarantee neither is clipped. */
+@media (max-width: 360px) {
+  .bw-air-dir { flex-direction: column !important; border-radius: 16px !important; gap: 6px !important; }
+  .bw-air-dir > button { width: 100% !important; font-size: 13px !important; }
+}
+
+/* ── Coverage map ─────────────────────────────────────────────────────────────*/
+/* On desktop the "FOUR STATES / COUNTLESS / DESTINATIONS" label floats over the
+   map's empty top-right corner. When the section stacks (map becomes full-width
+   and tall), that float ends up sitting on top of the map graphic. Below the
+   stacking point, drop the label into normal flow above the map instead. */
+@media (max-width: 960px) {
+  .cov-map-col    { min-height: auto !important; }
+  .cov-float-label {
+    position: static !important; text-align: right !important; z-index: auto !important;
+    padding: 0 clamp(20px, 5vw, 30px);
+  }
+  .cov-map-wrap   { position: static !important; height: clamp(300px, 72vw, 460px) !important; margin-top: 10px; }
 }
 
 /* ── Booking search page ──────────────────────────────────────────────────────*/

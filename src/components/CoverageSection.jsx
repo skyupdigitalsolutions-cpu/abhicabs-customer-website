@@ -263,6 +263,7 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
 
               {/* RIGHT: Map */}
               <m.div
+                className="cov-map-col"
                 initial="hidden"
                 whileInView="show"
                 viewport={VIEW}
@@ -271,7 +272,7 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
                   position: "relative", minHeight: "clamp(360px,42vw,540px)"
                 }}
               >
-                <m.div variants={labelIn} style={{
+                <m.div className="cov-float-label" variants={labelIn} style={{
                   position: "absolute", top: "clamp(20px,3vw,40px)", right: "clamp(20px,3vw,44px)",
                   textAlign: "right", zIndex: 3, pointerEvents: "none"
                 }}>
@@ -280,7 +281,7 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
                   </div>
                   <div style={{ width: 44, height: 3, background: "#FFC107", margin: "10px 0 0 auto", borderRadius: 2 }} />
                 </m.div>
-                <div style={{ position: "absolute", inset: 0 }}>
+                <div className="cov-map-wrap" style={{ position: "absolute", inset: 0 }}>
                   <BigMap
                     hovered={hovered}
                     onHover={setHovered}

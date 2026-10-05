@@ -769,7 +769,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
 
                   {mode === "airport" && (
                     <m.div key="airport" variants={panelVariants} initial="initial" animate="animate" exit="exit">
-                      <div className="bw-segment mb-5" role="radiogroup" aria-label="Airport transfer direction">
+                      <div className="bw-segment bw-air-dir mb-5" role="radiogroup" aria-label="Airport transfer direction">
                         {[["drop", "Drop to Airport"], ["pickup", "Pickup from Airport"]].map(([val, label]) => (
                           <GradientPill
                             key={val}
