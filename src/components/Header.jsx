@@ -161,7 +161,7 @@ export default function Header() {
             {/* Logo */}
             <m.a href="/" whileTap={{ scale: 0.97 }} className="flex items-center gap-2.5 shrink-0">
               <m.img
-                src="/images/abhi-cabs-icon.svg"
+                src="/images/abhi-cabs-icon.svg?v=2"
                 alt="Abhi Cabs"
                 className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-[9px]"
                 whileHover={{ rotate: -6, scale: 1.05 }}

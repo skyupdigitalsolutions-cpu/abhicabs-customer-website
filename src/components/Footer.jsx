@@ -145,7 +145,7 @@ export default function Footer() {
               {/* Brand */}
               <m.div variants={col} className="col-span-2 max-w-[360px] md:col-span-3 lg:col-span-1">
                 <img
-                  src="/images/abhi-cabs-logo-footer.png"
+                  src="/images/abhi-cabs-logo-footer.png?v=3"
                   alt="Abhi Cabs"
                   className="mb-4 w-[210px] object-contain"
                 />
