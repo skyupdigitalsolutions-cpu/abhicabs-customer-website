@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import { LazyMotion, domAnimation, m, MotionConfig } from "framer-motion";
 // Map geometry lives in coverageMapData.js (same folder as this file).
 import { MAP_DATA } from "./coverageMapData";
+import useServiceStates from "../hooks/useServiceStates";
 
+// Display order for the states that have map artwork. States the backend opens
+// later are appended after these (cards only — they have no map shape yet).
 const STATE_ORDER = ["Maharashtra", "Karnataka", "Telangana", "Andhra Pradesh"];
 const IS_NEW = { Maharashtra: true, "Andhra Pradesh": true };
 
@@ -169,6 +172,13 @@ function BigMap({ hovered, onHover, onLeave, onTapToggle }) {
 // coverage prop accepted for backwards-compat (new design uses baked-in state paths)
 export default function CoverageSection({ id = "cities", coverage }) { // eslint-disable-line no-unused-vars
   const [hovered, setHovered] = useState(null);
+  // Live list of open states. Known states keep their designed order; anything
+  // the admin opens later is appended, so a new state appears with no deploy.
+  const { states: liveStates, sentence: stateSentence } = useServiceStates();
+  const cardStates = [
+    ...STATE_ORDER.filter((n) => liveStates.includes(n)),
+    ...liveStates.filter((n) => !STATE_ORDER.includes(n)),
+  ];
 
   const handleRequest = () => {
     // Scroll to booking form or open enquiry modal
@@ -223,12 +233,12 @@ export default function CoverageSection({ id = "cities", coverage }) { // eslint
                   fontSize: 15.5, lineHeight: 1.6, color: "rgba(255,255,255,.62)",
                   fontWeight: 400, margin: "0 0 28px", maxWidth: 460
                 }}>
-                  Extensive travel coverage across Karnataka, Telangana, Maharashtra and Andhra Pradesh — wherever you travel, we&apos;ve got you covered.
+                  Extensive travel coverage across {stateSentence} — wherever you travel, we&apos;ve got you covered.
                 </m.p>
 
                 {/* State cards grid */}
                 <m.div variants={stagger(0.08)} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(118px,1fr))", gap: 14 }}>
-                  {STATE_ORDER.map(name => (
+                  {cardStates.map(name => (
                     // Animated wrapper; the card below keeps its own styles and hover lift
                     <m.div key={name} variants={cardIn} style={{ display: "grid" }}>
                       <div

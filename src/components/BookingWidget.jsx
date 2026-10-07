@@ -32,46 +32,12 @@ import {
 } from "./DateTimePickers";
 import { toISODate, pickupTimeError, returnTimeError } from "../lib/dateTime";
 import { isIndianMobile, cleanPhoneInput } from "../lib/phone";
+import useServiceStates from "../hooks/useServiceStates";
 
-// States this business actually operates in (Karnataka, Telangana, Andhra
-// Pradesh, Maharashtra). ANY location inside these four states is serviceable
-// — Mysore, Mandya, Hubli, etc. are all Karnataka and must never be flagged as
-// out of area.
-//
-// Matching mirrors the backend's service-area allowlist (src/lib/serviceArea.js):
-// the state name arrives as free text from Google (sometimes the whole
-// formatted address, sometimes a misspelling), so we compare with case,
-// spaces and punctuation stripped, and accept common aliases/misspellings and
-// substring hits. A strict === check would wrongly reject a valid Karnataka
-// pickup just because Google spelled the field differently this week.
-const ALLOWED_STATES = [
-  { name: "Karnataka", aliases: ["ka", "karnatak", "karnataka"] },
-  { name: "Telangana", aliases: ["tg", "ts", "telangana", "telengana", "telangna"] },
-  { name: "Andhra Pradesh", aliases: ["ap", "andhra", "andhrapradesh", "andrapradesh", "andhrapradhesh"] },
-  { name: "Maharashtra", aliases: ["mh", "maharashtra", "maharastra", "maharashtr", "maharashta"] },
-];
-
-// Lower-case, strip everything that is not a letter or digit.
-function normaliseState(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-// Is this free-text state/address inside one of our four serviced states?
-// Returns true when we can't tell (empty/unknown) so a missing state component
-// never blocks a booking — the backend stays the final authority.
-function isAllowedState(value) {
-  const n = normaliseState(value);
-  if (!n) return true; // unknown → don't block here; backend decides
-  for (const s of ALLOWED_STATES) {
-    if (n === normaliseState(s.name)) return true;
-    if (s.aliases.some((a) => n === normaliseState(a))) return true;
-  }
-  // Substring: Google sometimes returns the whole formatted address.
-  for (const s of ALLOWED_STATES) {
-    if (n.includes(normaliseState(s.name))) return true;
-  }
-  return false;
-}
+// The states we pick up in come LIVE from GET /service-states (useServiceStates
+// below). There is deliberately no client-side allowlist: the backend refuses a
+// pickup outside them with OUTSIDE_SERVICE_STATES, and a copy of the list here
+// went stale the moment an admin opened a new state.
 
 const TABS = [
   { mode: "one-way",    label: "One Way",    icon: <IconArrowRight className="w-3.5 h-3.5" /> },
@@ -152,7 +118,7 @@ function isSurgeTime(date, time) {
 
 function extractStateFromPlace(place) {
   const comp = place?.address_components?.find((c) => c.types.includes("administrative_area_level_1"));
-  // Fall back to the formatted address so isAllowedState()'s substring match can
+  // Fall back to the formatted address so the state can still be read from it when
   // still resolve the state when Google omits the admin_area_level_1 component.
   return comp?.long_name || place?.formatted_address || null;
 }
@@ -183,6 +149,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
   const dispatch = useDispatch();
   const toast = useToast();
   const layoutScope = useId();
+  const { sentence: serviceStatesText } = useServiceStates();
   const [mode, setMode] = useState(presetJourney?.tripType || initialMode);
 
   // The trip-type tabs used to own `mode` privately, so the quick-select
@@ -291,7 +258,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
           `Trip type: ${mode}\n` +
           `Date: ${fields.date || "—"} · Time: ${fields.time || "—"}\n` +
           `Vehicle: ${OOA_VEHICLES.find(v => v.value === requestVehicle)?.label || requestVehicle}\n` +
-          `(Requested from outside our regular service states — Karnataka, Telangana, Andhra Pradesh, Maharashtra.)`,
+          `(Requested from outside our regular service states — ${serviceStatesText}.)`,
       });
       toast("Request sent! Our team will reach out to confirm availability.", "success");
       setOutOfAreaOpen(false);
@@ -984,7 +951,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                         Outside our regular service area
                       </h3>
                       <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "#77736A", margin: "0 0 14px" }}>
-                        We operate directly in Karnataka, Telangana, Andhra Pradesh and Maharashtra. Leave your
+                        We operate directly in {serviceStatesText}. Leave your
                         details and our team will confirm availability and pricing for this trip.
                       </p>
 
