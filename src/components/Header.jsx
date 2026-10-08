@@ -113,44 +113,63 @@ export default function Header() {
     <LazyMotion features={domMax} strict>
       <MotionConfig reducedMotion="user">
         {/* ── Utility bar ─────────────────────────────────────────────── */}
-        <div className="bg-brand-black text-white">
-          <div className="ac-util-bar text-[12.5px] font-medium">
-            <span className="inline-flex items-center gap-1.5 text-white/85">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="#FFC107" strokeWidth="2" strokeLinejoin="round" />
-                <circle cx="12" cy="10" r="2.3" stroke="#FFC107" strokeWidth="2" />
-              </svg>
-              Serving Karnataka &amp; Hyderabad
+        <div className="ac-util-wrap">
+          <div className="ac-util-bar">
+            <span className="ac-util-loc">
+              <span className="ac-util-loc-icon" aria-hidden>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+                  <circle cx="12" cy="10" r="2.3" stroke="currentColor" strokeWidth="2.4" />
+                </svg>
+              </span>
+              <span>
+                <span className="ac-util-muted">Serving </span>
+                <b>Karnataka</b> <span className="ac-util-muted">&amp;</span> <b>Hyderabad</b>
+              </span>
             </span>
+
             <div className="ac-util-hide">
-              <a href="/#contact-form" className="inline-flex items-center gap-1.5 text-white/70 hover:!text-primary">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <a href="/#contact-form" className="ac-util-link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" strokeWidth="2" />
                   <path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 Support
               </a>
-              <span className="inline-flex items-center gap-2 text-white/70">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M6.6 10.8a13 13 0 006.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .5 1 1V20c0 .6-.4 1-1 1A17 17 0 013 4c0-.6.5-1 1-1h3.4c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.3 1L6.6 10.8z" fill="currentColor" />
-                </svg>
+
+              <span className="ac-util-sep" aria-hidden />
+
+              <span className="ac-util-phones">
+                <span className="ac-util-phone-icon" aria-hidden>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                    <path d="M6.6 10.8a13 13 0 006.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .5 1 1V20c0 .6-.4 1-1 1A17 17 0 013 4c0-.6.5-1 1-1h3.4c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.3 1L6.6 10.8z" fill="currentColor" />
+                  </svg>
+                </span>
                 {HELPLINES.map((h, i) => (
                   <React.Fragment key={h.href}>
-                    {i > 0 && <span className="text-white/30" aria-hidden>/</span>}
-                    <a href={h.href} className="hover:!text-primary">{h.display}</a>
+                    {i > 0 && <span className="ac-util-slash" aria-hidden>/</span>}
+                    <a href={h.href} className="ac-util-phone">{h.display}</a>
                   </React.Fragment>
                 ))}
               </span>
-              <span className="inline-flex items-center gap-1.5 text-primary font-semibold">
-                {/* Same dot and ring as before — the ring now gently pulses */}
+
+              <span className="ac-util-badge">
                 <m.span
-                  className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_0_3px_rgba(255,193,7,.25)]"
-                  animate={{ boxShadow: ["0 0 0 3px rgba(255,193,7,.25)", "0 0 0 5px rgba(255,193,7,0)", "0 0 0 3px rgba(255,193,7,.25)"] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                  className="ac-util-dot"
+                  animate={{ boxShadow: ["0 0 0 0 rgba(17,17,17,.55)", "0 0 0 5px rgba(17,17,17,0)", "0 0 0 0 rgba(17,17,17,.55)"] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
                 />
                 24/7 Assistance
               </span>
             </div>
+
+            {/* Mobile: the phone numbers are hidden, so keep one tap-to-call */}
+            <a href={HELPLINES[0].href} className="ac-util-callnow">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M6.6 10.8a13 13 0 006.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .5 1 1V20c0 .6-.4 1-1 1A17 17 0 013 4c0-.6.5-1 1-1h3.4c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.3 1L6.6 10.8z" fill="currentColor" />
+              </svg>
+              Call 24/7
+            </a>
           </div>
         </div>
 

@@ -14,6 +14,7 @@ import CoverageSection from "../../src/components/CoverageSection";
 import PopularRoutesSection from "../../src/components/PopularRoutesSection";
 import WhyAbhiCabsSection from "../../src/components/WhyAbhiCabsSection";
 import PromoBannersSection from "../../src/components/PromoBannersSection";
+import FreeCancellationBannerSection from "../../src/components/FreeCancellationBannerSection";
 import GroupTransportBannerSection from "../../src/components/GroupTransportBannerSection";
 import ServiceStripSection from "../../src/components/ServiceStripSection";
 import FleetCarouselSection from "../../src/components/FleetCarouselSection";
@@ -191,6 +192,9 @@ export default function Page() {
 
       {/* ============================== SERVICE STRIP ============================== */}
       <ServiceStripSection onSelect={bookMode} activeMode={activeMode} />
+
+      {/* ============================== FREE CANCELLATION ============================== */}
+      <FreeCancellationBannerSection />
 
       {/* ============================== CHOOSE YOUR RIDE (fleet carousel) ============================== */}
       <FleetCarouselSection vehicles={fleetVehicles} loading={fleetLoading} error={fleetError} onRetry={fleetRetry} />

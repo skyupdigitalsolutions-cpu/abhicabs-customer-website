@@ -24,17 +24,26 @@ export default function Page() {
   // to a display-only object built from the selection so details still render.
   const vehicle = useSelectedVehicle(selected, { withRate: true });
 
-  // Browse = a vehicle was opened from the "View Details" button WITHOUT a real
-  // trip (no trip type / pickup / drop chosen yet). selectJourney() falls back
-  // to the last search, so we must NOT trust `journey` here — we key off the
-  // selection instead. In browse we show the vehicle + indicative rates but no
-  // fabricated route or total.
-  const isBrowse = !selected || selected.browse || !selected.journeyId || selected.fare == null;
-  const tripJourney = isBrowse ? null : journey;
+  // Two modes:
+  //  • Trip — the customer already entered trip type / pickup / drop / date and
+  //    opened this vehicle from their results. Show THIS booking (route, date,
+  //    time, package, real fare) — not the generic rate card.
+  //  • Browse — opened from "View Details" with no trip yet. Show the vehicle +
+  //    indicative rates and a prompt to enter trip details.
+  // selectJourney() falls back to the LAST search when the id is missing, so
+  // the journey only counts when it is exactly the one on the selection.
+  const tripJourney =
+    selected && !selected.browse && selected.journeyId && journey && journey.id === selected.journeyId
+      ? journey
+      : null;
+  const hasTrip = Boolean(tripJourney);
+  const isPriced = hasTrip && selected.fare != null && Number(selected.fare) > 0;
+  const isBrowse = !hasTrip;
+  const resultsHref = hasTrip ? `/booking-search?j=${encodeURIComponent(tripJourney.id)}` : "/booking-search";
 
   return (
     <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 22px 70px" }}>
-      <Breadcrumb items={[["Home", "/"], ["Available Cabs", "/booking-search"], ["Cab Details", null]]} />
+      <Breadcrumb items={[["Home", "/"], ["Available Cabs", resultsHref], [hasTrip ? "Booking Details" : "Cab Details", null]]} />
 
       {!selected || !vehicle ? (
         <StateBlock
@@ -72,16 +81,19 @@ export default function Page() {
                 </span>
               </div>
 
-              {tripJourney
-                ? <JourneyMini journey={tripJourney} />
-                : <BrowsePrompt />}
-
-              <div style={{ background: "#F7F7F7", borderRadius: 14, padding: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: "14px 18px", margin: "22px 0 4px" }}>
-                <PricePair label={vehicle.rate ? `Local ${vehicle.rate.hours} hr / ${vehicle.rate.km} km` : "Local Package"} value={vehicle.rate ? fmtINR(vehicle.rate.packageFare) : "On request"} />
-                <PricePair label="Extra KM" value={vehicle.rate ? `${fmtINR(vehicle.rate.extraPerKm)}/km` : "—"} />
-                <PricePair label="Extra Hour" value={vehicle.rate ? `${fmtINR(vehicle.rate.extraPerHour)}/hr` : "—"} />
-                <PricePair label="Outstation" value="Live quote" accent />
-              </div>
+              {hasTrip ? (
+                <BookingDetails journey={tripJourney} />
+              ) : (
+                <>
+                  <BrowsePrompt />
+                  <div style={{ background: "#F7F7F7", borderRadius: 14, padding: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: "14px 18px", margin: "22px 0 4px" }}>
+                    <PricePair label={vehicle.rate ? `Local ${vehicle.rate.hours} hr / ${vehicle.rate.km} km` : "Local Package"} value={vehicle.rate ? fmtINR(vehicle.rate.packageFare) : "On request"} />
+                    <PricePair label="Extra KM" value={vehicle.rate ? `${fmtINR(vehicle.rate.extraPerKm)}/km` : "—"} />
+                    <PricePair label="Extra Hour" value={vehicle.rate ? `${fmtINR(vehicle.rate.extraPerHour)}/hr` : "—"} />
+                    <PricePair label="Outstation" value="Live quote" accent />
+                  </div>
+                </>
+              )}
 
               <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: "22px 0 10px" }}>Included Services</h3>
               <ul style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 14, color: "#666", paddingLeft: 18, margin: 0 }}>
@@ -99,12 +111,15 @@ export default function Page() {
             </div>
           </div>
 
-          {isBrowse ? <BrowseFareCard /> : <FareCard selected={selected} />}
+          {isBrowse ? <BrowseFareCard /> : isPriced ? <FareCard selected={selected} /> : <UnpricedFareCard resultsHref={resultsHref} />}
         </div>
       )}
 
-      {selected && vehicle && !isBrowse && (
+      {selected && vehicle && isPriced && (
         <MobileStickyBar label={fmtINR(selected.fare)} sub="Total fare" ctaLabel="Continue Booking" href="/checkout" />
+      )}
+      {selected && vehicle && hasTrip && !isPriced && (
+        <MobileStickyBar label="Fare on request" sub="for this trip" ctaLabel="Back to Results" href={resultsHref} />
       )}
       {selected && vehicle && isBrowse && (
         <MobileStickyBar label="Enter trip details" sub="to see your fare" ctaLabel="Get Fare" href="/#booking" />
@@ -151,17 +166,59 @@ function BrowseFareCard() {
   );
 }
 
-function JourneyMini({ journey }) {
+const TRIP_LABEL = { "one-way": "One Way", "round-trip": "Round Trip", local: "Local", airport: "Airport", "multi-city": "Multi-city" };
+
+function BookingDetails({ journey }) {
+  const rows = [
+    ["Trip Type", TRIP_LABEL[journey.tripType] || journey.tripType || "—"],
+    ["Pickup", journey.pickup || "—"],
+    ...(journey.stops || []).filter(Boolean).map((st, i) => [`Stop ${i + 1}`, st]),
+    ...(journey.drop ? [["Drop", journey.drop]] : []),
+    ["Pickup Date", journey.date ? formatDate(journey.date) : "—"],
+    ["Pickup Time", journey.time ? formatTime(journey.time) : "—"],
+    ...(journey.tripType === "round-trip" && journey.returnDate ? [["Return Date", formatDate(journey.returnDate)]] : []),
+    ...(journey.tripType === "round-trip" && journey.returnTime ? [["Return Time", formatTime(journey.returnTime)]] : []),
+    ...(journey.tripType === "local" && journey.package ? [["Package", journey.package]] : []),
+    ...(journey.passengers ? [["Passengers", journey.passengers]] : []),
+  ];
   return (
-    <div style={{ background: "#F7F7F7", borderRadius: 14, padding: 16, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 15 }}>
+    <div style={{ background: "#F7F7F7", borderRadius: 14, padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: 0 }}>Booking Details</h3>
+        <a href={`/booking-search?j=${encodeURIComponent(journey.id)}`} className="hover:!text-primary" style={{ fontSize: 12.5, fontWeight: 600, color: "#B8860B" }}>
+          Change trip
+        </a>
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>
         <IconPin className="w-4 h-4 text-primary" />
-        {journey.pickup} → {journey.drop}
+        <span>{journey.pickup}{journey.drop ? ` → ${journey.drop}` : ""}</span>
       </div>
-      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#666" }}>
-        <div>Date<b style={{ display: "block", fontSize: 14, color: "#111" }}>{formatDate(journey.date)}</b></div>
-        <div>Time<b style={{ display: "block", fontSize: 14, color: "#111" }}>{formatTime(journey.time)}</b></div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "12px 18px" }}>
+        {rows.map(([label, value], i) => (
+          <div key={`${label}-${i}`} style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: "#999", fontWeight: 500 }}>{label}</div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: "#111", overflowWrap: "anywhere" }}>{value}</div>
+          </div>
+        ))}
       </div>
+    </div>
+  );
+}
+
+function UnpricedFareCard({ resultsHref }) {
+  return (
+    <div className="cab-fare-card" style={{ background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, padding: 22, position: "sticky", top: 120 }}>
+      <h3 style={{ fontSize: 16.5, fontWeight: 700, margin: "0 0 8px" }}>Fare for this trip</h3>
+      <p style={{ fontSize: 13.5, color: "#666", lineHeight: 1.6, margin: "0 0 16px" }}>
+        We couldn't get an online quote for this vehicle on your route. Go back to your results to pick another vehicle or request a custom booking.
+      </p>
+      <a
+        href={resultsHref}
+        className="hover:!bg-[#FFB300]"
+        style={{ display: "flex", width: "100%", padding: 15, borderRadius: 12, border: "none", background: "#FFC107", color: "#111", fontWeight: 700, fontSize: 15, textAlign: "center", justifyContent: "center", alignItems: "center" }}
+      >
+        Back to Results
+      </a>
     </div>
   );
 }

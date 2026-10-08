@@ -757,16 +757,21 @@ export default function Page() {
   // Puts a priced vehicle into the store and moves to checkout. Shared by the
   // card's "Continue Booking" button and by the direct-vehicle fast path in
   // submitInlineJourney, so both produce an identical selection payload.
-  function selectAndGoToCheckout(v, journeyId, ctx) {
+  // The full selection payload for a priced vehicle on a real journey. Used by
+  // "Continue Booking" AND by "View Details", so the details page gets the same
+  // trip + fare data checkout does (previously View Details sent a thin payload
+  // without breakdown / vehicleClass / surge).
+  function buildSelection(v, journeyId, ctx) {
     const mult = ctx?.surgeMultiplier || 1;
-    dispatch(setSelectedCab({
+    const fare = v.fare != null && Number(v.fare) > 0 ? Number(v.fare) : null;
+    return {
       vehicleId: v.id,
-      fare: v.fare,
-      baseFare: Math.round(v.fare / mult),
+      fare,
+      baseFare: fare != null ? Math.round(fare / mult) : null,
       surge: Boolean(ctx?.surge),
       surgeMultiplier: mult,
       surgePct: v.surgePct ?? ctx?.surgePct ?? 0,
-      surgeFee: ctx?.surge ? Math.round(v.fare - v.fare / mult) : 0,
+      surgeFee: ctx?.surge && fare != null ? Math.round(fare - fare / mult) : 0,
       // Only the backend-quoted allowance. The old `|| v.outstation.driverBhata`
       // fallback pulled a number off the local rate card that was never part
       // of the quoted total (see the payment-summary fix).
@@ -785,7 +790,11 @@ export default function Page() {
       vehicleClass: v.vehicleClass || null,
       breakdown: v.breakdown || [],
       nightAllowance: v.nightAllowance || 0,
-    }));
+    };
+  }
+
+  function selectAndGoToCheckout(v, journeyId, ctx) {
+    dispatch(setSelectedCab(buildSelection(v, journeyId, ctx)));
     navigate("/checkout");
   }
 
@@ -814,15 +823,16 @@ export default function Page() {
       navigate("/cab-details");
       return;
     }
+    // A real trip is entered: carry the trip + the real quote (when there is
+    // one) so the details page shows THIS booking, not the generic rate card.
+    // Only a backend-priced row (vehicleClass + fare) counts as priced; if the
+    // trip couldn't be quoted (out of area / pricing error) the journey still
+    // travels with it and the page shows the trip with "fare on request".
+    const priced = Boolean(!requestOffer && v.vehicleClass && v.fare != null && Number(v.fare) > 0);
     dispatch(setSelectedCab({
-      vehicleId: v.id,
-      fare: v.fare,
-      journeyId: journey.id,
+      ...buildSelection(priced ? v : { ...v, fare: null }, effectiveJourneyId || journey?.id, { surge, surgeMultiplier, surgePct }),
+      browse: false,
       img: v.img,
-      vehicleImg: v.img,
-      vehicleImgFallback: v.imgFallback || v.img,
-      vehicleBags: v.bags || null,
-      vehicleCategory: v.category || null,
     }));
     navigate("/cab-details");
   }
