@@ -269,7 +269,7 @@ export default function Page() {
     discountAmount,
     discountCode: discount?.code || null,
   });
-  const { lines: fareLines, tripTotal: quotedTotal, cgst, sgst, totalPayable } = fare;
+  const { lines: fareLines, tripTotal: quotedTotal, cgst, sgst, taxLines, taxIncluded, taxRatePct, totalPayable } = fare;
   const baseFare = quotedTotal;
   const surgeFee = Math.round(Number(selected.surgeFee || selected.surgeAmount || 0));
   const driverBhata = Math.round(Number(selected.driverBhata || selected.driverAllowance || 0));
@@ -559,11 +559,25 @@ export default function Page() {
                     <div className="relative">
                       <input
                         ref={addressInputRef}
-                        className={`${FIELD_INPUT} pr-11`}
+                        className={`${FIELD_INPUT} ${address ? "pr-[76px]" : "pr-11"}`}
                         placeholder="House / building, area"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                       />
+                      {address && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setAddress(""); addressInputRef.current?.focus(); }}
+                          aria-label="Clear pickup address"
+                          title="Clear"
+                          className="absolute right-11 top-1/2 -translate-y-1/2 w-[22px] h-[22px] rounded-full grid place-items-center bg-[#EDEDED] text-[#555] hover:bg-[#111] hover:text-white transition-colors"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setMapPickerOpen(true)}
@@ -730,11 +744,13 @@ export default function Page() {
                       <span style={{ fontWeight: 700 }}>Trip Fare</span>
                       <span style={{ fontWeight: 700 }}>{fmtINR(quotedTotal)}</span>
                     </div>
-                    {isCorporate && (cgst + sgst) > 0 && (
-                      <>
-                        <SummaryRow label="CGST (2.5%)" value={`+ ${fmtINR(cgst)}`} />
-                        <SummaryRow label="SGST (2.5%)" value={`+ ${fmtINR(sgst)}`} />
-                      </>
+                    {taxLines.map((t) => (
+                      <SummaryRow key={t.label} label={t.label} value={`+ ${fmtINR(t.amount)}`} />
+                    ))}
+                    {taxIncluded > 0 && (
+                      <div style={{ fontSize: 11.5, color: "#888" }}>
+                        Includes GST{taxRatePct ? ` (${taxRatePct}%)` : ""} of {fmtINR(taxIncluded)}
+                      </div>
                     )}
                   </div>
                 </div>

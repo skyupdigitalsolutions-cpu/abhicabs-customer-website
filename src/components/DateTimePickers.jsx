@@ -106,6 +106,13 @@ export const BW_CSS = `
 .bw-icon-btn:hover { background: rgba(255,193,7,.16); color: var(--bw-ink); }
 .bw-icon-btn:focus-visible { outline: 2px solid var(--bw-yellow); outline-offset: 1px; }
 .bw-icon-btn:disabled { opacity: .5; cursor: default; }
+.bw-clear-btn {
+  flex: none; width: 22px; height: 22px; border-radius: 9999px; border: 0; padding: 0;
+  display: grid; place-items: center; background: #EDEDED; color: #555; cursor: pointer;
+  margin-right: -4px; transition: background-color .2s, color .2s;
+}
+.bw-clear-btn:hover { background: var(--bw-ink); color: #fff; }
+.bw-clear-btn:focus-visible { outline: 2px solid var(--bw-yellow); outline-offset: 1px; }
 
 .bw-addstop {
   width: 100%; height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;

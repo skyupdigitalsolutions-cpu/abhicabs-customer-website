@@ -28,12 +28,11 @@ function num(v) {
 /**
  * @param selected  the selectedCab slice (carries fare, breakdown, surge,
  *                  driverBhata, nightAllowance from the real backend quote)
- * @param opts      { isCorporate, gstRate, discountAmount, discountCode }
+ * @param opts      { isCorporate, discountAmount, discountCode }
  */
 export function buildFareLines(selected, opts = {}) {
   const {
     isCorporate = false,
-    gstRate = 0.05,          // 2.5% CGST + 2.5% SGST
     discountAmount = 0,
     discountCode = null,
   } = opts;
@@ -104,26 +103,50 @@ export function buildFareLines(selected, opts = {}) {
   }
 
   // ── After the trip fare: taxes and discount ───────────────────────────────
-  // GST only applies to corporate (tax-invoice) bookings. When the backend
-  // already itemised tax inside its own breakdown, don't add it twice.
+  // GST comes ONLY from the backend quote (`selected.tax`, attached per option
+  // by /fares/options). The backend decides whether it applies (account type
+  // from the session, trip type, state), the rate, and whether it is INCLUSIVE
+  // (already inside the fare — shown as information) or EXCLUSIVE (added on
+  // top — `tax.payable` is what is charged). This used to add a flat 5% on the
+  // client for anyone who ticked "Corporate", which the backend never charged.
+  const tax = selected?.tax || null;
+  const taxAmount = tax && tax.applies !== false ? Math.max(0, Math.round(num(tax.amount))) : 0;
+  const ratePct = num(tax?.ratePct);
+  const exclusive = taxAmount > 0 && tax.isInclusive === false;
   const breakdownHasTax = rawBreakdown.some((l) =>
     /gst|tax/i.test(String(l.label || l.name || ""))
   );
-  const taxable = isCorporate && !breakdownHasTax;
-  const cgst = taxable ? Math.round(tripTotal * (gstRate / 2)) : 0;
-  const sgst = taxable ? Math.round(tripTotal * (gstRate / 2)) : 0;
-
+  let taxLines = [];
+  if (exclusive && !breakdownHasTax) {
+    if (tax.splitKind === "INTRA") {
+      const half = ratePct ? ` (${+(ratePct / 2).toFixed(2)}%)` : "";
+      const c = Math.round(taxAmount / 2);
+      taxLines = [
+        { label: `CGST${half}`, amount: c },
+        { label: `SGST${half}`, amount: taxAmount - c },
+      ];
+    } else {
+      taxLines = [{ label: `IGST${ratePct ? ` (${ratePct}%)` : ""}`, amount: taxAmount }];
+    }
+  }
+  const taxTotal = taxLines.reduce((t, l) => t + l.amount, 0);
+  // Inclusive GST: nothing is added; surfaced as "includes GST ₹x".
+  const taxIncluded = taxAmount > 0 && !exclusive ? taxAmount : 0;
+  const cgst = taxLines.length === 2 ? taxLines[0].amount : 0;
+  const sgst = taxLines.length === 2 ? taxLines[1].amount : 0;
   const discount = Math.max(0, Math.round(num(discountAmount)));
-  const subTotal = tripTotal + cgst + sgst;
+  const subTotal = tripTotal + taxTotal;
   const totalPayable = Math.max(0, subTotal - discount);
-
   return {
     lines,
     tripTotal,
     hasRealBreakdown,
     cgst,
     sgst,
-    taxTotal: cgst + sgst,
+    taxLines,
+    taxTotal,
+    taxIncluded,
+    taxRatePct: ratePct,
     isCorporate,
     discount,
     discountCode: discount > 0 ? discountCode : null,

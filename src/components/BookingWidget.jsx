@@ -107,15 +107,6 @@ function emptyFields() {
   };
 }
 
-function isSurgeTime(date, time) {
-  if (!date || !time) return false;
-  try {
-    const pickup = new Date(`${date}T${time}`);
-    const diff = (pickup - Date.now()) / 60000;
-    return diff >= 0 && diff <= 30;
-  } catch { return false; }
-}
-
 function extractStateFromPlace(place) {
   const comp = place?.address_components?.find((c) => c.types.includes("administrative_area_level_1"));
   // Fall back to the formatted address so the state can still be read from it when
@@ -184,7 +175,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         }
       : { pickup: presetPickup, drop: presetDrop }),
   }));
-  const [surge, setSurge] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -327,6 +317,13 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     if (key === "drop") setDropPoint(null);
     setFields((f) => ({ ...f, [key]: e.target.value }));
   };
+  // Empty a location field and forget everything derived from the old place
+  // (coordinates for the same-city test, state for the service-area check).
+  function clearLocation(key) {
+    setFields((f) => ({ ...f, [key]: "" }));
+    if (key === "pickup") { setPickupPoint(null); setPickupState(null); }
+    if (key === "drop") { setDropPoint(null); setDropState(null); }
+  }
   function swapPickupDrop() {
     setPickupPoint((p) => { setDropPoint(p); return dropPoint; });
     setFields((f) => ({ ...f, pickup: f.drop, drop: f.pickup }));
@@ -334,9 +331,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
     setDropState(pickupState);
   }
 
-  useEffect(() => {
-    setSurge(isSurgeTime(fields.date, fields.time));
-  }, [fields.date, fields.time]);
 
   useEffect(() => {
     if (mode === "local" || mode === "airport") setStops([]);
@@ -490,8 +484,9 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
       returnTime: "",  // Return time removed — only return date is used
       package: effMode === "local" ? (localPackage || fields.package) : "",
       stops: effMode === "local" || effMode === "airport" ? [] : filledStops,
-      surge,
-      surgeMultiplier: surge ? 1.05 : 1.0,
+      // No client-side surge: whether demand pricing applies, and how much
+      // (5/10/15% by area tier), is decided by the backend quote and shown on
+      // each vehicle from /fares/options.
     };
 
     const action = dispatch(createJourney(journey));
@@ -527,7 +522,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         icon={<IconPin className="w-4 h-4" />} chipClass="bw-chip--from"
         placeholder="Pickup city or address"
         value={fields.pickup} onChange={set("pickup")} required
-        onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete}
+        onMapClick={() => setMapPickerField("pickup")} onClear={() => clearLocation("pickup")} autocomplete={pickupAutocomplete}
       />
     </Field>
   );
@@ -537,7 +532,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
         icon={<FlagIcon />}
         placeholder="Where to?"
         value={fields.drop} onChange={set("drop")} required
-        onMapClick={() => setMapPickerField("drop")} autocomplete={dropAutocomplete}
+        onMapClick={() => setMapPickerField("drop")} onClear={() => clearLocation("drop")} autocomplete={dropAutocomplete}
       />
     </Field>
   );
@@ -673,29 +668,6 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
             {/* Hairline gold seam between the dark bar and the form */}
             <div aria-hidden style={{ height: 1, background: "linear-gradient(90deg, transparent 0%, rgba(255,193,7,.6) 50%, transparent 100%)" }} />
 
-            {/* Surge banner */}
-            <AnimatePresence initial={false}>
-              {surge && (
-                <m.div key="surge" variants={collapse} initial="initial" animate="animate" exit="exit" style={{ overflow: "hidden" }}>
-                  <div className="mx-4 sm:mx-6 mt-4 bw-surge">
-                    <span className="bw-surge-icon">
-                      <m.span
-                        animate={{ scale: [1, 1.15, 1] }}
-                        transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                        className="inline-flex"
-                      >
-                        <IconZap className="w-4 h-4" />
-                      </m.span>
-                    </span>
-                    <div className="min-w-0">
-                      <div style={{ fontWeight: 700, fontSize: 13.5, color: "#7A5200" }}>Immediate booking · 5% surge applies</div>
-                      <div style={{ fontSize: 12.5, color: "#8F6A1A" }}>Pickup within 30 minutes. The surge is shown on each vehicle.</div>
-                    </div>
-                  </div>
-                </m.div>
-              )}
-            </AnimatePresence>
-
             <AnimatedHeight>
               <form onSubmit={handleSubmit} className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-6">
                 <AnimatePresence mode="popLayout" initial={false}>
@@ -721,7 +693,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                             icon={<IconPin className="w-4 h-4" />} chipClass="bw-chip--from"
                             placeholder="Pickup city or address"
                             value={fields.pickup} onChange={set("pickup")} required
-                            onMapClick={() => setMapPickerField("pickup")} autocomplete={pickupAutocomplete}
+                            onMapClick={() => setMapPickerField("pickup")} onClear={() => clearLocation("pickup")} autocomplete={pickupAutocomplete}
                           />
                         </Field>
                         <Field label="Package">
@@ -809,6 +781,7 @@ export default function BookingWidget({ initialMode = "one-way", presetPickup = 
                               onChange={set(nonAirportField)}
                               required
                               onMapClick={() => setMapPickerField(nonAirportField)}
+                              onClear={() => clearLocation(nonAirportField)}
                               autocomplete={nonAirportField === "drop" ? dropAutocomplete : pickupAutocomplete}
                               trailing={
                                 <LiveLocationButton
@@ -1261,10 +1234,11 @@ function StopFields({ stops, onChange, onRemove, onMapClick, autocompleteFor }) 
               value={stop.value}
               onChange={(e) => onChange(stop.id, e.target.value)}
               onMapClick={onMapClick ? () => onMapClick(stop.id) : undefined}
+              onClear={() => onChange(stop.id, "")}
               autocomplete={autocompleteFor ? autocompleteFor(stop.id) : null}
               trailing={
-                <button type="button" onClick={() => onRemove(stop.id)} aria-label={`Remove stop ${i + 1}`} className="bw-icon-btn">
-                  <CloseIcon />
+                <button type="button" onClick={() => onRemove(stop.id)} aria-label={`Remove stop ${i + 1}`} title="Remove stop" className="bw-icon-btn">
+                  <MinusIcon />
                 </button>
               }
             />
@@ -1319,15 +1293,33 @@ function Field({ label, filled = false, children }) {
   );
 }
 
-function Input({ icon, chipClass = "", className = "", onMapClick, autocomplete, trailing, ...props }) {
+function Input({ icon, chipClass = "", className = "", onMapClick, onClear, autocomplete, trailing, ...props }) {
+  const elRef = useRef(null);
+  const setRef = (el) => {
+    elRef.current = el;
+    if (autocomplete) autocomplete.attachTo(el);
+  };
+  const hasValue = String(props.value ?? "").length > 0;
   return (
     <div className={`bw-field ${icon ? "" : "bw-field--plain"}`}>
       {icon && <span className={`bw-chip ${chipClass}`}>{icon}</span>}
       <input
         {...props}
-        ref={autocomplete ? autocomplete.attachTo : null}
+        ref={setRef}
         className={`bw-input ${className}`}
       />
+      {onClear && hasValue && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()} /* keep focus in the field */
+          onClick={() => { onClear(); elRef.current?.focus(); }}
+          aria-label={`Clear ${props.placeholder || "location"}`}
+          title="Clear"
+          className="bw-clear-btn"
+        >
+          <CloseIcon size={11} />
+        </button>
+      )}
       {onMapClick && (
         <button type="button" onClick={onMapClick} aria-label="Pick on map" title="Pick on map" className="bw-icon-btn">
           <MapIcon />
@@ -1562,8 +1554,11 @@ function MapIcon() {
 function LocateIcon() {
   return <svg {...svgProps}><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="7.5" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" /></svg>;
 }
-function CloseIcon() {
-  return <svg {...svgProps} width={14} height={14} strokeWidth={2}><path d="M6 6l12 12M18 6L6 18" /></svg>;
+function CloseIcon({ size = 14 }) {
+  return <svg {...svgProps} width={size} height={size} strokeWidth={size < 14 ? 2.8 : 2}><path d="M6 6l12 12M18 6L6 18" /></svg>;
+}
+function MinusIcon() {
+  return <svg {...svgProps} width={14} height={14} strokeWidth={2.4}><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></svg>;
 }
 function PlusIcon() {
   return <svg {...svgProps} width={12} height={12} strokeWidth={2.6}><path d="M12 5v14M5 12h14" /></svg>;

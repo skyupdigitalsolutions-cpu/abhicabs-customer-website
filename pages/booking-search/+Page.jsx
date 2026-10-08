@@ -254,6 +254,11 @@ export default function Page() {
   const [showOtherVehicles, setShowOtherVehicles] = useState(false);
   // Same-city pickup/drop → offer an hourly package. One-time prompt.
   const [sameCityOpen, setSameCityOpen] = useState(false);
+  // Set when the BACKEND refused an outstation quote because pickup and drop
+  // are in the same city (409 LOCAL_PACKAGE_REQUIRED). Carries its own copy
+  // and the city's real rental packages, so the prompt offers only packages
+  // that exist and doesn't offer "keep outstation" (the backend won't price it).
+  const [localSwitchInfo, setLocalSwitchInfo] = useState(null);
   // True while the direct-vehicle fast path is pricing the trip and heading
   // straight to checkout, so the vehicle list never flashes on screen.
   const [autoPricing, setAutoPricing] = useState(false);
@@ -274,7 +279,11 @@ export default function Page() {
   // Real surge, straight from the backend's quote — every option in
   // apiVehicles carries the same surge info (one demand-pricing decision per
   // list, priced once for the whole journey), so the first one speaks for all.
-  const realSurge = !browseMode && apiVehicles?.length ? apiVehicles[0] : null;
+  // The banner speaks for the list, so use a vehicle that actually carries
+  // surge — the first option may be on a rate card that's exempt from it.
+  const realSurge = !browseMode && apiVehicles?.length
+    ? (apiVehicles.find((x) => x.surge) || apiVehicles[0])
+    : null;
   const surge = Boolean(realSurge?.surge);
   const surgeMultiplier = realSurge?.surgeMultiplier || 1.0;
   const surgePct = realSurge?.surgePct || 0;
@@ -331,6 +340,13 @@ export default function Page() {
         }
         const code = String(err?.code || "").toUpperCase();
         const msg  = String(err?.message || "").toLowerCase();
+        if (code === "LOCAL_PACKAGE_REQUIRED") {
+          const info = err?.details?.switchedToLocal || null;
+          setLocalSwitchInfo(info);
+          setFareError(info?.message || err?.message || "This trip is inside one city — choose a local package.");
+          setSameCityOpen(true);
+          return;
+        }
         const isServiceArea =
           code === "OUTSIDE_SERVICE_AREA" ||
           code === "CITY_NOT_SERVICED" ||
@@ -534,45 +550,60 @@ export default function Page() {
 
   // Submit the inline trip form — creates a journey and stays on this page,
   // updating the URL so fares load without a redirect to home.
-  function submitInlineTrip(e) {
-    e?.preventDefault?.();
-    if (inlineTrip.tripType !== "local" && !inlineTrip.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
+  // Returns the first problem with the inline trip form, or null if it's
+  // complete. Shared by "Search" and by "View Details" (which builds the trip
+  // from the form when the customer filled it but didn't press Search).
+  function inlineTripError() {
+    if (inlineTrip.tripType !== "local" && !inlineTrip.pickup.trim()) return "Please enter a pickup location";
     if (inlineTrip.tripType === "airport") {
       // Same requirements as the homepage widget: an airport AND a terminal,
       // plus the other side of the journey. Without this the two forms made
       // different airport bookings from the same site.
-      if (!inlineTrip.airport) { toast("Please select an airport", "error"); return; }
-      if (!inlineTrip.airportTerminal) { toast("Please select the airport terminal", "error"); return; }
+      if (!inlineTrip.airport) return "Please select an airport";
+      if (!inlineTrip.airportTerminal) return "Please select the airport terminal";
       const otherSide = inlineTrip.airportDirection === "pickup" ? inlineTrip.drop : inlineTrip.pickup;
       if (!String(otherSide || "").trim()) {
-        toast(inlineTrip.airportDirection === "pickup" ? "Please enter a destination" : "Please enter a pickup location", "error");
-        return;
+        return inlineTrip.airportDirection === "pickup" ? "Please enter a destination" : "Please enter a pickup location";
       }
     } else if ((inlineTrip.tripType === "one-way" || inlineTrip.tripType === "round-trip") && !inlineTrip.drop.trim()) {
-      toast("Please enter a destination", "error"); return;
+      return "Please enter a destination";
     }
-    if (inlineTrip.tripType === "local" && !inlineTrip.pickup.trim()) { toast("Please enter a pickup location", "error"); return; }
-    if (!inlineTrip.date) { toast("Please select a date", "error"); return; }
-    if (!inlineTrip.time) { toast("Please select a time", "error"); return; }
-    if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnDate) { toast("Please select a return date", "error"); return; }
+    if (inlineTrip.tripType === "local" && !inlineTrip.pickup.trim()) return "Please enter a pickup location";
+    if (!inlineTrip.date) return "Please select a date";
+    if (!inlineTrip.time) return "Please select a time";
+    if (inlineTrip.tripType === "round-trip" && !inlineTrip.returnDate) return "Please select a return date";
     if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate && inlineTrip.returnDate < inlineTrip.date) {
-      toast("Return date cannot be before the pickup date", "error"); return;
+      return "Return date cannot be before the pickup date";
     }
     // PAST DATE/TIME CHECK — same 30-minute rule as the main booking widget
     // (BookingWidget.jsx), so a past/too-soon time is blocked here too instead
     // of only on the homepage form. Must be fixed before moving on.
     const pickupDt = new Date(inlineTrip.date + "T" + inlineTrip.time);
     if (pickupDt < new Date(Date.now() + 30 * 60 * 1000)) {
-      toast("Pickup time must be at least 30 minutes from now — please update it", "error");
-      return;
+      return "Pickup time must be at least 30 minutes from now — please update it";
     }
     if (inlineTrip.tripType === "round-trip" && inlineTrip.returnDate) {
       const returnDt = new Date(inlineTrip.returnDate + "T23:59:00");
       if (returnDt <= pickupDt) {
-        toast("Return date must be after the pickup date", "error");
-        return;
+        return "Return date must be after the pickup date";
       }
     }
+
+    return null;
+  }
+
+  // Has the customer started entering a trip in the inline form?
+  function inlineTripTouched() {
+    return Boolean(
+      inlineTrip.pickup.trim() || inlineTrip.drop.trim() || inlineTrip.airport ||
+      (inlineTrip.stops || []).some((st) => String(st || "").trim())
+    );
+  }
+
+  function submitInlineTrip(e) {
+    e?.preventDefault?.();
+    const err = inlineTripError();
+    if (err) { toast(err, "error"); return; }
 
     // Same-city pickup and drop = an hourly hire. Switch to a local package
     // rather than quoting an intercity fare for a trip inside one city.
@@ -590,7 +621,9 @@ export default function Page() {
 
   // Split out so the same-city prompt can finish the submit, optionally
   // switching the trip to a local package.
-  function submitInlineJourney(localPackage = null) {
+  // Creates the journey from the inline form and switches this page into trip
+  // mode in place. Returns { journeyObj, newId }.
+  function createInlineJourney(localPackage = null, rentalPackageId = null) {
     const effType = localPackage ? "local" : inlineTrip.tripType;
     // Same label the homepage widget builds, so an airport trip booked here is
     // indistinguishable from one booked there.
@@ -612,6 +645,7 @@ export default function Page() {
       returnDate: effType === "local" ? "" : inlineTrip.returnDate,
       returnTime: "",  // Return time removed — only return date is used
       package: effType === "local" ? (localPackage || inlineTrip.package) : "",
+      ...(effType === "local" && rentalPackageId ? { rentalPackageId } : {}),
       stops: effType === "local" || effType === "airport"
         ? []
         : (inlineTrip.stops || []).filter((s) => s.trim()),
@@ -632,6 +666,11 @@ export default function Page() {
       if (seatFilters.length === 1) qs.set("seater", String(seatFilters[0]));
       window.history.replaceState(window.history.state, "", `/booking-search?${qs.toString()}`);
     } catch { /* non-browser / SSR guard */ }
+    return { journeyObj, newId };
+  }
+
+  function submitInlineJourney(localPackage = null, rentalPackageId = null) {
+    const { journeyObj, newId } = createInlineJourney(localPackage, rentalPackageId);
 
     // ── Direct-vehicle fast path ──────────────────────────────────────────
     // The customer already picked this exact vehicle before entering trip
@@ -762,16 +801,20 @@ export default function Page() {
   // trip + fare data checkout does (previously View Details sent a thin payload
   // without breakdown / vehicleClass / surge).
   function buildSelection(v, journeyId, ctx) {
-    const mult = ctx?.surgeMultiplier || 1;
+    const mult = Number(v.surgeMultiplier) || ctx?.surgeMultiplier || 1;
     const fare = v.fare != null && Number(v.fare) > 0 ? Number(v.fare) : null;
     return {
       vehicleId: v.id,
       fare,
       baseFare: fare != null ? Math.round(fare / mult) : null,
-      surge: Boolean(ctx?.surge),
+      // This vehicle's own surge, as the backend priced it — not the trip-level
+      // figure (a capped/exempt rate card carries less or none).
+      surge: v.surge != null ? Boolean(v.surge) : Boolean(ctx?.surge),
       surgeMultiplier: mult,
       surgePct: v.surgePct ?? ctx?.surgePct ?? 0,
-      surgeFee: ctx?.surge && fare != null ? Math.round(fare - fare / mult) : 0,
+      surgeAmount: Number(v.surgeAmount || 0),
+      surgeFee: Math.round(Number(v.surgeAmount || 0)),
+      surgeReason: v.surgeReason || null,
       // Only the backend-quoted allowance. The old `|| v.outstation.driverBhata`
       // fallback pulled a number off the local rate card that was never part
       // of the quoted total (see the payment-summary fix).
@@ -789,6 +832,7 @@ export default function Page() {
       // minimum-fare top-up, rounding) without re-quoting.
       vehicleClass: v.vehicleClass || null,
       breakdown: v.breakdown || [],
+      tax: v.tax || null,
       nightAllowance: v.nightAllowance || 0,
     };
   }
@@ -804,7 +848,48 @@ export default function Page() {
   // details page can't show a fabricated route (the old Bengaluru→Mysuru
   // default) or a made-up total. It shows the vehicle + rate card and a prompt
   // to enter trip details. With a real journey, it carries the real fare through.
+  // Opens the details page for `v` on a trip that was just built from the
+  // inline form: price it, then carry the real quote + journey through.
+  const openingDetailsRef = useRef(false);
+  function viewDetailsWithInlineTrip(v) {
+    if (openingDetailsRef.current) return; // ignore double taps while pricing
+    openingDetailsRef.current = true;
+    toast(`Getting the fare for the ${v.name}…`, "success");
+    const { journeyObj, newId } = createInlineJourney();
+    const ctxOf = (o) => ({ surge: Boolean(o?.surge), surgeMultiplier: o?.surgeMultiplier || 1, surgePct: o?.surgePct || 0 });
+    const go = (opt) => {
+      const priced = opt
+        ? { ...opt, id: v.id, vehicleId: v.id, name: v.name, img: v.img, imgFallback: v.imgFallback, seats: v.seats, bags: v.bags, ac: v.ac, category: v.category }
+        : { ...v, fare: null };
+      dispatch(setSelectedCab({ ...buildSelection(priced, newId, ctxOf(opt)), browse: false, img: v.img }));
+      openingDetailsRef.current = false;
+      navigate("/cab-details");
+    };
+    const wantClass = String(toBackendVehicleClass(v) || v.vehicleClass || v.id || "").toLowerCase();
+    faresApi.getFareOptions({ ...journeyObj, id: newId })
+      .then((options) => {
+        const opt = (options || []).find((o) => String(o.vehicleClass || "").toLowerCase() === wantClass) || null;
+        go(opt);
+      })
+      .catch(() => go(null));
+  }
+
   function viewDetails(v) {
+    // Trip details typed into the form but "Search" not pressed yet: treat
+    // them as the trip rather than opening the generic "no trip yet" view.
+    if (browseMode && inlineTripTouched()) {
+      const err = inlineTripError();
+      if (err) {
+        toast(`${err} to see the fare for this trip.`, "error");
+        setShowFilters(true);
+        setTimeout(() => {
+          try { document.getElementById("trip-details-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }); } catch { /* SSR */ }
+        }, 50);
+        return;
+      }
+      viewDetailsWithInlineTrip(v);
+      return;
+    }
     if (browseMode) {
       dispatch(setSelectedCab({
         vehicleId: v.id,
@@ -845,11 +930,6 @@ export default function Page() {
     background: active ? "#111" : "#fff", color: active ? "#FFC107" : "#666", fontWeight: 600, fontSize: 12.5, cursor: "pointer",
   });
 
-  const clearFieldBtnStyle = {
-    flexShrink: 0, width: 36, height: 42, borderRadius: 9, border: "1px solid #E5E5E5",
-    background: "#fff", color: "#999", cursor: "pointer", fontSize: 13, lineHeight: 1,
-  };
-
   const groupFieldStyle = {
     padding: "9px 11px", borderRadius: 9, border: "1px solid #E5E5E5", background: "#fff",
     fontSize: 13, fontWeight: 500, color: "#111", outline: "none", width: "100%",
@@ -889,18 +969,14 @@ export default function Page() {
                         {inlineTrip.tripType === "airport" ? "Pickup (your address)" : "From"}
                       </label>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <input
-                          ref={attachInlineAc("pickup", inlinePickupAcRef)}
+                        <ClearableLocationInput
+                          inputRef={attachInlineAc("pickup", inlinePickupAcRef)}
                           value={inlineTrip.pickup}
                           onChange={setInline("pickup")}
                           placeholder="Pickup location"
-                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+                          clearLabel="Clear pickup"
+                          onClear={() => { setInlineTrip((f) => ({ ...f, pickup: "" })); setInlinePoints((p) => ({ ...p, pickup: null })); }}
                         />
-                        {inlineTrip.pickup && (
-                          <button type="button" title="Clear pickup" aria-label="Clear pickup"
-                            onClick={() => { setInlineTrip((f) => ({ ...f, pickup: "" })); setInlinePoints((p) => ({ ...p, pickup: null })); }}
-                            style={clearFieldBtnStyle}>✕</button>
-                        )}
                         <button type="button" onClick={() => setInlineMapField("pickup")} title="Pick on map"
                           style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
@@ -930,18 +1006,14 @@ export default function Page() {
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>To</label>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <input
-                          ref={attachInlineAc("drop", inlineDropAcRef)}
+                        <ClearableLocationInput
+                          inputRef={attachInlineAc("drop", inlineDropAcRef)}
                           value={inlineTrip.drop}
                           onChange={setInline("drop")}
                           placeholder="Destination"
-                          style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+                          clearLabel="Clear destination"
+                          onClear={() => { setInlineTrip((f) => ({ ...f, drop: "" })); setInlinePoints((p) => ({ ...p, drop: null })); }}
                         />
-                        {inlineTrip.drop && (
-                          <button type="button" title="Clear destination" aria-label="Clear destination"
-                            onClick={() => { setInlineTrip((f) => ({ ...f, drop: "" })); setInlinePoints((p) => ({ ...p, drop: null })); }}
-                            style={clearFieldBtnStyle}>✕</button>
-                        )}
                         <button type="button" onClick={() => setInlineMapField("drop")} title="Pick on map"
                           style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                       </div>
@@ -954,8 +1026,14 @@ export default function Page() {
                       <label style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 5 }}>Stops</label>
                       {(inlineTrip.stops || []).map((s, i) => (
                         <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                          <input ref={attachStopAc(i)} value={s} onChange={(e) => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = e.target.value; return { ...f, stops: st }; })} placeholder={`Stop ${i + 1}`} autoComplete="off"
-                            style={{ flex: 1, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: "0 12px", fontSize: 13, outline: "none", minWidth: 0 }} />
+                          <ClearableLocationInput
+                            inputRef={attachStopAc(i)}
+                            value={s}
+                            onChange={(e) => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = e.target.value; return { ...f, stops: st }; })}
+                            placeholder={`Stop ${i + 1}`}
+                            clearLabel={`Clear stop ${i + 1}`}
+                            onClear={() => setInlineTrip((f) => { const st = [...(f.stops||[])]; st[i] = ""; return { ...f, stops: st }; })}
+                          />
                           <button type="button" onClick={() => setInlineMapField(`stop:${i}`)} title="Pick on map"
                             style={{ flexShrink: 0, width: 42, height: 42, borderRadius: 9, border: "1px solid #E5E5E5", background: "#FFFBEB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📍</button>
                           <button type="button" onClick={() => setInlineTrip((f) => ({ ...f, stops: (f.stops||[]).filter((_, x) => x !== i) }))} title="Remove stop"
@@ -1154,8 +1232,8 @@ export default function Page() {
           <div>
             <b style={{ color: "#92400E", fontSize: 14.5 }}>Surge pricing active — {surgePct}% added</b>
             <p style={{ color: "#B45309", fontSize: 13, margin: 0 }}>
-              {realSurge?.surgeTier ? `Demand is high in this area right now. ` : ""}
-              Prices below already include this fee.
+              {surgeReasonText(realSurge?.surgeReason)}
+              Prices below already include it{apiVehicles?.some((x) => !x.surge) ? " where it applies" : ""}.
             </p>
           </div>
         </div>
@@ -1546,25 +1624,35 @@ export default function Page() {
             onClick={(e) => e.stopPropagation()}
             style={{ background: "#fff", borderRadius: 22, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 24px 64px rgba(0,0,0,.28)" }}
           >
-            <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 6px" }}>Both stops are in the same city</h3>
+            <h3 style={{ fontWeight: 700, fontSize: 18, margin: "0 0 6px" }}>{localSwitchInfo?.title || "Both stops are in the same city"}</h3>
             <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "#77736A", margin: "0 0 18px" }}>
-              For travel within one city an hourly package is cheaper than an outstation
-              fare. Pick a package to continue.
+              {localSwitchInfo?.message
+                ? `${localSwitchInfo.message} ${localSwitchInfo.prompt || "Pick a package to continue."}`
+                : "For travel within one city an hourly package is cheaper than an outstation fare. Pick a package to continue."}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                { value: "4 hrs / 40 km",   description: "Half day" },
-                { value: "8 hrs / 80 km",   description: "Full day" },
-                { value: "12 hrs / 120 km", description: "Extended day" },
-              ].map((p) => (
+              {(localSwitchInfo?.packages?.length
+                ? localSwitchInfo.packages.map((p) => ({
+                    // Same "N hrs / M km" form the rest of the site parses.
+                    value: `${p.includedHours} hrs / ${p.includedKm} km`,
+                    description: p.label,
+                    id: p.rentalPackageId,
+                  }))
+                : [
+                    { value: "4 hrs / 40 km",   description: "Half day" },
+                    { value: "8 hrs / 80 km",   description: "Full day" },
+                    { value: "12 hrs / 120 km", description: "Extended day" },
+                  ]
+              ).map((p) => (
                 <button
-                  key={p.value}
+                  key={p.id || p.value}
                   type="button"
                   onClick={() => {
                     setSameCityAsked(true);
                     setSameCityOpen(false);
                     setInlineTrip((f) => ({ ...f, tripType: "local", package: p.value }));
-                    submitInlineJourney(p.value);
+                    setLocalSwitchInfo(null);
+                    submitInlineJourney(p.value, p.id || null);
                   }}
                   style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "13px 16px", borderRadius: 13, border: "1.5px solid #E5E5E5", background: "#fff", cursor: "pointer", textAlign: "left" }}
                 >
@@ -1576,6 +1664,7 @@ export default function Page() {
                 </button>
               ))}
             </div>
+            {!localSwitchInfo && (
             <button
               type="button"
               onClick={() => { setSameCityAsked(true); setSameCityOpen(false); submitInlineJourney(); }}
@@ -1583,6 +1672,7 @@ export default function Page() {
             >
               No, keep it as an outstation trip
             </button>
+            )}
           </div>
         </div>
       )}
@@ -1676,4 +1766,46 @@ function SeaterStepTwo({ vehicle, seats, onChange, form }) {
       </p>
     </section>
   );
+}
+
+// Location text box with an in-field clear (✕) button that appears once
+// there's text. `inputRef` is a callback ref (Places Autocomplete binding).
+function ClearableLocationInput({ inputRef, value, onChange, placeholder, onClear, clearLabel = "Clear" }) {
+  const elRef = useRef(null);
+  const hasValue = String(value || "").length > 0;
+  return (
+    <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex" }}>
+      <input
+        ref={(el) => { elRef.current = el; if (inputRef) inputRef(el); }}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoComplete="off"
+        style={{ flex: 1, width: "100%", height: 42, borderRadius: 9, border: "1px solid #E5E5E5", padding: hasValue ? "0 36px 0 12px" : "0 12px", fontSize: 13, outline: "none", minWidth: 0 }}
+      />
+      {hasValue && (
+        <button
+          type="button"
+          title="Clear"
+          aria-label={clearLabel}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { onClear(); elRef.current?.focus(); }}
+          className="hover:!bg-[#111] hover:!text-white"
+          style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 22, height: 22, borderRadius: "50%", border: "none", background: "#EDEDED", color: "#555", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, transition: "background-color .2s, color .2s" }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Backend reason reads "15% added — booked within 4 hours of pickup in
+// Kanakapura." The banner title already states the %, so keep the "why".
+function surgeReasonText(reason) {
+  if (!reason) return "";
+  let t = String(reason).replace(/^\s*[\d.]+%\s*added\s*[—–-]\s*/i, "").trim();
+  if (!t) return "";
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?]$/.test(t) ? `${t} ` : `${t}. `;
 }

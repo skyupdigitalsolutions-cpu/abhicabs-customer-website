@@ -11,7 +11,12 @@ const STATUS_COLORS = {
   Closed:      { bg: "#F9FAFB", text: "#6B7280", border: "#D1D5DB", dot: "#9CA3AF" },
 };
 
-function StatusBadge({ status }) {
+// Backend ContactStatus → the labels this page shows.
+const BACKEND_STATUS = { NEW: "Open", READ: "In Review", RESPONDED: "Resolved", ARCHIVED: "Closed" };
+const statusLabel = (s) => BACKEND_STATUS[s] || s || "Open";
+
+function StatusBadge({ status: raw }) {
+  const status = statusLabel(raw);
   const c = STATUS_COLORS[status] || STATUS_COLORS["Open"];
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 9999, background: c.bg, border: `1px solid ${c.border}`, fontSize: 12, fontWeight: 700, color: c.text }}>
@@ -31,7 +36,7 @@ function TicketCard({ ticket, onRefresh }) {
     setRefreshing(true);
     try {
       // Try fetching updated status from backend if endpoint exists
-      const data = await api.get(`/contact/${ticket.id}`);
+      const data = await api.get(`/contact/${ticket.id}`, { auth: false });
       if (data?.status) onRefresh(ticket.id, data.status);
     } catch {
       // Backend doesn't expose this to customers yet — show a message
@@ -110,12 +115,17 @@ export default function SupportTicketsPage() {
     setLooking(true);
     setLookupResult(null);
     setLookupError("");
+    // Accept the full ticket id or the 8-character short code shown on the
+    // ticket card — the backend looks tickets up by full id only.
+    const q = lookupId.trim();
+    const local = tickets.find(t => t.id === q || t.id?.slice(-8).toUpperCase() === q.toUpperCase());
+    const fullId = local?.id || q;
     try {
-      const data = await api.get(`/contact/${lookupId.trim()}`);
-      setLookupResult(data);
+      // Public status check: returns id, topic, status, submittedAt only.
+      const data = await api.get(`/contact/${fullId}`, { auth: false });
+      setLookupResult({ ...(local || {}), ...data });
+      if (local && data?.status) updateStatus(local.id, data.status);
     } catch {
-      // Check local storage as fallback
-      const local = tickets.find(t => t.id === lookupId.trim() || t.id?.slice(-8).toUpperCase() === lookupId.trim().toUpperCase());
       if (local) {
         setLookupResult(local);
       } else {

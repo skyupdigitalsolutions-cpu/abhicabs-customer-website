@@ -125,15 +125,24 @@ function mergeOptionWithCatalogue(opt, catalogueMap, topLevelSurge) {
     baseFare:       total,
 
     breakdown:       opt.breakdown || [],
+    // GST as the backend applied it (rate, inclusive/exclusive, amount,
+    // payable) — the only source for tax lines on checkout/payment.
+    tax:             opt.tax || null,
     driverAllowance: Number(opt.bata ?? 0),
     nightAllowance:  Number(opt.night ?? 0),
     surgeAmount:     Number(opt.surgeAmount ?? 0),
 
-    surge:           surgeMultiplier > 1,
-    surgeMultiplier,
+    // Surge is decided once per trip (top-level `surge`), but each vehicle's
+    // rate card can cap or exempt it — so a vehicle only "has surge" when ITS
+    // own quote carries a surge amount, not merely because the trip does.
+    surge:           surgeMultiplier > 1 && Number(opt.surgeAmount ?? 0) > 0,
+    surgeMultiplier: Number(opt.meta?.surgeMultiplier ?? surgeMultiplier),
     surgePct,
     surgeTier:       surgeInfo?.tier || null,
     surgeArea:       surgeInfo?.area || null,
+    // Backend copy explaining the premium (e.g. "Booked within 4 hours in a
+    // village area"), shown instead of a generic line.
+    surgeReason:     surgeInfo?.reason || null,
   };
 }
 
@@ -196,13 +205,15 @@ export async function estimateFare(journey, vehicleId) {
       fare: total,
       baseFare: total,
       breakdown: quote?.breakdown || [],
+      tax: quote?.tax || data?.tax || null,
       driverAllowance: Number(quote?.bata ?? 0),
       nightAllowance: Number(quote?.night ?? 0),
       surgeAmount: Number(quote?.surgeAmount ?? 0),
-      surge: Number(surgeInfo?.multiplier ?? 1) > 1,
-      surgeMultiplier: Number(surgeInfo?.multiplier ?? 1),
+      surge: Number(surgeInfo?.multiplier ?? 1) > 1 && Number(quote?.surgeAmount ?? 0) > 0,
+      surgeMultiplier: Number(quote?.meta?.surgeMultiplier ?? surgeInfo?.multiplier ?? 1),
       surgePct: Number(surgeInfo?.pct ?? 0),
       surgeTier: surgeInfo?.tier || null,
+      surgeReason: surgeInfo?.reason || null,
       trip: data?.trip || null,
       switchedToLocal: data?.switchedToLocal || null,
     };

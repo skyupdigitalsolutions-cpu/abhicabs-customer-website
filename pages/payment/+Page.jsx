@@ -139,7 +139,7 @@ export default function Page() {
     discountCode,
   });
   const {
-    lines: fareLines, tripTotal, cgst, sgst, discount: discountAmount, totalPayable,
+    lines: fareLines, tripTotal, cgst, sgst, taxLines, taxIncluded, taxRatePct, discount: discountAmount, totalPayable,
   } = fare;
   // Kept for the booking payload / invoice header, which record them
   // separately from the displayed lines.
@@ -494,11 +494,13 @@ export default function Page() {
               </div>
             </div>
 
-            {isCorporate && cgst + sgst > 0 && (
-              <>
-                <SummaryRow label="CGST (2.5%)" value={`+ ${fmtINR(cgst)}`} />
-                <SummaryRow label="SGST (2.5%)" value={`+ ${fmtINR(sgst)}`} />
-              </>
+            {taxLines.map((t) => (
+              <SummaryRow key={t.label} label={t.label} value={`+ ${fmtINR(t.amount)}`} />
+            ))}
+            {taxIncluded > 0 && (
+              <div style={{ fontSize: 11.5, color: "#888" }}>
+                Includes GST{taxRatePct ? ` (${taxRatePct}%)` : ""} of {fmtINR(taxIncluded)}
+              </div>
             )}
             {discountAmount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -539,7 +541,7 @@ export default function Page() {
         <InvoiceModal
           journey={journey} vehicle={vehicle} details={details}
           fareLines={fareLines} tripTotal={tripTotal}
-          cgst={cgst} sgst={sgst}
+          cgst={cgst} sgst={sgst} taxLines={taxLines}
           discountCode={discountCode} discountAmount={discountAmount}
           totalPayable={totalPayable}
           onClose={() => setShowInvoice(false)}
@@ -559,7 +561,7 @@ function SummaryRow({ label, value }) {
   );
 }
 
-function InvoiceModal({ journey, vehicle, details, fareLines, tripTotal, cgst, sgst, discountCode, discountAmount, totalPayable, onClose, onConfirm }) {
+function InvoiceModal({ journey, vehicle, details, fareLines, tripTotal, cgst, sgst, taxLines = [], discountCode, discountAmount, totalPayable, onClose, onConfirm }) {
   const isCorporate  = details.customerType === "corporate";
   const invoiceNumber = "INV-" + Date.now().toString().slice(-9);
   const billedOn     = formatDate(new Date());
@@ -677,10 +679,9 @@ function InvoiceModal({ journey, vehicle, details, fareLines, tripTotal, cgst, s
                       <span className="text-gray-600 font-semibold">Trip Fare</span>
                       <span className="font-bold">₹ {tripTotal.toLocaleString("en-IN")}</span>
                     </div>
-                    {isCorporate && (cgst + sgst) > 0 && (<>
-                      <div className="flex justify-between w-full"><span className="text-gray-500">CGST (2.5%)</span><span className="font-bold">₹ {cgst.toLocaleString("en-IN")}</span></div>
-                      <div className="flex justify-between w-full"><span className="text-gray-500">SGST (2.5%)</span><span className="font-bold">₹ {sgst.toLocaleString("en-IN")}</span></div>
-                    </>)}
+                    {taxLines.map((t) => (
+                      <div key={t.label} className="flex justify-between w-full"><span className="text-gray-500">{t.label}</span><span className="font-bold">₹ {t.amount.toLocaleString("en-IN")}</span></div>
+                    ))}
                     {discountAmount > 0 && (
                       <div className="flex justify-between w-full"><span className="text-green-700">Promo ({discountCode})</span><span className="font-bold text-green-700">− ₹ {discountAmount.toLocaleString("en-IN")}</span></div>
                     )}
