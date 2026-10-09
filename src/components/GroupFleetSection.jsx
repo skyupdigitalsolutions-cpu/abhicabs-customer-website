@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { navigate } from "vike/client/router";
 import { LazyMotion, domAnimation, m, MotionConfig, AnimatePresence } from "framer-motion";
-import { fmtINR, VEHICLE_RATES } from "../data/mockData";
+import { fmtINR } from "../data/mockData";
 
 const EASE_OUT = [0.22, 1, 0.36, 1];
 const GOLD = "linear-gradient(180deg, #FFD54A 0%, #FFC107 55%, #F0A500 100%)";
@@ -24,12 +24,7 @@ export default function GroupFleetSection({ vehicles, id = "group-fleet" }) {
   const [activeImg, setActiveImg] = useState(0);
 
   function openModal(v) {
-    // Try to find rich data from VEHICLE_RATES by matching name or seats
-    const rich = VEHICLE_RATES.find(r =>
-      r.name === v.name ||
-      String(r.seats) === String(v.seats).replace(/[^0-9]/g, "")
-    );
-    setModal(rich || v);
+    setModal(v);
     setActiveImg(0);
     document.body.style.overflow = "hidden";
   }
@@ -203,16 +198,12 @@ export default function GroupFleetSection({ vehicles, id = "group-fleet" }) {
                     {modal.bags && <span>🧳 {modal.bags} Bags</span>}
                   </m.div>
 
-                  {(modal.local || modal.outstation) && (
-                    <m.div variants={cardReveal} className="rate-grid-3" style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 10px", marginBottom: 20 }}>
-                      <Rate label="Local Package" value={fmtINR(modal.local?.base8hr80km ?? 0)} />
-                      <Rate label="Outstation" value={`₹${modal.outstation?.perKm ?? 0}/km`} gold />
-                      <Rate label="Extra Hour" value="₹150" />
-                      <Rate label="Extra KM" value={`₹${modal.local?.extraKm ?? modal.outstation?.perKm ?? 0}`} />
-                      <Rate label="Min / day" value="300 km" />
-                      <Rate label="Driver Allowance" value={fmtINR(modal.outstation?.driverBhata ?? 700)} />
-                    </m.div>
-                  )}
+                  <m.div variants={cardReveal} className="rate-grid-3" style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 10px", marginBottom: 20 }}>
+                    <Rate label={modal.rate ? `Local ${modal.rate.hours} hr / ${modal.rate.km} km` : "Local Package"} value={modal.rate ? fmtINR(modal.rate.packageFare) : "On request"} />
+                    <Rate label="Outstation" value="Live quote" gold />
+                    <Rate label="Extra Hour" value={modal.rate ? `${fmtINR(modal.rate.extraPerHour)}/hr` : "—"} />
+                    <Rate label="Extra KM" value={modal.rate ? `${fmtINR(modal.rate.extraPerKm)}/km` : "—"} />
+                  </m.div>
 
                   {modal.features?.length > 0 && (
                     <m.div variants={cardReveal} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>

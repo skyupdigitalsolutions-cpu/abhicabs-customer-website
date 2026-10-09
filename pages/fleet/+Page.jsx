@@ -3,6 +3,7 @@ import { fmtINR } from "../../src/data/mockData";
 import useVehicleCatalogue from "../../src/hooks/useVehicleCatalogue";
 import Button from "../../src/components/ui/Button";
 import SectionHead from "../../src/components/ui/SectionHead";
+import FuelToggle from "../../src/components/FuelToggle";
 import { IconSeat, IconLuggage, IconAC, IconCar, IconBus, IconTruck, IconCheck, IconClose, IconStar, IconWrench, IconId, IconGPS, IconInsurance, IconChevronRight } from "../../src/components/Icons";
 
 const TABS = [
@@ -24,7 +25,7 @@ const CATEGORY_INFO = {
 
 export default function FleetPage() {
   // The live, admin-managed fleet — see useVehicleCatalogue.
-  const { vehicles: fleet, loading, error, retry } = useVehicleCatalogue();
+  const { grouped: fleet, loading, error, retry } = useVehicleCatalogue();
   const seatList = fleet.map((v) => Number(v.seats)).filter(Boolean);
   const seatRange = seatList.length ? `${Math.min(...seatList)}–${Math.max(...seatList)}` : "—";
   // Only offer tabs the live fleet actually has.
@@ -32,7 +33,18 @@ export default function FleetPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [activeImg, setActiveImg] = useState(0);
+  // Tracks which variant key the user picked per group: { [groupKey]: vehicleKey }
+  const [variantOverrides, setVariantOverrides] = useState({});
 
+  function resolveVariant(v) {
+    if (!v.variants) return v;
+    const picked = variantOverrides[v.groupKey];
+    if (picked) {
+      const found = v.variants.find((m) => m.key === picked);
+      if (found) return { ...found, variants: v.variants };
+    }
+    return v;
+  }
 
   const filtered = activeTab === "all"
     ? fleet
@@ -127,9 +139,17 @@ export default function FleetPage() {
 
           {/* Vehicle grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filtered.map((v) => (
-              <FleetCard key={v.id} vehicle={v} onView={() => openModal(v)} />
-            ))}
+            {filtered.map((entry) => {
+              const v = resolveVariant(entry);
+              return (
+                <FleetCard
+                  key={entry.groupKey || entry.id}
+                  vehicle={v}
+                  onView={() => openModal(v)}
+                  onSwitchVariant={(picked) => setVariantOverrides((prev) => ({ ...prev, [entry.groupKey]: picked.key }))}
+                />
+              );
+            })}
           </div>
         </div>
       </section>
@@ -162,14 +182,23 @@ export default function FleetPage() {
 
       {/* Vehicle Detail Modal */}
       {selectedVehicle && (
-        <VehicleModal vehicle={selectedVehicle} activeImg={activeImg} setActiveImg={setActiveImg} onClose={closeModal} />
+        <VehicleModal
+          vehicle={selectedVehicle}
+          activeImg={activeImg}
+          setActiveImg={setActiveImg}
+          onClose={closeModal}
+          onSwitchVariant={(picked) => {
+            setSelectedVehicle({ ...picked, variants: selectedVehicle.variants });
+            setActiveImg(0);
+          }}
+        />
       )}
     </>
   );
 }
 
 // ─── Fleet Card ──────────────────────────────────────────────────────────────
-function FleetCard({ vehicle: v, onView }) {
+function FleetCard({ vehicle: v, onView, onSwitchVariant }) {
   const catColors = {
     sedan:  "bg-blue-50 text-blue-700",
     suv:    "bg-green-50 text-green-700",
@@ -200,7 +229,6 @@ function FleetCard({ vehicle: v, onView }) {
         {!v.ac && (
           <span className="absolute top-2.5 right-2.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white">Non A/C</span>
         )}
-        {/* Your selection badge when coming from group section */}
 
         {/* Gallery count */}
         {v.gallery?.length > 1 && (
@@ -218,6 +246,14 @@ function FleetCard({ vehicle: v, onView }) {
           <span className="flex items-center gap-1"><IconAC className="w-3.5 h-3.5" />{v.ac ? "A/C" : "Non-A/C"}</span>
           {v.bags && <span className="flex items-center gap-1"><IconLuggage className="w-3.5 h-3.5" />{v.bags}</span>}
         </div>
+
+        {/* Fuel variant toggle */}
+        {v.variants && v.variants.length > 1 && onSwitchVariant && (
+          <div className="mt-0.5">
+            <FuelToggle variants={v.variants} activeKey={v.key} onChange={onSwitchVariant} size="sm" />
+          </div>
+        )}
+
         <p className="text-[12.5px] text-text-secondary flex-1 line-clamp-2">{v.tagline}</p>
 
         {/* Rates */}
@@ -248,7 +284,7 @@ function FleetCard({ vehicle: v, onView }) {
 }
 
 // ─── Vehicle Detail Modal ─────────────────────────────────────────────────────
-function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
+function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose, onSwitchVariant }) {
   return (
     <div
       className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
@@ -257,7 +293,12 @@ function VehicleModal({ vehicle: v, activeImg, setActiveImg, onClose }) {
       <div className="bg-white rounded-[20px] w-full max-w-[860px] max-h-[92vh] overflow-y-auto shadow-2xl">
         {/* Modal header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-white z-10 rounded-t-[20px]">
-          <h2 className="text-[18px] font-bold">{v.name}</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-[18px] font-bold">{v.name}</h2>
+            {v.variants && v.variants.length > 1 && onSwitchVariant && (
+              <FuelToggle variants={v.variants} activeKey={v.key} onChange={onSwitchVariant} size="md" />
+            )}
+          </div>
           <button
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"

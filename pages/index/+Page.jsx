@@ -123,7 +123,7 @@ export default function Page() {
   // service cards read this so they highlight the same thing the widget shows.
   const [activeMode, setActiveMode] = useState("one-way");
   // Show the fleet the backend actually has switched on, not a bundled list.
-  const { vehicles: fleetVehicles, loading: fleetLoading, error: fleetError, retry: fleetRetry } = useVehicleCatalogue();
+  const { grouped: fleetVehicles, loading: fleetLoading, error: fleetError, retry: fleetRetry } = useVehicleCatalogue();
 
   // NOTE: this homepage previously had its own embedded Contact form
   // (id="contact") wired to the real POST /api/v1/contact endpoint — the

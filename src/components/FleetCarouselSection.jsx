@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { navigate } from "vike/client/router";
 import { LazyMotion, domAnimation, m, MotionConfig, AnimatePresence, useScroll, useSpring } from "framer-motion";
 import { fmtINR } from "../data/mockData";
+import FuelToggle from "./FuelToggle";
 
 const EASE_OUT = [0.22, 1, 0.36, 1];
 const GOLD = "linear-gradient(180deg, #FFD54A 0%, #FFC107 55%, #F0A500 100%)";
@@ -27,6 +28,24 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
   const [activeImg, setActiveImg] = useState(0);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
+  // Tracks which variant key the user chose per group: { [groupKey]: vehicleKey }
+  const [variantOverrides, setVariantOverrides] = useState({});
+
+  /** Resolve the displayed vehicle for a group entry. If the user toggled to a
+   *  variant, return that variant; otherwise the lead (default) vehicle. */
+  function resolveVariant(v) {
+    if (!v.variants) return v;
+    const picked = variantOverrides[v.groupKey];
+    if (picked) {
+      const found = v.variants.find((m) => m.key === picked);
+      if (found) return { ...found, variants: v.variants };
+    }
+    return v;
+  }
+
+  function switchVariant(groupKey, variant) {
+    setVariantOverrides((prev) => ({ ...prev, [groupKey]: variant.key }));
+  }
 
   // Scroll progress of the track → gold progress bar under the carousel
   const { scrollXProgress } = useScroll({ container: scrollRef });
@@ -143,10 +162,12 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
             viewport={{ once: true, amount: 0.25 }}
             style={{ display: "flex", gap: 20, overflowX: "auto", scrollBehavior: "smooth", paddingBottom: 12, scrollSnapType: "x mandatory" }}
           >
-            {vehicles.map((v) => (
+            {vehicles.map((entry) => {
+              const v = resolveVariant(entry);
+              return (
               // Card markup and styles are unchanged — only the wrapper is animated
               <m.div
-                key={v.id}
+                key={entry.groupKey || entry.id}
                 variants={cardReveal}
                 style={{ flex: "0 0 280px", scrollSnapAlign: "start", background: "#fff", border: "1px solid #EFEFEF", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column" }}
               >
@@ -161,9 +182,23 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
                     <h3 style={{ fontWeight: 700, fontSize: 17, margin: 0 }}>{v.name}</h3>
                     <span style={{ fontSize: 11, fontWeight: 600, color: "#666", background: "#F7F7F7", padding: "4px 9px", borderRadius: 9999, flexShrink: 0 }}>{v.seats} Seater</span>
                   </div>
-                  <div style={{ fontSize: 12.5, color: "#666", fontWeight: 500, margin: "6px 0 14px" }}>
-                    {v.ac ? "A/C" : "Non-A/C"} · {v.category}
-                  </div>
+
+                  {/* Fuel variant toggle — Petrol / CNG / Diesel */}
+                  {v.variants && v.variants.length > 1 ? (
+                    <div style={{ margin: "6px 0 10px" }}>
+                      <FuelToggle
+                        variants={v.variants}
+                        activeKey={v.key}
+                        onChange={(picked) => switchVariant(entry.groupKey, picked)}
+                        size="sm"
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12.5, color: "#666", fontWeight: 500, margin: "6px 0 14px" }}>
+                      {v.ac ? "A/C" : "Non-A/C"} · {v.fuel || v.category}
+                    </div>
+                  )}
+
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
                     <span style={{ color: "#666" }}>{v.rate ? `Local ${v.rate.hours} hr / ${v.rate.km} km` : "Local package"}</span>
                     <span style={{ fontWeight: 700, color: "#111" }}>{v.rate ? fmtINR(v.rate.packageFare) : "On request"}</span>
@@ -181,7 +216,8 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
                   </button>
                 </div>
               </m.div>
-            ))}
+              );
+            })}
           </m.div>
 
           {/* Scroll progress */}
@@ -275,11 +311,26 @@ export default function FleetCarouselSection({ vehicles = [], loading = false, e
                     </span>
                   </div>
 
-                  <div style={{ display: "flex", gap: 20, fontSize: 13.5, color: "#666", fontWeight: 500, marginBottom: 16 }}>
+                  <div style={{ display: "flex", gap: 20, fontSize: 13.5, color: "#666", fontWeight: 500, marginBottom: modal.variants ? 8 : 16, flexWrap: "wrap", alignItems: "center" }}>
                     <span>👤 {modal.seats} Seater</span>
                     <span>❄️ {modal.ac ? "A/C" : "Non A/C"}</span>
                     {modal.bags && <span>🧳 {modal.bags}</span>}
                   </div>
+
+                  {/* Fuel variant toggle in modal */}
+                  {modal.variants && modal.variants.length > 1 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <FuelToggle
+                        variants={modal.variants}
+                        activeKey={modal.key}
+                        onChange={(picked) => {
+                          setModal({ ...picked, variants: modal.variants });
+                          setActiveImg(0);
+                        }}
+                        size="md"
+                      />
+                    </div>
+                  )}
 
                   <div className="rate-grid-3" style={{ background: "#F7F7F7", borderRadius: 14, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 10px", marginBottom: 12 }}>
                     <Rate label={modal.rate ? `Local ${modal.rate.hours} hr / ${modal.rate.km} km` : "Local Package"} value={modal.rate ? fmtINR(modal.rate.packageFare) : "On request"} />

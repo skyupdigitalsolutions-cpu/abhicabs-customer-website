@@ -94,6 +94,11 @@ export function normaliseVehicle(row) {
     trips: row.trips ?? null,
     sortOrder: row.sortOrder ?? 0,
     isActive: row.isActive !== false,
+    // Variant grouping — backend sends groupKey (falls back to the row's own
+    // key) and variantLabel (null when there is nothing to choose between).
+    // Two rows with the same groupKey are drawn as ONE card with a fuel toggle.
+    groupKey: normaliseKey(row.groupKey || row.key),
+    variantLabel: row.variantLabel || null,
   };
 }
 
